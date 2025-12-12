@@ -1,6 +1,6 @@
 # 🌐 Internet Fragility Monitor
 
-![License](https://img.shields.io/badge/license-ISC-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 **Internet Fragility Monitor** is a tool designed to provide a simple, independent way to monitor the various important service providers used for web applications.
 
