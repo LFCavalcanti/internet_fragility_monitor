@@ -79,29 +79,6 @@ export function NetworkIllustration({ status }: NetworkIllustrationProps) {
 
     return (
         <div className="w-full h-full flex items-center justify-center relative">
-            <style jsx>{`
-                @keyframes data-packet {
-                    0% { 
-                        offset-distance: 0%;
-                        opacity: 0;
-                    }
-                    5% {
-                        opacity: 1;
-                    }
-                    95% {
-                        opacity: 1;
-                    }
-                    100% { 
-                        offset-distance: 100%;
-                        opacity: 0;
-                    }
-                }
-                .packet {
-                    offset-rotate: 0deg;
-                    animation: data-packet ${duration}s linear infinite;
-                }
-            `}</style>
-
             <svg
                 viewBox="0 0 450 300"
                 fill="none"
@@ -150,22 +127,32 @@ export function NetworkIllustration({ status }: NetworkIllustrationProps) {
                             {/* Forward packet (left to right) */}
                             <circle
                                 r="3"
-                                className={cn("packet fill-current", packetColor)}
+                                className={cn("fill-current", packetColor)}
                                 filter="url(#glow)"
                                 style={{
                                     offsetPath: `path('${forwardPath}')`,
+                                    animationName: 'data-packet',
+                                    animationDuration: `${duration}s`,
+                                    animationTimingFunction: 'linear',
+                                    animationIterationCount: 'infinite',
                                     animationDelay: `${forwardDelay}s`,
-                                }}
+                                    offsetRotate: '0deg',
+                                } as React.CSSProperties}
                             />
                             {/* Reverse packet (right to left) */}
                             <circle
                                 r="3"
-                                className={cn("packet fill-current", packetColor)}
+                                className={cn("fill-current", packetColor)}
                                 filter="url(#glow)"
                                 style={{
                                     offsetPath: `path('${reversePath}')`,
+                                    animationName: 'data-packet',
+                                    animationDuration: `${duration}s`,
+                                    animationTimingFunction: 'linear',
+                                    animationIterationCount: 'infinite',
                                     animationDelay: `${reverseDelay}s`,
-                                }}
+                                    offsetRotate: '0deg',
+                                } as React.CSSProperties}
                             />
                         </g>
                     );

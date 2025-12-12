@@ -5,7 +5,7 @@ import Image from "next/image";
 export function TopBar() {
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-            <div className="container flex h-16 items-center justify-between px-8">
+            <div className="max-w-7xl mx-auto w-full flex h-16 items-center justify-between px-8">
                 <div className="flex items-center gap-3">
                     <Image
                         src="/logo.svg"
