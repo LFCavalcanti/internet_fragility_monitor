@@ -10,12 +10,16 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate:sqlite",
     "db:push": "drizzle-kit push:sqlite",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "@types/node": "^20.12.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -25,7 +29,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.8",
-    "drizzle-orm": "^0.45.0",
+    "drizzle-orm": "^0.45.1",
     "eslint": "^9.17.0",
     "eslint-config-next": "15.1.0",
     "fast-xml-parser": "^5.3.2",
@@ -39,10 +43,19 @@
     "tailwind-merge": "^2.2.2",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.3",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/better-sqlite3": "^7.6.12",
-    "@types/node-cron": "^3.0.11"
+    "@types/node-cron": "^3.0.11",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.15",
+    "jsdom": "^27.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.0.15"
   }
 }

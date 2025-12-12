@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusResult } from "@/lib/fetchers/types";
@@ -41,7 +42,14 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                     {logo ? (
                         <div className="relative w-8 h-8 overflow-hidden">
                              {/* Keep logo original colors, just ensure it fits */}
-                            <img src={logo} alt={name} className="object-contain w-full h-full" />
+                            <Image 
+                                src={logo} 
+                                alt={name} 
+                                width={32} 
+                                height={32} 
+                                className="object-contain w-full h-full"
+                                unoptimized
+                            />
                          </div>
                     ) : (
                         <Globe className="h-8 w-8 text-muted-foreground" />

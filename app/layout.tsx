@@ -7,9 +7,21 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
     title: 'Internet Fragility Monitor',
-    description: 'Monitor the status of major internet services',
+    description: 'Centralized, independent tool to check for incidents affecting the internet at large.',
     icons: {
         icon: '/favicon.svg',
+    },
+    openGraph: {
+        title: 'Internet Fragility Monitor',
+        description: 'Centralized, independent tool to check for incidents affecting the internet at large.',
+        type: 'website',
+        locale: 'en_US',
+        siteName: 'Internet Fragility Monitor',
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'Internet Fragility Monitor',
+        description: 'Centralized, independent tool to check for incidents affecting the internet at large.',
     },
 }
 
