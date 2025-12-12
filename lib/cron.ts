@@ -1,12 +1,9 @@
 import cron from "node-cron";
 import { fetchAllStatuses } from "./fetchers";
 import { saveStatusResult, ensureProvidersExist } from "./db-service";
+import { getGlobalLatestStatusCheck } from "./dao";
 
 let isRunning = false;
-
-import { db } from "./db";
-import { statusChecks } from "./schema";
-import { desc } from "drizzle-orm";
 
 export async function initCron() {
     if (isRunning) return;
@@ -16,9 +13,7 @@ export async function initCron() {
 
     // Check last update time
     try {
-        const lastCheck = await db.query.statusChecks.findFirst({
-            orderBy: [desc(statusChecks.checkedAt)],
-        });
+        const lastCheck = await getGlobalLatestStatusCheck();
 
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
