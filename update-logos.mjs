@@ -13,7 +13,6 @@ import { eq } from 'drizzle-orm';
 // Create database connection for standalone script
 const client = createClient({
     url: process.env.DATABASE_URL || 'file:sqlite.db',
-    encryptionKey: process.env.DATABASE_ENCRYPTION_KEY,
 });
 const db = drizzle(client);
 

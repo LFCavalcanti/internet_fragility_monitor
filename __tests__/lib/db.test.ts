@@ -22,30 +22,17 @@ describe('db.ts', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             process.env.NODE_ENV = 'development';
             delete process.env.DATABASE_URL;
-            delete process.env.DATABASE_ENCRYPTION_KEY;
 
             // Dynamic import to get fresh module
             await import('@/lib/db');
 
             expect(warnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('DATABASE_URL not set')
+                expect.stringContaining('DATABASE_URL is not set')
             );
             warnSpy.mockRestore();
         });
 
-        it('should warn when DATABASE_ENCRYPTION_KEY is not set in development', async () => {
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            process.env.NODE_ENV = 'development';
-            process.env.DATABASE_URL = 'file:test.db';
-            delete process.env.DATABASE_ENCRYPTION_KEY;
 
-            await import('@/lib/db');
-
-            expect(warnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('DATABASE_ENCRYPTION_KEY not set')
-            );
-            warnSpy.mockRestore();
-        });
 
         it('should throw error when DATABASE_URL is not set in production', async () => {
             process.env.NODE_ENV = 'production';
@@ -56,15 +43,7 @@ describe('db.ts', () => {
             }).rejects.toThrow('DATABASE_URL is not set');
         });
 
-        it('should throw error when DATABASE_ENCRYPTION_KEY is not set in production', async () => {
-            process.env.NODE_ENV = 'production';
-            process.env.DATABASE_URL = 'file:test.db';
-            delete process.env.DATABASE_ENCRYPTION_KEY;
 
-            await expect(async () => {
-                await import('@/lib/db');
-            }).rejects.toThrow('DATABASE_ENCRYPTION_KEY is not set');
-        });
     });
 
     describe('getDb', () => {

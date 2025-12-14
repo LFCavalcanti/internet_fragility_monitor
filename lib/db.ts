@@ -5,39 +5,33 @@ import * as schema from "./schema";
 // Environment variable validation
 function validateEnv() {
     const dbUrl = process.env.DATABASE_URL;
-    const encryptionKey = process.env.DATABASE_ENCRYPTION_KEY;
 
     if (!dbUrl) {
-        if (process.env.NODE_ENV === "production") {
-            throw new Error("DATABASE_URL is not set. This is required in production.");
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error("DATABASE_URL is not set");
         }
-        console.warn("[DB] WARNING: DATABASE_URL not set, using default 'file:sqlite.db'");
+        console.warn("[DB] WARNING: DATABASE_URL is not set. Using default 'file:sqlite.db'");
     }
 
-    if (!encryptionKey) {
-        if (process.env.NODE_ENV === "production") {
-            throw new Error("DATABASE_ENCRYPTION_KEY is not set. This is required in production for data security.");
-        }
-        console.warn("[DB] WARNING: DATABASE_ENCRYPTION_KEY not set, database will NOT be encrypted!");
-        console.warn("[DB] Set DATABASE_ENCRYPTION_KEY in .env for production use.");
-    }
-
-    return { dbUrl, encryptionKey };
+    return { dbUrl };
 }
 
 // Lazy-loaded database singleton
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 function getDatabase() {
-    const { dbUrl, encryptionKey } = validateEnv();
+    const { dbUrl } = validateEnv();
     
     // Only use encryption in production - drizzle-kit creates unencrypted DBs
     const isProduction = process.env.NODE_ENV === "production";
-    const shouldEncrypt = isProduction && encryptionKey;
+
+    console.log("[DB] Initializing database...");
+    console.log("[DB] CWD:", process.cwd());
+    console.log("[DB] URL:", dbUrl || "file:sqlite.db");
+    console.log("[DB] Production Mode:", isProduction);
 
     const client = createClient({
         url: dbUrl || "file:sqlite.db",
-        ...(shouldEncrypt ? { encryptionKey } : {}),
     });
 
     return drizzle(client, { schema });

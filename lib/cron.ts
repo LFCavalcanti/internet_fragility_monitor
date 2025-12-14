@@ -25,6 +25,7 @@ export async function initCron() {
         }
     } catch (error) {
         console.error("Error checking last update time:", error);
+        
         // Fallback to running if check fails
         runJob();
     }
