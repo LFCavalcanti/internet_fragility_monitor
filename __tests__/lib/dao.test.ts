@@ -54,7 +54,7 @@ import {
 } from '@/lib/dao';
 
 describe('dao.ts', () => {
-    let mockDb: ReturnType<typeof getDb>;
+    let mockDb: any;
 
     beforeEach(() => {
         vi.clearAllMocks();

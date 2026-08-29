@@ -20,7 +20,7 @@ describe('db.ts', () => {
     describe('Environment Validation', () => {
         it('should warn when DATABASE_URL is not set in development', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            process.env.NODE_ENV = 'development';
+            (process.env as any).NODE_ENV = 'development';
             delete process.env.DATABASE_URL;
 
             // Dynamic import to get fresh module
@@ -35,7 +35,7 @@ describe('db.ts', () => {
 
 
         it('should throw error when DATABASE_URL is not set in production', async () => {
-            process.env.NODE_ENV = 'production';
+            (process.env as any).NODE_ENV = 'production';
             delete process.env.DATABASE_URL;
 
             await expect(async () => {
@@ -48,7 +48,7 @@ describe('db.ts', () => {
 
     describe('getDb', () => {
         it('should return a database instance', async () => {
-            process.env.NODE_ENV = 'test';
+            (process.env as any).NODE_ENV = 'test';
             process.env.DATABASE_URL = 'file:test.db';
             
             // Suppress warnings for test
@@ -65,7 +65,7 @@ describe('db.ts', () => {
         });
 
         it('should return the same instance on multiple calls (singleton)', async () => {
-            process.env.NODE_ENV = 'test';
+            (process.env as any).NODE_ENV = 'test';
             process.env.DATABASE_URL = 'file:test.db';
             
             vi.spyOn(console, 'warn').mockImplementation(() => {});

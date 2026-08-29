@@ -1,8 +1,6 @@
 {
-  "version": "5",
+  "version": "6",
   "dialect": "sqlite",
-  "id": "8001ba62-5f71-444a-a662-ff17c3bd9c2f",
-  "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "incidents": {
       "name": "incidents",
@@ -85,19 +83,20 @@
         "incidents_provider_id_providers_id_fk": {
           "name": "incidents_provider_id_providers_id_fk",
           "tableFrom": "incidents",
-          "tableTo": "providers",
           "columnsFrom": [
             "provider_id"
           ],
+          "tableTo": "providers",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "providers": {
       "name": "providers",
@@ -141,7 +140,8 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "status_checks": {
       "name": "status_checks",
@@ -188,25 +188,28 @@
         "status_checks_provider_id_providers_id_fk": {
           "name": "status_checks_provider_id_providers_id_fk",
           "tableFrom": "status_checks",
-          "tableTo": "providers",
           "columnsFrom": [
             "provider_id"
           ],
+          "tableTo": "providers",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
   "enums": {},
   "_meta": {
-    "schemas": {},
     "tables": {},
     "columns": {}
-  }
+  },
+  "id": "8001ba62-5f71-444a-a662-ff17c3bd9c2f",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "views": {}
 }
