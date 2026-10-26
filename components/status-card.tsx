@@ -2,7 +2,7 @@ import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusResult } from "@/lib/fetchers/types";
-import { Activity, CheckCircle, AlertTriangle, XCircle, ExternalLink, Wrench, Globe } from "lucide-react";
+import { Activity, CircleCheckBig, TriangleAlert, CircleX, ExternalLink, Wrench, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, ResponsiveContainer, Tooltip } from "recharts";
 import { formatDistanceToNow } from "date-fns";
@@ -62,7 +62,7 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                         {name}
                     </CardTitle>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                         {statusPageUrl && (
                             <a
                                 href={statusPageUrl}
@@ -74,9 +74,9 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                                 <ExternalLink className="h-4 w-4" />
                             </a>
                         )}
-                        {isOperational && <CheckCircle className="h-6 w-6 text-green-500" />}
-                        {isDegraded && <AlertTriangle className="h-6 w-6 text-yellow-500" />}
-                        {isOutage && <XCircle className="h-6 w-6 text-red-500" />}
+                        {isOperational && <CircleCheckBig className="h-6 w-6 text-green-500" />}
+                        {isDegraded && <TriangleAlert className="h-6 w-6 text-yellow-500" />}
+                        {isOutage && <CircleX className="h-6 w-6 text-red-500" />}
                         {isMaintenance && <Wrench className="h-6 w-6 text-blue-500" />}
                     </div>
                 </div>

@@ -6,23 +6,23 @@
 
 ### Core Framework & UI
 
-- ![Next.js](https://img.shields.io/badge/Next.js-v16.0.10-000000?style=flat&logo=next.js&logoColor=white)
-- ![React](https://img.shields.io/badge/React-v19.2.3-61DAFB?style=flat&logo=react&logoColor=black)
-- ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.1.18-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
-- ![Lucide React](https://img.shields.io/badge/Lucide_React-v0.556.0-F56565?style=flat&logo=lucide&logoColor=white)
+- ![Next.js](https://img.shields.io/badge/Next.js-v16.4.3-000000?style=flat&logo=next.js&logoColor=white)
+- ![React](https://img.shields.io/badge/React-v19.3.1-61DAFB?style=flat&logo=react&logoColor=black)
+- ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.3.3-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
+- ![Lucide React](https://img.shields.io/badge/Lucide_React-v1.61.0-F56565?style=flat&logo=lucide&logoColor=white)
 
 ### Backend & Database
 
-- ![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-v0.45.1-C5F74F?style=flat&logo=drizzle&logoColor=black)
-- ![Better SQLite3](https://img.shields.io/badge/Better_SQLite3-v12.5.0-003B57?style=flat&logo=sqlite&logoColor=white)
-- ![Node Cron](https://img.shields.io/badge/Node_Cron-v4.2.1-339933?style=flat&logo=node.js&logoColor=white)
+- ![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-v0.45.4-C5F74F?style=flat&logo=drizzle&logoColor=black)
+- ![libSQL](https://img.shields.io/badge/libSQL_Client-v0.18.0-003B57?style=flat&logo=sqlite&logoColor=white)
+- ![Node Cron](https://img.shields.io/badge/Node_Cron-v4.6.0-339933?style=flat&logo=node.js&logoColor=white)
 
 ### Utilities & Testing
 
-- ![TypeScript](https://img.shields.io/badge/TypeScript-v5.4.3-3178C6?style=flat&logo=typescript&logoColor=white)
-- ![Vitest](https://img.shields.io/badge/Vitest-v4.0.15-729B1B?style=flat&logo=vitest&logoColor=white)
-- ![Zod](https://img.shields.io/badge/Zod-v4.1.13-3E67B1?style=flat&logo=zod&logoColor=white)
-- ![Date-fns](https://img.shields.io/badge/Date--fns-v4.1.0-770C56?style=flat&logo=date-fns&logoColor=white)
+- ![TypeScript](https://img.shields.io/badge/TypeScript-v6.0.3-3178C6?style=flat&logo=typescript&logoColor=white)
+- ![Vitest](https://img.shields.io/badge/Vitest-v5.0.5-729B1B?style=flat&logo=vitest&logoColor=white)
+- ![Zod](https://img.shields.io/badge/Zod-v4.6.7-3E67B1?style=flat&logo=zod&logoColor=white)
+- ![Date-fns](https://img.shields.io/badge/Date--fns-v4.4.0-770C56?style=flat&logo=date-fns&logoColor=white)
 
 ## ✨ Features
 
