@@ -11,6 +11,8 @@ Mantido pelo orquestrador (a sessão principal, na `main`). Agentes de ticket n�
 | 03 | [Falha de leitura vira Unreachable](.scratch/internet-fragility-monitor/issues/03-read-failure-becomes-unreachable.md) | `785afc7` |
 | 05 | [Nova regra do Internet Health](.scratch/internet-fragility-monitor/issues/05-internet-health-new-rule.md) | `e0be78e` |
 | 06 | [Stale Snapshot](.scratch/internet-fragility-monitor/issues/06-stale-snapshot.md) | `d97b0a4` |
+| 04 | [Recent Incidents com uma regra só](.scratch/internet-fragility-monitor/issues/04-recent-incidents-single-rule.md) | `7f0e369` |
+| 07 | [Catálogo no banco](.scratch/internet-fragility-monitor/issues/07-provider-catalog-in-database.md) | `5df46e3` |
 
 ## 2. Ciclo atual: revisão de arquitetura (tickets 02–17)
 
@@ -20,10 +22,10 @@ Origem: `arvore-de-decisoes-2026-10-26-arquitetura.md` e as cinco specs em `.scr
 |---|---|---|---|---|
 | ~~02~~ | ~~Manutenção agendada não esconde mais problema~~ **(esquema)** | provider-status | T1 | — |
 | ~~03~~ | ~~Falha de leitura vira Unreachable~~ | provider-status | T1 | 02 |
-| 04 | Recent Incidents com uma regra só | provider-status | T1 | 02, 03 |
+| ~~04~~ | ~~Recent Incidents com uma regra só~~ | provider-status | T1 | 02, 03 |
 | ~~05~~ | ~~Nova regra do Internet Health~~ | provider-status | T2 | 02 |
 | ~~06~~ | ~~Stale Snapshot~~ | provider-status | T2 | 05 |
-| 07 | Catálogo no banco **(esquema)** | provider-catalog | T3 | 04, 06 |
+| ~~07~~ | ~~Catálogo no banco~~ **(esquema)** | provider-catalog | T3 | 04, 06 |
 | 08 | Poll guiado pelo catálogo, com Probes para quem não tem Feed | provider-catalog | T3 | 03, 07 |
 | 09 | Política de leitura única com a família Statuspage.io | status-feed | T3 | 08 |
 | 10 | Demais famílias na política única | status-feed | T3 | 09 |
@@ -41,9 +43,9 @@ Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos
 
 | Trilha | Sequência | Áreas de código |
 |---|---|---|
-| **T1 – Card e leitores** | ~~02~~ → ~~03~~ → 04 | leitores de status, card do Provider, módulo de Provider Status, leitura do Snapshot |
+| **T1 – Card e leitores** | ~~02~~ → ~~03~~ → ~~04~~ | leitores de status, card do Provider, módulo de Provider Status, leitura do Snapshot |
 | **T2 – Visão geral** | ~~05~~ → ~~06~~ | página, hero, módulo de Internet Health |
-| **T3 – Catálogo e Status Feed** | 07 → 08 → 09 → 10 → 11 → 12 | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
+| **T3 – Catálogo e Status Feed** | ~~07~~ → 08 → 09 → 10 → 11 → 12 | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
 | **T4 – Persistência** | 13 → 14 → 15 → 16 | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
 | **T5 – Agendamento** | 17 | agendador, inicialização, atualização automática da página |
 
@@ -66,8 +68,8 @@ Uma onda só começa quando os tickets da onda anterior de que ela depende estã
 |---|---|---|
 | 1 | ~~**02**~~ (esquema) | T1 |
 | 2 | ~~**03**~~, ~~**05**~~ | T1, T2 |
-| 3 | **04**, ~~**06**~~ | T1, T2 |
-| 4 | **07** (esquema) | T3 |
+| 3 | ~~**04**~~, ~~**06**~~ | T1, T2 |
+| 4 | ~~**07**~~ (esquema) | T3 |
 | 5 | **08** | T3 |
 | 6 | **09** | T3 |
 | 7 | **10** | T3 |
@@ -84,4 +86,5 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 
 - **Onda 1 (fechada, 28/10/2026):** Ticket 02, commit `c252582`. Migrations `0001_incident_kind_and_scheduled_for` (esquema) e `0002_maintenance_incidents_to_kind` (dados); `_journal.json` linear, aplicadas numa cópia do `sqlite.db` e `drizzle-kit check` sem problemas. Na `main`: 114 testes passando, tsc limpo, lint sem erro novo (17 erros já existentes). Próxima: onda 2 (03, 05).
 - **Onda 2 (fechada, 28/10/2026):** Tickets 05 (`e0be78e`) e 03 (`785afc7`), sem migrations. Na `main`: 156 testes passando, tsc limpo, lint sem erro novo (16 erros já existentes). O 06 começou assim que o 05 entrou, sem esperar o 03 (trilhas diferentes). Code review da onda 1 achou defeitos no 02 (Upcoming Maintenance sem relógio, `resolved_at` não limpo ao reabrir manutenção, nomes fora do glossário, regra de Incident encerrado triplicada); a correção vai num `fix(...) (Ticket 02)` antes do 04.
-- **Onda 3 (em andamento):** 06 integrado (`d97b0a4`); code review do 06 feito. Correções pós-review das ondas 1–3, num agente só: `7edcfaa` (Ticket 02: Upcoming Maintenance com relógio, `resolved_at` limpo ao reabrir, regra única de Incident encerrado em `lib/incident-status.ts`, nomes do glossário), `3d98bad` (Ticket 05: nomes do módulo de Internet Health), `e71d499` (Ticket 06: hora do último Poll ignora leituras Unreachable, formatação UTC única em `lib/format-utc.ts`, tipo `HeroState`). Na `main`: 177 testes, tsc limpo, lint sem erro novo. 04 rodando depois das correções (mesmos arquivos). Decisões de produto pendentes para o usuário: Incidents gravados no card Unreachable com a última fase lida; card Unreachable sem Upcoming Maintenance; textos do hero com "major outage"/"Service Down"; Stale com banco vazio ("No Poll recorded yet."); aviso de Stale com português e inglês misturados.
+- **Onda 3 (fechada, 28/10/2026):** 04 integrado (`7f0e369`); na `main` 191 testes, tsc limpo, lint sem erro novo. Antes: 06 integrado (`d97b0a4`); code review do 06 feito. Correções pós-review das ondas 1–3, num agente só: `7edcfaa` (Ticket 02: Upcoming Maintenance com relógio, `resolved_at` limpo ao reabrir, regra única de Incident encerrado em `lib/incident-status.ts`, nomes do glossário), `3d98bad` (Ticket 05: nomes do módulo de Internet Health), `e71d499` (Ticket 06: hora do último Poll ignora leituras Unreachable, formatação UTC única em `lib/format-utc.ts`, tipo `HeroState`). Na `main`: 177 testes, tsc limpo, lint sem erro novo. 04 rodando depois das correções (mesmos arquivos). Decisões de produto pendentes para o usuário: Incidents gravados no card Unreachable com a última fase lida; card Unreachable sem Upcoming Maintenance; textos do hero com "major outage"/"Service Down"; Stale com banco vazio ("No Poll recorded yet."); aviso de Stale com português e inglês misturados.
+- **Onda 4 (fechada, 28/10/2026):** Ticket 07, commit `5df46e3`. Migrations `0003_provider_catalog` (esquema) e `0004_provider_catalog_load` (dados); `_journal.json` linear, aplicadas numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Na `main`: 194 testes, tsc limpo, lint sem erro novo (15 erros já existentes). Nota para o deploy: `build:prod` agora só aplica migrations; conferir antes que a `__drizzle_migrations` de produção tenha só 0000–0002 deste repositório. Decisão do usuário: o RSS da AWS agrupa atualizações por evento (prefixo do `guid`), ativo até a AWS resolver; entra no Ticket 10 (registrado nos Comments dele). Próxima: onda 5 (08), em paralelo com a correção pós-review do 04 e o review do 07.

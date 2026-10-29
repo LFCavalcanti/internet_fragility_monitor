@@ -13,3 +13,7 @@
 - [ ] Os erros de lint no-explicit-any dos leitores chegam a zero
 - [ ] Uma fixture real por família; formato do id de Heroku e Azure confirmado nas fixtures
 - [ ] Testes de leitura de cada família pela interface do módulo de Status Feed
+
+## Comments
+
+- **28/10/2026, decisão do usuário (orquestrador):** o RSS da AWS publica cada *atualização* como um item; o `guid` tem o formato `https://status.aws.amazon.com/#<evento>_<timestamp da atualização>` (ex.: `multipleservices-me-central-1_1789468030`). Em 28/10/2026 os 38 itens do RSS eram 2 eventos (me-central-1 e me-south-1, abertos desde 01/03/2026, última atualização 15/09/2026), nenhum marcado como resolvido. Regra decidida: o leitor da AWS **agrupa as atualizações pelo evento** (parte do `guid` antes do último `_`), que vira o id do Incident, com a data da última atualização; o evento fica ativo até a AWS marcá-lo como resolvido (nada de encerrar por silêncio). O `guid` inteiro não serve de id, porque muda a cada atualização. Conferir se o RSS da Azure tem o mesmo padrão antes de escolher o id dela. Também desta onda: os leitores devem usar `isClosed` de `lib/incident-status.ts` em vez de `status !== 'resolved'` (achado do review do Ticket 04).
