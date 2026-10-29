@@ -1,11 +1,11 @@
 /** Estado que o próprio Provider declara num Feed. */
-export type DeclaredState = 'operational' | 'degraded' | 'outage';
+export type DeclaredStatus = 'operational' | 'degraded' | 'outage';
 
 /**
  * Resultado de uma leitura: o estado declarado pelo Feed, ou "unreachable" quando
  * a status page não pôde ser lida. Falha de leitura nunca é Outage.
  */
-export type ReadingStatus = DeclaredState | 'unreachable';
+export type ReadingStatus = DeclaredStatus | 'unreachable';
 
 export interface StatusResult {
     providerId: string;

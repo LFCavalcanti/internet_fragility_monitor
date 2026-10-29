@@ -5,6 +5,7 @@
  */
 import type { IncidentData } from "./fetchers/types";
 import type { ProviderStatus } from "./provider-status";
+import { isClosed } from "./incident-status";
 
 /** Major Providers enquanto o Provider Catalog não existe (o Ticket 07 troca pela marcação no banco). */
 export const MAJOR_PROVIDERS: readonly string[] = ["aws", "google-cloud", "azure", "cloudflare"];
@@ -150,7 +151,7 @@ function single(p: ProviderHealthEntry): HeroHighlight {
         return { ...base, type: "down", title: "Service Down", description: DOWN_TEXT };
     }
 
-    const active = p.incidents.find(i => i.kind === "problem" && i.status !== "resolved");
+    const active = p.incidents.find(i => i.kind === "problem" && !isClosed(i));
 
     return p.status === "outage"
         ? { ...base, type: "outage", title: "Service Outage", description: active?.title ?? "Major outage reported." }

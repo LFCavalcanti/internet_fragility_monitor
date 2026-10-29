@@ -3,12 +3,11 @@
 import {
     upsertProvider,
     saveStatusCheck,
-    getActiveIncidents,
+    getOpenIncidents,
     getAllIncidentsForProvider,
     updateIncidentStatus,
     createIncident,
-    resolveIncident,
-    completeMaintenance,
+    closeIncident,
     getAllProviders,
     getLatestStatusCheck,
 } from "./dao";
@@ -20,6 +19,7 @@ import type {
     StatusResult,
 } from "./fetchers/types";
 import { providersList } from "./fetchers";
+import { isClosed } from "./incident-status";
 
 export async function ensureProvidersExist() {
     for (const p of providersList) {
@@ -52,10 +52,10 @@ export async function saveStatusResult(result: StatusResult) {
     // We need to handle:
     // a) New incidents (insert)
     // b) Updated incidents (status, kind or scheduled date changed)
-    // c) Stale incidents (close them if they are no longer in the feed)
+    // c) Incidents that left the Feed (close them)
 
-    // Get all currently open incidents for this provider from DB
-    const activeDbIncidents = await getActiveIncidents(result.providerId);
+    // Get all currently open incidents for this provider from DB (scheduled maintenances included)
+    const openDbIncidents = await getOpenIncidents(result.providerId);
     const allDbIncidents = await getAllIncidentsForProvider(result.providerId);
 
     const currentIncidentTitles = new Set(result.incidents.map(i => i.title));
@@ -93,17 +93,13 @@ export async function saveStatusResult(result: StatusResult) {
         }
     }
 
-    // B. Handle Stale Incidents (close missing)
+    // B. Handle Incidents that left the Feed
     // If an incident is open in DB but NOT in the current result list, the provider closed or removed it:
     // a problem becomes resolved and a maintenance becomes completed.
-    for (const dbInc of activeDbIncidents) {
+    for (const dbInc of openDbIncidents) {
         if (!currentIncidentTitles.has(dbInc.title)) {
-            console.log(`Closing stale incident: ${dbInc.title} for ${result.providerId}`);
-            if (dbInc.kind === "maintenance") {
-                await completeMaintenance(dbInc.id);
-            } else {
-                await resolveIncident(dbInc.id);
-            }
+            console.log(`Closing incident that left the Feed: ${dbInc.title} for ${result.providerId}`);
+            await closeIncident(dbInc.id, dbInc.kind === "maintenance" ? "maintenance" : "problem");
         }
     }
 }
@@ -141,17 +137,16 @@ export async function getLatestStatus(): Promise<StatusResult[]> {
         // Problems keep the cut at the 5 newest (Ticket 04 replaces it with the Recent Incident rule).
         // Scheduled and in-progress maintenances all come along, so Upcoming Maintenance counts them all;
         // completed maintenances never appear.
-        const problems = providerIncidents.filter(i => i.kind !== "maintenance").slice(0, 5);
-        const openMaintenances = providerIncidents.filter(
-            i => i.kind === "maintenance" && i.status !== "completed",
-        );
+        const recorded = providerIncidents.map(toIncidentData);
+        const problems = recorded.filter(i => i.kind === "problem").slice(0, 5);
+        const openMaintenances = recorded.filter(i => i.kind === "maintenance" && !isClosed(i));
 
         // Map back to StatusResult
         results.push({
             providerId: provider.id,
             status: (latestCheck?.status as StatusResult['status']) || "operational",
             responseTime: latestCheck?.responseTime || 0,
-            incidents: [...problems, ...openMaintenances].map(toIncidentData),
+            incidents: [...problems, ...openMaintenances],
             lastUpdated: latestCheck?.checkedAt || undefined,
         });
     }

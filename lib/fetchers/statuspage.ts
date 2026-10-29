@@ -1,7 +1,7 @@
 import {
     Fetcher,
     StatusResult,
-    DeclaredState,
+    DeclaredStatus,
     MaintenanceIncident,
     MaintenancePhase,
     ProblemIncident,
@@ -72,7 +72,7 @@ export class StatusPageFetcher implements Fetcher {
         }
     }
 
-    private mapStatus(indicator: string): DeclaredState {
+    private mapStatus(indicator: string): DeclaredStatus {
         switch (indicator) {
             case "minor":
                 return "degraded";

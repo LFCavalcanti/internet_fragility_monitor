@@ -129,6 +129,44 @@ describe('decideProviderStatus', () => {
         expect(decision.upcomingMaintenance).toEqual({ count: 2, next: new Date('2026-10-29T00:00:00Z') });
     });
 
+    describe('Upcoming Maintenance usa o relógio', () => {
+        it('manutenção ainda scheduled com data já passada não conta, e a próxima data nunca fica no passado', () => {
+            const decision = decideProviderStatus({
+                feeds: [feed('operational', [
+                    maintenance({ title: 'Atrasada', scheduledFor: new Date('2026-10-26T12:00:00Z') }),
+                    maintenance({ title: 'Futura', scheduledFor: new Date('2026-10-28T03:00:00Z') }),
+                ])],
+                probes: [],
+                previousPollUnanswered: false,
+                now,
+            });
+            expect(decision.upcomingMaintenance).toEqual({ count: 1, next: new Date('2026-10-28T03:00:00Z') });
+        });
+
+        it('manutenção marcada para agora já começou: não é Upcoming Maintenance', () => {
+            const decision = decideProviderStatus({
+                feeds: [feed('operational', [maintenance({ scheduledFor: now })])],
+                probes: [],
+                previousPollUnanswered: false,
+                now,
+            });
+            expect(decision.upcomingMaintenance).toBeNull();
+        });
+
+        it('a mesma leitura muda com o relógio: depois da data marcada, a manutenção sai da conta', () => {
+            const feeds = [feed('operational', [maintenance({ scheduledFor: new Date('2026-10-27T02:00:00Z') })])];
+            const before = decideProviderStatus({ feeds, probes: [], previousPollUnanswered: false, now });
+            const after = decideProviderStatus({
+                feeds,
+                probes: [],
+                previousPollUnanswered: false,
+                now: new Date('2026-10-27T02:30:00Z'),
+            });
+            expect(before.upcomingMaintenance).toEqual({ count: 1, next: new Date('2026-10-27T02:00:00Z') });
+            expect(after.upcomingMaintenance).toBeNull();
+        });
+    });
+
     describe('precedência Down, Outage, Degraded, Maintenance, Operational', () => {
         const ongoing = maintenance({ status: 'in_progress' });
 

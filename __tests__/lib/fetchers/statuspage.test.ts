@@ -4,6 +4,7 @@ import { StatusPageFetcher } from '@/lib/fetchers/statuspage';
 import { CloudflareFetcher } from '@/lib/fetchers/cloudflare';
 import { GitHubFetcher } from '@/lib/fetchers/github';
 import { VercelFetcher } from '@/lib/fetchers/vercel';
+import { decideProviderStatus } from '@/lib/provider-status';
 
 // Payload no formato do summary.json da Statuspage.io (recortado do caso da Cloudflare de 26/10/2026).
 const summary = {
@@ -100,6 +101,32 @@ describe('StatusPageFetcher', () => {
             scheduledFor: new Date('2026-10-27T05:00:00Z'),
             url: 'https://stspg.io/mnt1',
         });
+    });
+
+    it('indicator maintenance sem manutenção em andamento resulta em Operational', async () => {
+        stubFetch({
+            status: { indicator: 'maintenance', description: 'Service Under Maintenance' },
+            incidents: [],
+            scheduled_maintenances: [
+                {
+                    id: 'mnt1',
+                    name: 'LIM (Lima) datacenter',
+                    status: 'scheduled',
+                    created_at: '2026-10-20T10:00:00Z',
+                    scheduled_for: '2026-10-27T05:00:00Z',
+                },
+            ],
+        });
+        const result = await new StatusPageFetcher('cloudflare', 'https://www.cloudflarestatus.com').fetchStatus();
+        expect(result.status).toBe('operational');
+
+        const decision = decideProviderStatus({
+            feeds: [{ read: true, declared: 'operational', incidents: result.incidents }],
+            probes: [],
+            previousPollUnanswered: false,
+            now: new Date('2026-10-26T15:00:00Z'),
+        });
+        expect(decision.status).toBe('operational');
     });
 
     it('as cópias de Cloudflare, GitHub e Vercel leem as manutenções do Feed', async () => {

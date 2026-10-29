@@ -123,7 +123,7 @@ export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 
 export const updateIncidentStatusSchema = z.object({
     id: idSchema,
-    status: z.string().min(1, "Status is required").max(50, "Status exceeds maximum length"),
+    status: incidentStatusSchema,
     description: z.string().max(5000, "Description exceeds maximum length").optional(),
     kind: incidentKindSchema.optional(),
     scheduledFor: z.date().optional().nullable(),

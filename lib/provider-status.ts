@@ -3,7 +3,7 @@
  * Módulo puro: recebe as leituras e o relógio, não lê banco nem rede.
  * Termos conforme GLOSSARY.md.
  */
-import type { DeclaredState, IncidentData, MaintenanceIncident } from "./fetchers/types";
+import type { DeclaredStatus, IncidentData, MaintenanceIncident } from "./fetchers/types";
 
 export type ProviderStatus =
     | "down"
@@ -19,7 +19,7 @@ export type ProviderStatus =
  * mas não decidem o estado nem a Upcoming Maintenance, que seriam dado velho tomado por atual.
  */
 export type FeedReading =
-    | { read: true; declared: DeclaredState; incidents: IncidentData[] }
+    | { read: true; declared: DeclaredStatus; incidents: IncidentData[] }
     | { read: false; incidents?: IncidentData[] };
 
 export interface ProviderStatusInput {
@@ -55,7 +55,7 @@ export function decideProviderStatus(input: ProviderStatusInput): ProviderStatus
     return {
         status: decideStatus(input),
         incidents: allIncidents.filter(isVisible),
-        upcomingMaintenance: summarizeUpcoming(readIncidents),
+        upcomingMaintenance: summarizeUpcoming(readIncidents, input.now),
     };
 }
 
@@ -81,16 +81,24 @@ function isVisible(incident: IncidentData): boolean {
     return incident.kind === "problem" || incident.status === "in_progress";
 }
 
-function summarizeUpcoming(incidents: IncidentData[]): UpcomingMaintenanceSummary | null {
-    const scheduled = incidents.filter(
-        (i): i is MaintenanceIncident => i.kind === "maintenance" && i.status === "scheduled",
+/**
+ * Upcoming Maintenance: manutenção agendada para o futuro que ainda não começou.
+ * Fase scheduled com data marcada até agora já começou (o Feed só atrasou a fase) e sai da conta.
+ * Sem data marcada, vale a fase declarada: conta, mas não define a próxima data.
+ */
+function summarizeUpcoming(incidents: IncidentData[], now: Date): UpcomingMaintenanceSummary | null {
+    const upcoming = incidents.filter(
+        (i): i is MaintenanceIncident =>
+            i.kind === "maintenance" &&
+            i.status === "scheduled" &&
+            (i.scheduledFor === undefined || i.scheduledFor.getTime() > now.getTime()),
     );
-    if (scheduled.length === 0) return null;
+    if (upcoming.length === 0) return null;
 
-    const dates = scheduled.flatMap(i => (i.scheduledFor ? [i.scheduledFor.getTime()] : []));
+    const dates = upcoming.flatMap(i => (i.scheduledFor ? [i.scheduledFor.getTime()] : []));
 
     return {
-        count: scheduled.length,
+        count: upcoming.length,
         next: dates.length > 0 ? new Date(Math.min(...dates)) : null,
     };
 }

@@ -44,14 +44,13 @@ import {
     getLatestStatusCheck,
     getGlobalLatestStatusCheck,
     saveStatusCheck,
-    getActiveIncidents,
+    getOpenIncidents,
     getAllIncidentsForProvider,
     getIncidentByTitle,
     upsertIncident,
     createIncident,
     updateIncidentStatus,
-    resolveIncident,
-    completeMaintenance,
+    closeIncident,
 } from '@/lib/dao';
 
 describe('dao.ts', () => {
@@ -212,14 +211,14 @@ describe('dao.ts', () => {
     });
 
     describe('Incident Operations', () => {
-        describe('getActiveIncidents', () => {
-            it('should return non-resolved incidents for provider', async () => {
+        describe('getOpenIncidents', () => {
+            it('devolve os Incidents abertos do Provider', async () => {
                 const mockIncidents = [
                     { id: 'inc-1', providerId: 'aws', title: 'Issue 1', status: 'investigating', createdAt: new Date() },
                 ];
                 mockDb.query.incidents.findMany = vi.fn().mockResolvedValueOnce(mockIncidents);
 
-                const result = await getActiveIncidents('aws');
+                const result = await getOpenIncidents('aws');
 
                 expect(mockDb.query.incidents.findMany).toHaveBeenCalled();
                 expect(result).toEqual(mockIncidents);
@@ -319,9 +318,9 @@ describe('dao.ts', () => {
             });
         });
 
-        describe('resolveIncident', () => {
-            it('should mark incident as resolved with current timestamp', async () => {
-                await resolveIncident('inc-123');
+        describe('closeIncident', () => {
+            it('encerra um problema como resolved, com a hora do encerramento', async () => {
+                await closeIncident('inc-123', 'problem');
 
                 expect(mockDb.update).toHaveBeenCalled();
                 expect(mockDb.set).toHaveBeenCalledWith(
@@ -332,14 +331,8 @@ describe('dao.ts', () => {
                 );
             });
 
-            it('should throw validation error for empty ID', async () => {
-                await expect(resolveIncident('')).rejects.toThrow('Validation failed');
-            });
-        });
-
-        describe('completeMaintenance', () => {
             it('encerra a manutenção com a fase completed e a hora do encerramento', async () => {
-                await completeMaintenance('mnt-1');
+                await closeIncident('mnt-1', 'maintenance');
 
                 expect(mockDb.set).toHaveBeenCalledWith(
                     expect.objectContaining({
@@ -350,7 +343,7 @@ describe('dao.ts', () => {
             });
 
             it('should throw validation error for empty ID', async () => {
-                await expect(completeMaintenance('')).rejects.toThrow('Validation failed');
+                await expect(closeIncident('', 'problem')).rejects.toThrow('Validation failed');
             });
         });
 
@@ -364,6 +357,23 @@ describe('dao.ts', () => {
                 );
                 expect(mockDb.set).not.toHaveBeenCalledWith(
                     expect.objectContaining({ resolvedAt: expect.any(Date) })
+                );
+            });
+
+            it('Incident encerrado que volta a uma fase aberta perde a hora do encerramento', async () => {
+                // ex.: manutenção encerrada pela migration 0002 que reaparece no Feed como scheduled
+                await updateIncidentStatus('mnt-1', 'scheduled', undefined, { kind: 'maintenance', scheduledFor: null });
+
+                expect(mockDb.set).toHaveBeenCalledWith(
+                    expect.objectContaining({ status: 'scheduled', resolvedAt: null })
+                );
+            });
+
+            it('problema que volta de resolved para investigating perde a hora do encerramento', async () => {
+                await updateIncidentStatus('inc-1', 'investigating');
+
+                expect(mockDb.set).toHaveBeenCalledWith(
+                    expect.objectContaining({ status: 'investigating', resolvedAt: null })
                 );
             });
 

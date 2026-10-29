@@ -14,6 +14,7 @@ import { providers, incidents, statusChecks } from "./schema";
 import type { Provider, NewProvider, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
 import { eq, desc, and, notInArray } from "drizzle-orm";
 import type { IncidentKind } from "./fetchers/types";
+import { CLOSED_STATUSES, closedStatusFor, isClosed, type IncidentStatus } from "./incident-status";
 import {
     validate,
     idSchema,
@@ -89,17 +90,15 @@ export async function saveStatusCheck(data: Omit<NewStatusCheck, "id">): Promise
 // Incident Operations
 // ============================================================================
 
-/** Status em que um Incident está encerrado: problema resolved, manutenção completed. */
-const CLOSED_STATUSES = ["resolved", "completed"];
-
-export async function getActiveIncidents(providerId: string): Promise<Incident[]> {
-    const { providerId: validId } = validate(providerIdParamSchema, { providerId }, "getActiveIncidents");
+/** Incidents abertos do Provider: tudo o que não está encerrado, inclusive manutenção agendada. */
+export async function getOpenIncidents(providerId: string): Promise<Incident[]> {
+    const { providerId: validId } = validate(providerIdParamSchema, { providerId }, "getOpenIncidents");
     const db = getDb();
 
     return await db.query.incidents.findMany({
         where: and(
             eq(incidents.providerId, validId),
-            notInArray(incidents.status, CLOSED_STATUSES)
+            notInArray(incidents.status, [...CLOSED_STATUSES])
         ),
         orderBy: [desc(incidents.createdAt)],
     });
@@ -165,7 +164,7 @@ export async function createIncident(data: Omit<NewIncident, "id">): Promise<str
 
 export async function updateIncidentStatus(
     id: string,
-    status: string,
+    status: IncidentStatus,
     description?: string,
     details?: { kind?: IncidentKind; scheduledFor?: Date | null },
 ): Promise<void> {
@@ -182,28 +181,18 @@ export async function updateIncidentStatus(
         ...(validData.kind ? { kind: validData.kind } : {}),
         ...(validData.scheduledFor !== undefined ? { scheduledFor: validData.scheduledFor } : {}),
         updatedAt: new Date(),
-        ...(CLOSED_STATUSES.includes(validData.status) ? { resolvedAt: new Date() } : {}),
+        // Encerrado marca a hora do encerramento; de volta a uma fase aberta, a hora sai.
+        resolvedAt: isClosed(validData) ? new Date() : null,
     }).where(eq(incidents.id, validData.id));
 }
 
-export async function resolveIncident(id: string): Promise<void> {
-    const validId = validate(idSchema, id, "resolveIncident");
+/** Encerra um Incident que saiu do Feed: problema vira resolved, manutenção vira completed. */
+export async function closeIncident(id: string, kind: IncidentKind): Promise<void> {
+    const validId = validate(idSchema, id, "closeIncident");
 
     const db = getDb();
     await db.update(incidents).set({
-        status: "resolved",
-        updatedAt: new Date(),
-        resolvedAt: new Date(),
-    }).where(eq(incidents.id, validId));
-}
-
-/** Encerra uma manutenção que saiu do Feed: a fase passa a completed. */
-export async function completeMaintenance(id: string): Promise<void> {
-    const validId = validate(idSchema, id, "completeMaintenance");
-
-    const db = getDb();
-    await db.update(incidents).set({
-        status: "completed",
+        status: closedStatusFor(kind),
         updatedAt: new Date(),
         resolvedAt: new Date(),
     }).where(eq(incidents.id, validId));

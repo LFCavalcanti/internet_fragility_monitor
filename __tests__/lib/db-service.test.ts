@@ -8,12 +8,11 @@ import type { StatusResult } from '@/lib/fetchers/types';
 vi.mock('@/lib/dao', () => ({
     upsertProvider: vi.fn().mockResolvedValue(undefined),
     saveStatusCheck: vi.fn().mockResolvedValue(undefined),
-    getActiveIncidents: vi.fn().mockResolvedValue([]),
+    getOpenIncidents: vi.fn().mockResolvedValue([]),
     getAllIncidentsForProvider: vi.fn().mockResolvedValue([]),
     updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
     createIncident: vi.fn().mockResolvedValue('new-incident-id'),
-    resolveIncident: vi.fn().mockResolvedValue(undefined),
-    completeMaintenance: vi.fn().mockResolvedValue(undefined),
+    closeIncident: vi.fn().mockResolvedValue(undefined),
     getAllProviders: vi.fn().mockResolvedValue([]),
     getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
 }));
@@ -35,12 +34,11 @@ import {
 import {
     upsertProvider,
     saveStatusCheck,
-    getActiveIncidents,
+    getOpenIncidents,
     getAllIncidentsForProvider,
     updateIncidentStatus,
     createIncident,
-    resolveIncident,
-    completeMaintenance,
+    closeIncident,
     getAllProviders,
     getLatestStatusCheck,
 } from '@/lib/dao';
@@ -98,7 +96,7 @@ describe('db-service.ts', () => {
             };
 
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
             await saveStatusResult(resultWithIncident);
 
@@ -139,7 +137,7 @@ describe('db-service.ts', () => {
             };
 
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([existingIncident]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([existingIncident]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([existingIncident]);
 
             await saveStatusResult(resultWithUpdatedIncident);
 
@@ -178,14 +176,14 @@ describe('db-service.ts', () => {
             };
 
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([existingIncident]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([existingIncident]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([existingIncident]);
 
             await saveStatusResult(resultWithSameIncident);
 
             expect(updateIncidentStatus).not.toHaveBeenCalled();
         });
 
-        it('should resolve stale incidents no longer in the feed', async () => {
+        it('encerra como problema o Incident que saiu do Feed', async () => {
             const staleIncident = {
                 id: 'inc-stale',
                 providerId: 'aws',
@@ -203,14 +201,14 @@ describe('db-service.ts', () => {
 
             // Empty incidents array = all previous incidents should be resolved
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([staleIncident]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([staleIncident]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([staleIncident]);
 
             // Suppress console.log for this test
             vi.spyOn(console, 'log').mockImplementation(() => {});
 
             await saveStatusResult(baseResult);
 
-            expect(resolveIncident).toHaveBeenCalledWith('inc-stale');
+            expect(closeIncident).toHaveBeenCalledWith('inc-stale', 'problem');
         });
 
         it('falha de leitura grava unreachable e não encerra nem altera os Incidents gravados', async () => {
@@ -230,20 +228,19 @@ describe('db-service.ts', () => {
             };
             const openMaintenance = { ...openProblem, id: 'mnt-open', title: 'Network upgrade', status: 'in_progress', kind: 'maintenance' };
             vi.mocked(getAllIncidentsForProvider).mockResolvedValue([openProblem, openMaintenance]);
-            vi.mocked(getActiveIncidents).mockResolvedValue([openProblem, openMaintenance]);
+            vi.mocked(getOpenIncidents).mockResolvedValue([openProblem, openMaintenance]);
 
             try {
                 await saveStatusResult({ providerId: 'aws', status: 'unreachable', incidents: [], responseTime: 0 });
             } finally {
                 vi.mocked(getAllIncidentsForProvider).mockResolvedValue([]);
-                vi.mocked(getActiveIncidents).mockResolvedValue([]);
+                vi.mocked(getOpenIncidents).mockResolvedValue([]);
             }
 
             expect(saveStatusCheck).toHaveBeenCalledWith(
                 expect.objectContaining({ providerId: 'aws', status: 'unreachable' }),
             );
-            expect(resolveIncident).not.toHaveBeenCalled();
-            expect(completeMaintenance).not.toHaveBeenCalled();
+            expect(closeIncident).not.toHaveBeenCalled();
             expect(updateIncidentStatus).not.toHaveBeenCalled();
             expect(createIncident).not.toHaveBeenCalled();
         });
@@ -266,7 +263,7 @@ describe('db-service.ts', () => {
 
         it('grava manutenção nova com tipo, fase e data marcada', async () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
             await saveStatusResult({
                 ...baseResult,
@@ -290,7 +287,7 @@ describe('db-service.ts', () => {
 
         it('grava problema novo com tipo problema e sem data marcada', async () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
             await saveStatusResult({
                 ...baseResult,
@@ -307,7 +304,7 @@ describe('db-service.ts', () => {
         it('o Poll seguinte atualiza a manutenção migrada como completed que continua no Feed', async () => {
             const migrated = maintenanceRow({ status: 'completed', scheduledFor: null });
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([migrated]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
             await saveStatusResult({
                 ...baseResult,
@@ -331,7 +328,7 @@ describe('db-service.ts', () => {
 
         it('atualiza a manutenção quando a data marcada muda, mesmo com a fase igual', async () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow()]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow()]);
 
             await saveStatusResult({
                 ...baseResult,
@@ -355,7 +352,7 @@ describe('db-service.ts', () => {
 
         it('não atualiza manutenção sem mudança de fase nem de data', async () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow()]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow()]);
 
             await saveStatusResult({
                 ...baseResult,
@@ -372,15 +369,15 @@ describe('db-service.ts', () => {
             expect(updateIncidentStatus).not.toHaveBeenCalled();
         });
 
-        it('manutenção que some do Feed vira completed, não resolved', async () => {
+        it('manutenção que some do Feed é encerrada como manutenção, não como problema', async () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
-            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
+            vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
             vi.spyOn(console, 'log').mockImplementation(() => {});
 
             await saveStatusResult({ ...baseResult, providerId: 'cloudflare' });
 
-            expect(completeMaintenance).toHaveBeenCalledWith('mnt-1');
-            expect(resolveIncident).not.toHaveBeenCalled();
+            expect(closeIncident).toHaveBeenCalledWith('mnt-1', 'maintenance');
+            expect(closeIncident).toHaveBeenCalledTimes(1);
         });
     });
 
