@@ -17,7 +17,6 @@ export default defineConfig([
     ".agents/**",
     "*.db",
     "*.af*",
-    "update-logos.mjs",
     "check-db.js",
   ]),
 ]);

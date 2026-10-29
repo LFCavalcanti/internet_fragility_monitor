@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchAllStatuses } from "./fetchers";
-import { saveStatusResult, ensureProvidersExist } from "./db-service";
+import { saveStatusResult } from "./db-service";
 import { getGlobalLatestStatusCheck } from "./dao";
 
 let isRunning = false;
@@ -39,7 +39,6 @@ export async function initCron() {
 
 async function runJob() {
     try {
-        await ensureProvidersExist();
         const results = await fetchAllStatuses();
         for (const result of results) {
             await saveStatusResult(result);

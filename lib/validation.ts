@@ -38,23 +38,7 @@ export const flexibleUrlSchema = z
     .max(2048, "URL exceeds maximum length of 2048 characters")
     .optional();
 
-// ============================================================================
-// Provider Schemas
-// ============================================================================
-
-export const providerTypeSchema = z.enum(["cloud", "cdn", "paas", "other"]);
-
-export const providerSchema = z.object({
-    id: idSchema,
-    name: z.string().min(1, "Name is required").max(255, "Name exceeds maximum length").trim(),
-    url: z.string().min(1, "URL is required").max(2048, "URL exceeds maximum length"),
-    type: z.string().min(1, "Type is required").max(50, "Type exceeds maximum length"),
-    logo: z.string().max(2048, "Logo URL exceeds maximum length").optional().nullable(),
-});
-
-export const newProviderSchema = providerSchema;
-
-export type ProviderInput = z.infer<typeof providerSchema>;
+// O Provider Catalog não tem esquema de escrita: ele muda só por migrations de dados (ADR 0001).
 
 // ============================================================================
 // Status Check Schemas

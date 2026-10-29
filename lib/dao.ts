@@ -11,14 +11,13 @@
 
 import { getDb } from "./db";
 import { providers, incidents, statusChecks } from "./schema";
-import type { Provider, NewProvider, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
-import { eq, desc, and, notInArray } from "drizzle-orm";
+import type { Provider, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
+import { eq, desc, asc, and, notInArray } from "drizzle-orm";
 import type { IncidentKind } from "./fetchers/types";
 import { CLOSED_STATUSES, closedStatusFor, isClosed, type IncidentStatus } from "./incident-status";
 import {
     validate,
     idSchema,
-    providerSchema,
     newStatusCheckSchema,
     incidentSchema,
     createIncidentSchema,
@@ -31,28 +30,21 @@ import {
 // Provider Operations
 // ============================================================================
 
-export async function getAllProviders(): Promise<Provider[]> {
+// O Provider Catalog só é lido aqui: ele muda por migrations de dados (ADR 0001), nunca pelo código.
+
+/** Providers ativos do Provider Catalog, na ordem de exibição. */
+export async function getActiveProviders(): Promise<Provider[]> {
     const db = getDb();
-    return await db.select().from(providers).all();
+    return await db.select().from(providers)
+        .where(eq(providers.active, true))
+        .orderBy(asc(providers.displayOrder), asc(providers.id))
+        .all();
 }
 
 export async function getProviderById(id: string): Promise<Provider | undefined> {
     const validId = validate(idSchema, id, "getProviderById");
     const db = getDb();
     return await db.select().from(providers).where(eq(providers.id, validId)).get();
-}
-
-export async function upsertProvider(data: NewProvider): Promise<void> {
-    const validData = validate(providerSchema, data, "upsertProvider");
-
-    const db = getDb();
-    const existing = await db.select().from(providers).where(eq(providers.id, validData.id)).get();
-
-    if (!existing) {
-        await db.insert(providers).values(validData);
-    } else {
-        await db.update(providers).set(validData).where(eq(providers.id, validData.id));
-    }
 }
 
 // ============================================================================

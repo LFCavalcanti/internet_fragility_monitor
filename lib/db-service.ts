@@ -1,31 +1,29 @@
 "use server";
 
 import {
-    upsertProvider,
     saveStatusCheck,
     getOpenIncidents,
     getAllIncidentsForProvider,
     updateIncidentStatus,
     createIncident,
     closeIncident,
-    getAllProviders,
+    getActiveProviders,
     getLatestStatusCheck,
 } from "./dao";
-import type { Incident } from "./schema";
+import type { Incident, Provider } from "./schema";
 import type {
     IncidentData,
     MaintenancePhase,
     ProblemStatus,
     StatusResult,
 } from "./fetchers/types";
-import { providersList } from "./fetchers";
 import { isClosed } from "./incident-status";
 import { isRecentlyResolved } from "./provider-status";
 
-export async function ensureProvidersExist() {
-    for (const p of providersList) {
-        await upsertProvider(p);
-    }
+/** Um Provider ativo do Provider Catalog com o resultado dele no Snapshot. */
+export interface SnapshotEntry {
+    provider: Provider;
+    result: StatusResult;
 }
 
 function scheduledForOf(inc: IncidentData): Date | null {
@@ -128,16 +126,17 @@ function toIncidentData(row: Incident): IncidentData {
 }
 
 /**
- * Leitura do Snapshot. Por Provider, traz os Incidents que o módulo de Provider Status pode exibir ou contar:
+ * Leitura do Snapshot, guiada pelo Provider Catalog: os Providers ativos, na ordem de exibição, cada um com seus dados.
+ * Por Provider, traz os Incidents que o módulo de Provider Status pode exibir ou contar:
  * todos os abertos (problemas, manutenções agendadas e em andamento), sem corte por quantidade,
  * e os problemas resolvidos dentro da janela de Recent Incident. Manutenção completed nunca vem.
  * `now` é o mesmo relógio que a página passa ao módulo.
  */
-export async function getLatestStatus(now: Date): Promise<StatusResult[]> {
-    const allProviders = await getAllProviders();
-    const results: StatusResult[] = [];
+export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
+    const activeProviders = await getActiveProviders();
+    const entries: SnapshotEntry[] = [];
 
-    for (const provider of allProviders) {
+    for (const provider of activeProviders) {
         const latestCheck = await getLatestStatusCheck(provider.id);
 
         // All recorded incidents for this provider (newest first)
@@ -146,14 +145,17 @@ export async function getLatestStatus(now: Date): Promise<StatusResult[]> {
             .map(toIncidentData)
             .filter(i => !isClosed(i) || isRecentlyResolved(i, now));
 
-        results.push({
-            providerId: provider.id,
-            status: (latestCheck?.status as StatusResult['status']) || "operational",
-            responseTime: latestCheck?.responseTime || 0,
-            incidents,
-            lastUpdated: latestCheck?.checkedAt || undefined,
+        entries.push({
+            provider,
+            result: {
+                providerId: provider.id,
+                status: (latestCheck?.status as StatusResult['status']) || "operational",
+                responseTime: latestCheck?.responseTime || 0,
+                incidents,
+                lastUpdated: latestCheck?.checkedAt || undefined,
+            },
         });
     }
 
-    return results;
+    return entries;
 }

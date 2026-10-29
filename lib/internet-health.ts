@@ -7,9 +7,6 @@ import type { IncidentData, StatusResult } from "./fetchers/types";
 import type { ProviderStatus } from "./provider-status";
 import { isClosed } from "./incident-status";
 
-/** Major Providers enquanto o Provider Catalog não existe (o Ticket 07 troca pela marcação no banco). */
-export const MAJOR_PROVIDERS: readonly string[] = ["aws", "google-cloud", "azure", "cloudflare"];
-
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
 
 /** O que o Internet Health precisa saber de um Provider: o estado decidido e os Incidents a exibir. */
@@ -23,7 +20,7 @@ export interface ProviderSnapshotEntry {
 
 export interface InternetHealthInput {
     providers: ProviderSnapshotEntry[];
-    /** Ids dos Major Providers. */
+    /** Ids dos Major Providers, marcados no Provider Catalog. */
     majorProviders: readonly string[];
     /** Hora do último Poll; `null` quando nenhum Poll foi registrado. */
     lastPollAt: Date | null;

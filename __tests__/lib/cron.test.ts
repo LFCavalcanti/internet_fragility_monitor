@@ -21,7 +21,6 @@ vi.mock('@/lib/fetchers', () => ({
 // Mock db-service
 vi.mock('@/lib/db-service', () => ({
     saveStatusResult: vi.fn().mockResolvedValue(undefined),
-    ensureProvidersExist: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock DAO
@@ -30,7 +29,7 @@ vi.mock('@/lib/dao', () => ({
 }));
 
 import { getGlobalLatestStatusCheck } from '@/lib/dao';
-import { saveStatusResult, ensureProvidersExist } from '@/lib/db-service';
+import { saveStatusResult } from '@/lib/db-service';
 import { fetchAllStatuses } from '@/lib/fetchers';
 
 describe('cron.ts', () => {
@@ -90,7 +89,6 @@ describe('cron.ts', () => {
             await initCron();
 
             // Should trigger immediate update
-            expect(ensureProvidersExist).toHaveBeenCalled();
             expect(fetchAllStatuses).toHaveBeenCalled();
         });
 
@@ -141,7 +139,7 @@ describe('cron.ts', () => {
 
             await initCron();
 
-            expect(ensureProvidersExist).toHaveBeenCalled();
+            expect(fetchAllStatuses).toHaveBeenCalled();
         });
     });
 

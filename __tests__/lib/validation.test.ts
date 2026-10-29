@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
     idSchema,
     urlSchema,
-    providerSchema,
     statusValueSchema,
     newStatusCheckSchema,
     incidentSchema,
@@ -77,32 +76,6 @@ describe('Validation Schemas', () => {
 
         it('rejeita o antigo status "maintenance": manutenção agora é um tipo, com fase própria', () => {
             expect(() => validate(incidentStatusSchema, 'maintenance')).toThrow();
-        });
-    });
-
-    describe('providerSchema', () => {
-        const validProvider = {
-            id: 'cloudflare',
-            name: 'Cloudflare',
-            url: 'https://www.cloudflarestatus.com',
-            type: 'cdn',
-            logo: '/logos/cloudflare.svg',
-        };
-
-        it('accepts valid provider data', () => {
-            expect(() => validate(providerSchema, validProvider)).not.toThrow();
-        });
-
-        it('rejects missing required fields', () => {
-            expect(() => validate(providerSchema, { ...validProvider, id: '' })).toThrow('ID is required');
-            expect(() => validate(providerSchema, { ...validProvider, name: '' })).toThrow('Name is required');
-            expect(() => validate(providerSchema, { ...validProvider, url: '' })).toThrow('URL is required');
-            expect(() => validate(providerSchema, { ...validProvider, type: '' })).toThrow('Type is required');
-        });
-
-        it('accepts null/undefined logo', () => {
-            expect(() => validate(providerSchema, { ...validProvider, logo: null })).not.toThrow();
-            expect(() => validate(providerSchema, { ...validProvider, logo: undefined })).not.toThrow();
         });
     });
 

@@ -38,9 +38,7 @@ vi.mock('@/lib/db', () => {
 // Import mocks and functions after mocking
 import { getDb } from '@/lib/db';
 import {
-    getAllProviders,
     getProviderById,
-    upsertProvider,
     getLatestStatusCheck,
     getGlobalLatestStatusCheck,
     saveStatusCheck,
@@ -62,22 +60,6 @@ describe('dao.ts', () => {
     });
 
     describe('Provider Operations', () => {
-        describe('getAllProviders', () => {
-            it('should call db.select().from(providers).all()', async () => {
-                const mockProviders = [
-                    { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null },
-                ];
-                (mockDb.all as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockProviders);
-
-                const result = await getAllProviders();
-
-                expect(mockDb.select).toHaveBeenCalled();
-                expect(mockDb.from).toHaveBeenCalled();
-                expect(mockDb.all).toHaveBeenCalled();
-                expect(result).toEqual(mockProviders);
-            });
-        });
-
         describe('getProviderById', () => {
             it('should validate ID and return provider when found', async () => {
                 const mockProvider = { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null };
@@ -102,42 +84,6 @@ describe('dao.ts', () => {
             });
         });
 
-        describe('upsertProvider', () => {
-            const validProvider = {
-                id: 'cloudflare',
-                name: 'Cloudflare',
-                url: 'https://www.cloudflare.com',
-                type: 'cdn',
-                logo: '/logos/cloudflare.svg',
-            };
-
-            it('should insert new provider when not existing', async () => {
-                (mockDb.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
-
-                await upsertProvider(validProvider);
-
-                expect(mockDb.insert).toHaveBeenCalled();
-                expect(mockDb.values).toHaveBeenCalled();
-            });
-
-            it('should update existing provider', async () => {
-                (mockDb.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(validProvider);
-
-                await upsertProvider({ ...validProvider, name: 'Cloudflare Updated' });
-
-                expect(mockDb.update).toHaveBeenCalled();
-                expect(mockDb.set).toHaveBeenCalled();
-            });
-
-            it('should throw validation error for invalid provider data', async () => {
-                await expect(upsertProvider({
-                    id: '',
-                    name: 'Test',
-                    url: 'https://test.com',
-                    type: 'other',
-                })).rejects.toThrow('Validation failed');
-            });
-        });
     });
 
     describe('Status Check Operations', () => {

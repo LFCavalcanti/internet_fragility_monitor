@@ -22,6 +22,20 @@
       "when": 1793235293666,
       "tag": "0002_maintenance_incidents_to_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793237547385,
+      "tag": "0003_provider_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793237553213,
+      "tag": "0004_provider_catalog_load",
+      "breakpoints": true
     }
   ]
 }

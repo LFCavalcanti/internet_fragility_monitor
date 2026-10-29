@@ -6,60 +6,49 @@ import type { StatusResult } from '@/lib/fetchers/types';
 
 // Mock the DAO functions
 vi.mock('@/lib/dao', () => ({
-    upsertProvider: vi.fn().mockResolvedValue(undefined),
     saveStatusCheck: vi.fn().mockResolvedValue(undefined),
     getOpenIncidents: vi.fn().mockResolvedValue([]),
     getAllIncidentsForProvider: vi.fn().mockResolvedValue([]),
     updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
     createIncident: vi.fn().mockResolvedValue('new-incident-id'),
     closeIncident: vi.fn().mockResolvedValue(undefined),
-    getAllProviders: vi.fn().mockResolvedValue([]),
+    getActiveProviders: vi.fn().mockResolvedValue([]),
     getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock the providers list
-vi.mock('@/lib/fetchers', () => ({
-    providersList: [
-        { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null },
-        { id: 'azure', name: 'Azure', url: 'https://azure.microsoft.com', type: 'cloud', logo: null },
-    ],
-}));
-
 import {
-    ensureProvidersExist,
     saveStatusResult,
     getLatestStatus,
 } from '@/lib/db-service';
 
 import {
-    upsertProvider,
     saveStatusCheck,
     getOpenIncidents,
     getAllIncidentsForProvider,
     updateIncidentStatus,
     createIncident,
     closeIncident,
-    getAllProviders,
+    getActiveProviders,
     getLatestStatusCheck,
 } from '@/lib/dao';
+import type { Provider } from '@/lib/schema';
+
+/** Um Provider ativo do Provider Catalog, como o DAO devolve. */
+const catalogProvider = (id: string, name: string, displayOrder = 1): Provider => ({
+    id,
+    name,
+    url: `https://${id}.example`,
+    statusPageUrl: `https://status.${id}.example`,
+    type: 'cloud',
+    logo: null,
+    isMajor: false,
+    active: true,
+    displayOrder,
+});
 
 describe('db-service.ts', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-    });
-
-    describe('ensureProvidersExist', () => {
-        it('should call upsertProvider for each provider in the list', async () => {
-            await ensureProvidersExist();
-
-            expect(upsertProvider).toHaveBeenCalledTimes(2);
-            expect(upsertProvider).toHaveBeenCalledWith(
-                expect.objectContaining({ id: 'aws' })
-            );
-            expect(upsertProvider).toHaveBeenCalledWith(
-                expect.objectContaining({ id: 'azure' })
-            );
-        });
     });
 
     describe('saveStatusResult', () => {
@@ -400,11 +389,8 @@ describe('db-service.ts', () => {
     });
 
     describe('getLatestStatus', () => {
-        it('should return status results for all providers', async () => {
-            const providers = [
-                { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null },
-                { id: 'azure', name: 'Azure', url: 'https://azure.microsoft.com', type: 'cloud', logo: null },
-            ];
+        it('should return status results for all active providers, each with its catalog data', async () => {
+            const providers = [catalogProvider('aws', 'AWS', 1), catalogProvider('azure', 'Azure', 2)];
 
             const awsCheck = {
                 id: 1,
@@ -414,7 +400,7 @@ describe('db-service.ts', () => {
                 checkedAt: new Date(),
             };
 
-            vi.mocked(getAllProviders).mockResolvedValueOnce(providers);
+            vi.mocked(getActiveProviders).mockResolvedValueOnce(providers);
             vi.mocked(getLatestStatusCheck)
                 .mockResolvedValueOnce(awsCheck)
                 .mockResolvedValueOnce(undefined);
@@ -425,20 +411,20 @@ describe('db-service.ts', () => {
             const results = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(results).toHaveLength(2);
-            expect(results[0]).toMatchObject({
+            expect(results[0].provider).toBe(providers[0]);
+            expect(results[0].result).toMatchObject({
                 providerId: 'aws',
                 status: 'operational',
             });
-            expect(results[1]).toMatchObject({
+            expect(results[1].provider).toBe(providers[1]);
+            expect(results[1].result).toMatchObject({
                 providerId: 'azure',
                 status: 'operational', // Default when no check found
             });
         });
 
         it('traz a falha de leitura como unreachable, com os Incidents gravados', async () => {
-            vi.mocked(getAllProviders).mockResolvedValueOnce([
-                { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null },
-            ]);
+            vi.mocked(getActiveProviders).mockResolvedValueOnce([catalogProvider('aws', 'AWS')]);
             vi.mocked(getLatestStatusCheck).mockResolvedValueOnce({
                 id: 1,
                 providerId: 'aws',
@@ -461,7 +447,7 @@ describe('db-service.ts', () => {
                 resolvedAt: null,
             }]);
 
-            const [aws] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
+            const [{ result: aws }] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(aws.status).toBe('unreachable');
             expect(aws.incidents).toEqual([
@@ -495,11 +481,11 @@ describe('db-service.ts', () => {
                 row('Resolved sem hora, criado há 72h', 'resolved', hoursAgo(72)),
             ];
 
-            vi.mocked(getAllProviders).mockResolvedValueOnce([{ id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null }]);
+            vi.mocked(getActiveProviders).mockResolvedValueOnce([catalogProvider('aws', 'AWS')]);
             vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
 
-            const [result] = await getLatestStatus(now);
+            const [{ result }] = await getLatestStatus(now);
 
             expect(result.incidents.map(i => i.title)).toEqual([
                 ...active.map(r => r.title),
@@ -510,7 +496,7 @@ describe('db-service.ts', () => {
         });
 
         it('traz todas as manutenções agendadas e em andamento, fora do corte de 5, e omite as completed', async () => {
-            const providers = [{ id: 'cloudflare', name: 'Cloudflare', url: 'https://cloudflare.com', type: 'cdn', logo: null }];
+            const providers = [catalogProvider('cloudflare', 'Cloudflare')];
             const row = (i: number, kind: string, status: string, scheduledFor: Date | null) => ({
                 id: `row-${kind}-${i}`,
                 providerId: 'cloudflare',
@@ -533,11 +519,11 @@ describe('db-service.ts', () => {
                 row(40, 'problem', 'identified', null),
             ];
 
-            vi.mocked(getAllProviders).mockResolvedValueOnce(providers);
+            vi.mocked(getActiveProviders).mockResolvedValueOnce(providers);
             vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
 
-            const [result] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
+            const [{ result }] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'scheduled')).toHaveLength(25);
             expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'in_progress')).toHaveLength(1);

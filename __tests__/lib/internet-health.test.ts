@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
     decideInternetHealth,
     lastAnsweredPollAt,
-    MAJOR_PROVIDERS,
     type InternetHealth,
     type ProviderSnapshotEntry,
 } from '@/lib/internet-health';
@@ -11,6 +10,9 @@ import type { ProviderStatus } from '@/lib/provider-status';
 import type { IncidentData, StatusResult } from '@/lib/fetchers/types';
 
 const now = new Date('2026-10-26T15:00:00Z');
+
+/** Os Major Providers marcados no Provider Catalog (migration de carga). */
+const MAJOR_PROVIDERS = ['aws', 'google-cloud', 'azure', 'cloudflare'];
 
 const NAMES: Record<string, string> = {
     aws: 'AWS',
@@ -82,7 +84,6 @@ describe('decideInternetHealth', () => {
     });
 
     it('Cloudflare é Major Provider: um Outage dela sozinha já é Critical', () => {
-        expect(MAJOR_PROVIDERS).toEqual(['aws', 'google-cloud', 'azure', 'cloudflare']);
         expect(decide([provider('cloudflare', 'outage')]).status).toBe('Critical');
     });
 
