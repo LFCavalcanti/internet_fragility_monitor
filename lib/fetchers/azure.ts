@@ -38,7 +38,7 @@ export class AzureFetcher implements Fetcher {
             console.error("Error fetching Azure status:", error);
             return {
                 providerId: this.providerId,
-                status: "outage",
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

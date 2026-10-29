@@ -34,16 +34,16 @@ export class PingFetcher implements Fetcher {
 
             return {
                 providerId: this.providerId,
-                status: isUp ? "operational" : "outage",
+                status: isUp ? "operational" : "unreachable",
                 incidents: [],
                 responseTime,
             };
         } catch (error) {
             console.error(`Error pinging ${this.providerId}:`, error);
-            // If fetch fails (network error, timeout), assume outage
+            // Sem resposta (erro de rede, timeout) descreve a leitura, não o Provider: Unreachable
             return {
                 providerId: this.providerId,
-                status: "outage",
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

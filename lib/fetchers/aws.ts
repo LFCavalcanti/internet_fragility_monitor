@@ -41,7 +41,7 @@ export class AWSFetcher implements Fetcher {
             console.error("Error fetching AWS status:", error);
             return {
                 providerId: this.providerId,
-                status: "outage",
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

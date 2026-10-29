@@ -65,7 +65,7 @@ export class StatusPageFetcher implements Fetcher {
             console.error(`Error fetching ${this.providerId} status:`, error);
             return {
                 providerId: this.providerId,
-                status: "outage", // Falha de leitura ainda vira Outage; o Ticket 03 troca por Unreachable
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

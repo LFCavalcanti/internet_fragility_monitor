@@ -44,6 +44,10 @@ export async function saveStatusResult(result: StatusResult) {
         checkedAt: new Date(),
     });
 
+    // A read failure says nothing about the Provider's Incidents: the recorded ones stay as they are,
+    // and the card keeps showing them as Recent Incidents.
+    if (result.status === "unreachable") return;
+
     // 2. Sync Incidents
     // We need to handle:
     // a) New incidents (insert)

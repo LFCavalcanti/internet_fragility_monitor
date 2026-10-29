@@ -31,7 +31,7 @@ export class HerokuFetcher implements Fetcher {
             console.error("Error fetching Heroku status:", error);
             return {
                 providerId: this.providerId,
-                status: "outage",
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

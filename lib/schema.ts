@@ -29,7 +29,7 @@ export const incidents = sqliteTable("incidents", {
 export const statusChecks = sqliteTable("status_checks", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     providerId: text("provider_id").references(() => providers.id).notNull(),
-    status: text("status").notNull(), // 'operational', 'degraded', 'outage'
+    status: text("status").notNull(), // 'operational', 'degraded', 'outage', 'unreachable' (falha de leitura)
     responseTime: integer("response_time"),
     checkedAt: integer("checked_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
 });

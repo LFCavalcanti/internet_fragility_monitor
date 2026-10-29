@@ -213,6 +213,41 @@ describe('db-service.ts', () => {
             expect(resolveIncident).toHaveBeenCalledWith('inc-stale');
         });
 
+        it('falha de leitura grava unreachable e não encerra nem altera os Incidents gravados', async () => {
+            const openProblem = {
+                id: 'inc-open',
+                providerId: 'aws',
+                title: 'Elevated errors',
+                description: null,
+                status: 'identified',
+                kind: 'problem',
+                severity: null,
+                scheduledFor: null,
+                url: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                resolvedAt: null,
+            };
+            const openMaintenance = { ...openProblem, id: 'mnt-open', title: 'Network upgrade', status: 'in_progress', kind: 'maintenance' };
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValue([openProblem, openMaintenance]);
+            vi.mocked(getActiveIncidents).mockResolvedValue([openProblem, openMaintenance]);
+
+            try {
+                await saveStatusResult({ providerId: 'aws', status: 'unreachable', incidents: [], responseTime: 0 });
+            } finally {
+                vi.mocked(getAllIncidentsForProvider).mockResolvedValue([]);
+                vi.mocked(getActiveIncidents).mockResolvedValue([]);
+            }
+
+            expect(saveStatusCheck).toHaveBeenCalledWith(
+                expect.objectContaining({ providerId: 'aws', status: 'unreachable' }),
+            );
+            expect(resolveIncident).not.toHaveBeenCalled();
+            expect(completeMaintenance).not.toHaveBeenCalled();
+            expect(updateIncidentStatus).not.toHaveBeenCalled();
+            expect(createIncident).not.toHaveBeenCalled();
+        });
+
         const maintenanceRow = (overrides: Record<string, unknown> = {}) => ({
             id: 'mnt-1',
             providerId: 'cloudflare',
@@ -383,6 +418,40 @@ describe('db-service.ts', () => {
                 providerId: 'azure',
                 status: 'operational', // Default when no check found
             });
+        });
+
+        it('traz a falha de leitura como unreachable, com os Incidents gravados', async () => {
+            vi.mocked(getAllProviders).mockResolvedValueOnce([
+                { id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null },
+            ]);
+            vi.mocked(getLatestStatusCheck).mockResolvedValueOnce({
+                id: 1,
+                providerId: 'aws',
+                status: 'unreachable',
+                responseTime: 0,
+                checkedAt: new Date('2026-10-26T15:00:00Z'),
+            });
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([{
+                id: 'inc-open',
+                providerId: 'aws',
+                title: 'Elevated errors',
+                description: null,
+                status: 'identified',
+                kind: 'problem',
+                severity: null,
+                scheduledFor: null,
+                url: null,
+                createdAt: new Date('2026-10-26T14:00:00Z'),
+                updatedAt: new Date('2026-10-26T14:00:00Z'),
+                resolvedAt: null,
+            }]);
+
+            const [aws] = await getLatestStatus();
+
+            expect(aws.status).toBe('unreachable');
+            expect(aws.incidents).toEqual([
+                expect.objectContaining({ kind: 'problem', title: 'Elevated errors', status: 'identified' }),
+            ]);
         });
 
         it('should include up to 5 incidents per provider', async () => {

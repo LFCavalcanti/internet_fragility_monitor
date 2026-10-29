@@ -51,6 +51,8 @@ function formatUpcoming({ count, next }: UpcomingMaintenanceSummary): string {
 export function StatusCard({ name, logo, statusPageUrl, result, decision }: StatusCardProps) {
     const displayStatus = decision.status;
     const { icon: StatusIcon, className: statusColor } = STATUS_ICON[displayStatus];
+    // Unreachable descreve a leitura, não o Provider: card cinza e neutro, sem último status conhecido.
+    const unreachable = displayStatus === "unreachable";
 
     // Filter incidents to only show those from the last 48 hours
     const recentIncidents = decision.incidents.filter(inc => {
@@ -62,7 +64,13 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision }: Stat
     const upcoming = decision.upcomingMaintenance;
 
     return (
-        <Card className="w-full hover:shadow-lg transition-shadow duration-200 overflow-hidden flex flex-col h-full border-primary/20 bg-card/50 backdrop-blur-sm rounded-none">
+        <Card
+            data-status={displayStatus}
+            className={cn(
+                "w-full hover:shadow-lg transition-shadow duration-200 overflow-hidden flex flex-col h-full border-primary/20 bg-card/50 backdrop-blur-sm rounded-none",
+                unreachable && "grayscale border-muted bg-muted/30",
+            )}
+        >
             <CardHeader className="flex flex-row p-0 bg-primary/5 backdrop-blur-xl border-b border-white/10 space-y-0 h-20">
                 {/* Left Column: Logo (25%) */}
                 <div className="w-1/5 h-full border-r border-white/10 flex items-center justify-center p-2 bg-background/20 relative">
@@ -109,12 +117,12 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision }: Stat
             <CardContent className="pt-4 flex-1 flex flex-col">
                 <div className="flex justify-between items-end mb-4">
                     <div>
-                        <div className="text-2xl font-bold capitalize flex items-center gap-2">
+                        <div className={cn("text-2xl font-bold capitalize flex items-center gap-2", unreachable && "text-muted-foreground")}>
                             {displayStatus}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            {(displayStatus as any) === 'unknown' || !displayStatus ? (result.responseTime ? `${result.responseTime}ms latency` : "") : ""}
-                        </p>
+                        {unreachable && (
+                            <p className="text-xs text-muted-foreground mt-1">Não foi possível ler a status page</p>
+                        )}
                         {result.lastUpdated && (
                             <p className="text-[10px] text-muted-foreground/70">
                                 Updated {formatDistanceToNow(result.lastUpdated, { addSuffix: true })}

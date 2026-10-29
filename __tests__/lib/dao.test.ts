@@ -194,6 +194,14 @@ describe('dao.ts', () => {
                 expect(mockDb.values).toHaveBeenCalled();
             });
 
+            it('grava a falha de leitura como unreachable', async () => {
+                await saveStatusCheck({ providerId: 'aws', status: 'unreachable', responseTime: 0 });
+
+                expect(mockDb.values).toHaveBeenCalledWith(
+                    expect.objectContaining({ providerId: 'aws', status: 'unreachable' }),
+                );
+            });
+
             it('should throw validation error for invalid status', async () => {
                 await expect(saveStatusCheck({
                     providerId: 'aws',

@@ -193,4 +193,46 @@ describe('decideProviderStatus', () => {
             expect(decision.status).toBe('degraded');
         });
     });
+
+    describe('Unreachable', () => {
+        it('falha de leitura do único Feed, sem Probes, é Unreachable e não Outage', () => {
+            const decision = decideProviderStatus({
+                feeds: [{ read: false }],
+                probes: [],
+                previousPollUnanswered: false,
+                now,
+            });
+            expect(decision.status).toBe('unreachable');
+            expect(decision.incidents).toEqual([]);
+            expect(decision.upcomingMaintenance).toBeNull();
+        });
+
+        it('mantém os Recent Incidents já gravados do Feed não lido, sem virar estado nem Upcoming Maintenance', () => {
+            const active = problem({ title: 'Elevated errors', status: 'identified' });
+            const resolved = problem({ title: 'API latency', status: 'resolved' });
+            const ongoing = maintenance({ title: 'Network upgrade', status: 'in_progress' });
+
+            const decision = decideProviderStatus({
+                feeds: [{ read: false, incidents: [active, resolved, ongoing, maintenance()] }],
+                probes: [],
+                previousPollUnanswered: false,
+                now,
+            });
+
+            expect(decision.status).toBe('unreachable');
+            expect(decision.incidents.map(i => i.title)).toEqual(['Elevated errors', 'API latency', 'Network upgrade']);
+            expect(decision.upcomingMaintenance).toBeNull();
+        });
+
+        it('Incidents gravados de um Feed não lido não pesam no estado vindo de outro Feed lido', () => {
+            const decision = decideProviderStatus({
+                feeds: [{ read: false, incidents: [problem({ title: 'Old outage' })] }, feed('operational')],
+                probes: [],
+                previousPollUnanswered: false,
+                now,
+            });
+            expect(decision.status).toBe('operational');
+            expect(decision.incidents.map(i => i.title)).toEqual(['Old outage']);
+        });
+    });
 });

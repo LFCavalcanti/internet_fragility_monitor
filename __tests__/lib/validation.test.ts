@@ -53,10 +53,12 @@ describe('Validation Schemas', () => {
             expect(() => validate(statusValueSchema, 'operational')).not.toThrow();
             expect(() => validate(statusValueSchema, 'degraded')).not.toThrow();
             expect(() => validate(statusValueSchema, 'outage')).not.toThrow();
-            expect(() => validate(statusValueSchema, 'unknown')).not.toThrow();
+            expect(() => validate(statusValueSchema, 'unreachable')).not.toThrow();
         });
 
         it('rejects invalid status values', () => {
+            // "unknown" saiu do vocabulário: falha de leitura é Unreachable (GLOSSARY.md)
+            expect(() => validate(statusValueSchema, 'unknown')).toThrow();
             expect(() => validate(statusValueSchema, 'invalid')).toThrow();
             expect(() => validate(statusValueSchema, 'OPERATIONAL')).toThrow();
         });

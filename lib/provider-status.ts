@@ -13,10 +13,14 @@ export type ProviderStatus =
     | "operational"
     | "unreachable";
 
-/** Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida. */
+/**
+ * Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida.
+ * Um Feed não lido pode trazer os Incidents já gravados dele: entram nos Recent Incidents,
+ * mas não decidem o estado nem a Upcoming Maintenance, que seriam dado velho tomado por atual.
+ */
 export type FeedReading =
     | { read: true; declared: DeclaredState; incidents: IncidentData[] }
-    | { read: false };
+    | { read: false; incidents?: IncidentData[] };
 
 export interface ProviderStatusInput {
     feeds: FeedReading[];
@@ -45,12 +49,13 @@ export interface ProviderStatusDecision {
 const PRECEDENCE: ProviderStatus[] = ["outage", "degraded", "maintenance", "operational"];
 
 export function decideProviderStatus(input: ProviderStatusInput): ProviderStatusDecision {
-    const incidents = input.feeds.flatMap(f => (f.read ? f.incidents : []));
+    const readIncidents = input.feeds.flatMap(f => (f.read ? f.incidents : []));
+    const allIncidents = input.feeds.flatMap(f => f.incidents ?? []);
 
     return {
         status: decideStatus(input),
-        incidents: incidents.filter(isVisible),
-        upcomingMaintenance: summarizeUpcoming(incidents),
+        incidents: allIncidents.filter(isVisible),
+        upcomingMaintenance: summarizeUpcoming(readIncidents),
     };
 }
 

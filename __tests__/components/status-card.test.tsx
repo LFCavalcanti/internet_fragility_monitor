@@ -156,6 +156,63 @@ describe('StatusCard', () => {
         expect(screen.queryByText('Recent Activity (48h)')).not.toBeInTheDocument();
     });
 
+    describe('Unreachable', () => {
+        it('card cinza e neutro com "Não foi possível ler a status page"', () => {
+            const { container } = renderCard({ status: 'unreachable' });
+
+            expect(screen.getByText('Não foi possível ler a status page')).toBeInTheDocument();
+            expect(screen.getByRole('img', { name: 'unreachable' })).toHaveClass('text-muted-foreground');
+            const card = container.firstElementChild;
+            expect(card).toHaveAttribute('data-status', 'unreachable');
+            expect(card).toHaveClass('grayscale');
+        });
+
+        it('não mostra o último status conhecido nem o tempo de resposta', () => {
+            render(
+                <StatusCard
+                    {...baseProps}
+                    result={createResult({ status: 'unreachable', responseTime: 0 })}
+                    decision={createDecision({ status: 'unreachable' })}
+                />
+            );
+            for (const status of ['operational', 'degraded', 'outage', 'maintenance']) {
+                expect(screen.queryByText(status)).not.toBeInTheDocument();
+            }
+            expect(screen.queryByText(/latency/)).not.toBeInTheDocument();
+        });
+
+        it('continua mostrando os Recent Incidents gravados, com suas datas', () => {
+            renderCard({
+                status: 'unreachable',
+                incidents: [{
+                    kind: 'problem',
+                    title: 'Elevated errors',
+                    status: 'identified',
+                    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                }],
+            });
+            expect(screen.getByText('Elevated errors')).toBeInTheDocument();
+            expect(screen.getByText('about 2 hours ago')).toBeInTheDocument();
+        });
+
+        it('os outros estados não usam o texto nem o cinza de Unreachable', () => {
+            const { container } = renderCard({ status: 'outage' });
+            expect(screen.queryByText('Não foi possível ler a status page')).not.toBeInTheDocument();
+            expect(container.firstElementChild).not.toHaveClass('grayscale');
+        });
+    });
+
+    it('não exibe o tempo de resposta em nenhum estado', () => {
+        render(
+            <StatusCard
+                {...baseProps}
+                result={createResult({ responseTime: 250 })}
+                decision={createDecision()}
+            />
+        );
+        expect(screen.queryByText(/250/)).not.toBeInTheDocument();
+    });
+
     it('renders external link to status page', () => {
         renderCard();
         const link = screen.getByTitle('Visit Status Page');

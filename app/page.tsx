@@ -14,12 +14,16 @@ export default async function Home() {
     const now = new Date();
 
     // O módulo de Provider Status decide o estado de cada Provider; a página só exibe.
-    // Até o Ticket 03 cada Provider tem um Feed, sempre tratado como lido.
+    // Cada Provider tem um Feed; quando a leitura falhou, ele vai como não lido, com os Incidents já gravados.
     const statuses = snapshot.map(result => ({
         providerId: result.providerId,
         result,
         decision: decideProviderStatus({
-            feeds: [{ read: true, declared: result.status, incidents: result.incidents }],
+            feeds: [
+                result.status === "unreachable"
+                    ? { read: false, incidents: result.incidents }
+                    : { read: true, declared: result.status, incidents: result.incidents },
+            ],
             probes: [],
             previousPollUnanswered: false,
             now,

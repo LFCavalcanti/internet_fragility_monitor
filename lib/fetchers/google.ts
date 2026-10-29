@@ -41,7 +41,7 @@ export class GoogleCloudFetcher implements Fetcher {
             console.error("Error fetching GCP status:", error);
             return {
                 providerId: this.providerId,
-                status: "outage",
+                status: "unreachable",
                 incidents: [],
                 responseTime: 0,
             };

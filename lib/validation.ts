@@ -60,7 +60,7 @@ export type ProviderInput = z.infer<typeof providerSchema>;
 // Status Check Schemas
 // ============================================================================
 
-export const statusValueSchema = z.enum(["operational", "degraded", "outage", "unknown"]);
+export const statusValueSchema = z.enum(["operational", "degraded", "outage", "unreachable"]);
 
 export const statusCheckSchema = z.object({
     id: z.number().int().positive().optional(),
