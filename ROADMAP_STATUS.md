@@ -97,11 +97,6 @@ Tudo integrado na `main` (`fd18c36`): tickets 02–07 e as correções pós-revi
 2. **Correção pós-review do Ticket 04** (`refactor(status): ... (Ticket 04)`), achados ainda não aplicados: mover `isRecentlyResolved` de `lib/provider-status.ts` para `lib/incident-status.ts`; `closedAt` devolve número mas o nome sugere `Date`; helper de tempo compartilhado nos testes (`hoursAgo` repetido em 4 arquivos); renomear `__tests__/lib/fetchers/no-24h-cut.test.ts` pelo assunto e usar relógio fixo. O `status !== 'resolved'` nos leitores fica para o Ticket 10 (registrado nos Comments dele).
 3. **Onda 5: Ticket 08** (Poll guiado pelo catálogo, com Probes), que pode rodar junto com os itens 1 e 2.
 
-Decisões de produto ainda abertas para o usuário (nada bloqueado por elas):
-- Card Unreachable mostra os Incidents gravados com a última fase lida ("investigating"): avisar que podem estar desatualizados?
-- Card Unreachable esconde a Upcoming Maintenance (escolha do Ticket 03, a spec não cobre).
-- Textos do hero usam "major outage" e "Service Down", que o glossário evita.
-- Banco vazio: o hero mostra o estado neutro com "No Poll recorded yet."
-- Aviso de Stale mistura português e inglês ("Sem leitura recente. The provider cards may be out of date.").
+Decisões de produto e ações do usuário pendentes: ver `ISSUES_ANNOTATION.md` na raiz (nada bloqueado por elas).
 
 Situação visível conhecida até o Ticket 10: o card da AWS mostra uma lista longa de atualizações do RSS como Incidents ativos (decisão já tomada: agrupar por evento no Ticket 10).
