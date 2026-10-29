@@ -3,22 +3,22 @@
 import { NetworkIllustration } from "./network-illustration";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-
-interface CompromisedService {
-    title: string;
-    providerName: string;
-    providerLogo?: string;
-    description: string;
-    type: 'outage' | 'degraded';
-}
+import type { HeroHighlight, InternetHealth } from "@/lib/internet-health";
 
 interface HeroSectionProps {
-    status: "Healthy" | "Unstable" | "Critical";
-    description: string;
-    compromisedService?: CompromisedService;
+    /** Internet Health decidido pelo módulo; o hero só exibe. */
+    health: InternetHealth;
 }
 
-export function HeroSection({ status, description, compromisedService }: HeroSectionProps) {
+const HIGHLIGHT_ICON: Record<HeroHighlight["type"], string> = {
+    down: "⛔",
+    outage: "🔴",
+    degraded: "⚠️",
+};
+
+export function HeroSection({ health }: HeroSectionProps) {
+    const { status, description, highlight } = health;
+
     const getStatusColor = () => {
         switch (status) {
             case "Healthy":
@@ -58,23 +58,30 @@ export function HeroSection({ status, description, compromisedService }: HeroSec
                             </span>
                         </div>
 
-                        {compromisedService ? (
-                            <div className="mt-6 p-4 bg-background/40 border border-white/10 backdrop-blur-sm">
+                        {highlight ? (
+                            <div
+                                data-testid="hero-highlight"
+                                data-type={highlight.type}
+                                className={cn(
+                                    "mt-6 p-4 bg-background/40 border backdrop-blur-sm",
+                                    highlight.type === "down" ? "border-red-700" : "border-white/10",
+                                )}
+                            >
                                 {/* Line 1: Icon + Bold Title */}
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className="text-xl">
-                                        {compromisedService?.type === 'outage' ? '🔴' : '⚠️'}
+                                        {HIGHLIGHT_ICON[highlight.type]}
                                     </span>
                                     <span className="text-lg font-bold text-foreground">
-                                        {compromisedService?.title}
+                                        {highlight.title}
                                     </span>
                                 </div>
 
                                 <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-                                    {compromisedService?.providerLogo ? (
+                                    {highlight.providerLogo ? (
                     <Image
-                        src={compromisedService.providerLogo}
-                        alt={compromisedService.providerName}
+                        src={highlight.providerLogo}
+                        alt={highlight.providerName}
                         width={24}
                         height={24}
                         className="w-6 h-6 object-contain"
@@ -82,13 +89,13 @@ export function HeroSection({ status, description, compromisedService }: HeroSec
                                         <span className="text-sm">🏢</span>
                                     )}
                                     <span className="text-sm font-medium">
-                                        {compromisedService?.providerName}
+                                        {highlight.providerName}
                                     </span>
                                 </div>
 
                                 {/* Line 3: Description */}
                                 <p className="text-sm text-muted-foreground">
-                                    {compromisedService?.description}
+                                    {highlight.description}
                                 </p>
                             </div>
                         ) : (

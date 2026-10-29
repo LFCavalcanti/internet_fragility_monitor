@@ -1,9 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { InternetHealthStatus } from "@/lib/internet-health";
 
 interface NetworkIllustrationProps {
-    status: "Healthy" | "Unstable" | "Critical";
+    status: InternetHealthStatus;
 }
 
 export function NetworkIllustration({ status }: NetworkIllustrationProps) {
