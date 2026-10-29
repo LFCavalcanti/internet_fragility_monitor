@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { InternetHealthStatus } from "@/lib/internet-health";
+import type { InternetHealth } from "@/lib/internet-health";
 
 interface NetworkIllustrationProps {
-    status: InternetHealthStatus;
+    status: InternetHealth["status"];
 }
 
 export function NetworkIllustration({ status }: NetworkIllustrationProps) {
@@ -15,6 +15,7 @@ export function NetworkIllustration({ status }: NetworkIllustrationProps) {
         const base = 3;
         switch (status) {
             case "Healthy":
+            case "Stale":
                 return base;
             case "Unstable":
                 return base * 1.25;
@@ -28,6 +29,9 @@ export function NetworkIllustration({ status }: NetworkIllustrationProps) {
         switch (status) {
             case "Healthy":
                 return "text-green-500";
+            case "Stale":
+                // Estado neutro: sem leitura recente, nenhuma cor de Internet Health.
+                return "text-muted-foreground";
             case "Unstable":
                 return "text-yellow-500";
             case "Critical":

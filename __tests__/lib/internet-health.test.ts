@@ -32,8 +32,11 @@ const provider = (
     incidents,
 });
 
+/** Poll de 5 minutos atrás: Snapshot recente. */
+const recentPoll = new Date('2026-10-26T14:55:00Z');
+
 const decide = (providers: ProviderHealthEntry[]) =>
-    decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, now });
+    decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, lastPollAt: recentPoll, now });
 
 describe('decideInternetHealth', () => {
     it('Healthy quando todos os Providers estão Operational, sem destaque', () => {
@@ -184,9 +187,59 @@ describe('decideInternetHealth', () => {
         const health = decideInternetHealth({
             providers: [provider('heroku', 'outage')],
             majorProviders: ['heroku'],
+            lastPollAt: recentPoll,
             now,
         });
 
         expect(health.status).toBe('Critical');
+    });
+});
+
+describe('decideInternetHealth: Stale Snapshot', () => {
+    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+    const critical = [provider('aws', 'outage'), provider('heroku', 'outage')];
+
+    it('Snapshot de 14 minutos mantém o Internet Health', () => {
+        const health = decideInternetHealth({
+            providers: critical,
+            majorProviders: MAJOR_PROVIDERS,
+            lastPollAt: minutesAgo(14),
+            now,
+        });
+
+        expect(health.status).toBe('Critical');
+    });
+
+    it('Snapshot de exatamente 15 minutos ainda não é Stale Snapshot (são mais de três ciclos)', () => {
+        const health = decideInternetHealth({
+            providers: [provider('heroku', 'operational')],
+            majorProviders: MAJOR_PROVIDERS,
+            lastPollAt: minutesAgo(15),
+            now,
+        });
+
+        expect(health.status).toBe('Healthy');
+    });
+
+    it('Snapshot de 16 minutos vira o estado neutro, inclusive sobre Critical, com a hora do último Poll e sem destaque', () => {
+        const health = decideInternetHealth({
+            providers: critical,
+            majorProviders: MAJOR_PROVIDERS,
+            lastPollAt: minutesAgo(16),
+            now,
+        });
+
+        expect(health).toEqual({ status: 'Stale', lastPollAt: new Date('2026-10-26T14:44:00Z') });
+    });
+
+    it('sem nenhum Poll registrado também é o estado neutro, sem hora', () => {
+        const health = decideInternetHealth({
+            providers: [],
+            majorProviders: MAJOR_PROVIDERS,
+            lastPollAt: null,
+            now,
+        });
+
+        expect(health).toEqual({ status: 'Stale', lastPollAt: null });
     });
 });

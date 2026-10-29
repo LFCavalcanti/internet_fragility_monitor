@@ -3,7 +3,8 @@
 import { NetworkIllustration } from "./network-illustration";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { HeroHighlight, InternetHealth } from "@/lib/internet-health";
+import { STALE_TEXT, type HeroHighlight, type InternetHealth } from "@/lib/internet-health";
+import { formatLastPoll } from "./stale-snapshot-notice";
 
 interface HeroSectionProps {
     /** Internet Health decidido pelo módulo; o hero só exibe. */
@@ -17,10 +18,17 @@ const HIGHLIGHT_ICON: Record<HeroHighlight["type"], string> = {
 };
 
 export function HeroSection({ health }: HeroSectionProps) {
-    const { status, description, highlight } = health;
+    const { status, highlight } = health;
+    // Stale Snapshot: estado neutro com a hora do último Poll, no lugar de qualquer Internet Health.
+    const [label, description] =
+        health.status === "Stale"
+            ? [STALE_TEXT, formatLastPoll(health.lastPollAt)]
+            : [health.status, health.description];
 
     const getStatusColor = () => {
         switch (status) {
+            case "Stale":
+                return "text-muted-foreground";
             case "Healthy":
                 return "text-green-500";
             case "Unstable":
@@ -54,7 +62,7 @@ export function HeroSection({ health }: HeroSectionProps) {
                         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-6">
                             <span className="text-lg font-medium text-muted-foreground">Global Status:</span>
                             <span className={cn("text-4xl md:text-5xl font-extrabold tracking-tight", getStatusColor())}>
-                                {status}
+                                {label}
                             </span>
                         </div>
 

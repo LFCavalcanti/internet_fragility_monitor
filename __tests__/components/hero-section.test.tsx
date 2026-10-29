@@ -44,4 +44,20 @@ describe('HeroSection', () => {
         expect(screen.getByText('Status page e serviço sem resposta')).toBeInTheDocument();
         expect(screen.getByTestId('hero-highlight')).toHaveAttribute('data-type', 'down');
     });
+
+    it('Stale Snapshot mostra o estado neutro "Sem leitura recente" com a hora do último Poll, sem destaque', () => {
+        render(<HeroSection health={{ status: 'Stale', lastPollAt: new Date('2026-10-26T14:44:00Z') }} />);
+
+        expect(screen.getByText('Sem leitura recente')).toBeInTheDocument();
+        expect(screen.getByText('Last Poll: Oct 26, 14:44 UTC')).toBeInTheDocument();
+        expect(screen.queryByTestId('hero-highlight')).not.toBeInTheDocument();
+        expect(screen.queryByText('Critical')).not.toBeInTheDocument();
+    });
+
+    it('Stale Snapshot sem nenhum Poll registrado diz que ainda não houve Poll', () => {
+        render(<HeroSection health={{ status: 'Stale', lastPollAt: null }} />);
+
+        expect(screen.getByText('Sem leitura recente')).toBeInTheDocument();
+        expect(screen.getByText('No Poll recorded yet.')).toBeInTheDocument();
+    });
 });
