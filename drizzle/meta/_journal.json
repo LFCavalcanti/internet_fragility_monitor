@@ -8,6 +8,20 @@
       "when": 1763669075184,
       "tag": "0000_fancy_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793235291093,
+      "tag": "0001_incident_kind_and_scheduled_for",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793235293666,
+      "tag": "0002_maintenance_incidents_to_kind",
+      "breakpoints": true
     }
   ]
 }

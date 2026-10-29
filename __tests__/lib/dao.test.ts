@@ -51,6 +51,7 @@ import {
     createIncident,
     updateIncidentStatus,
     resolveIncident,
+    completeMaintenance,
 } from '@/lib/dao';
 
 describe('dao.ts', () => {
@@ -325,6 +326,45 @@ describe('dao.ts', () => {
 
             it('should throw validation error for empty ID', async () => {
                 await expect(resolveIncident('')).rejects.toThrow('Validation failed');
+            });
+        });
+
+        describe('completeMaintenance', () => {
+            it('encerra a manutenção com a fase completed e a hora do encerramento', async () => {
+                await completeMaintenance('mnt-1');
+
+                expect(mockDb.set).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        status: 'completed',
+                        resolvedAt: expect.any(Date),
+                    })
+                );
+            });
+
+            it('should throw validation error for empty ID', async () => {
+                await expect(completeMaintenance('')).rejects.toThrow('Validation failed');
+            });
+        });
+
+        describe('updateIncidentStatus com tipo e data marcada', () => {
+            it('grava o tipo e a data marcada recebidos', async () => {
+                const scheduledFor = new Date('2026-10-27T05:00:00Z');
+                await updateIncidentStatus('mnt-1', 'scheduled', undefined, { kind: 'maintenance', scheduledFor });
+
+                expect(mockDb.set).toHaveBeenCalledWith(
+                    expect.objectContaining({ status: 'scheduled', kind: 'maintenance', scheduledFor })
+                );
+                expect(mockDb.set).not.toHaveBeenCalledWith(
+                    expect.objectContaining({ resolvedAt: expect.any(Date) })
+                );
+            });
+
+            it('fase completed marca a hora do encerramento', async () => {
+                await updateIncidentStatus('mnt-1', 'completed', undefined, { kind: 'maintenance', scheduledFor: null });
+
+                expect(mockDb.set).toHaveBeenCalledWith(
+                    expect.objectContaining({ status: 'completed', resolvedAt: expect.any(Date) })
+                );
             });
         });
     });

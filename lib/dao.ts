@@ -12,7 +12,8 @@
 import { getDb } from "./db";
 import { providers, incidents, statusChecks } from "./schema";
 import type { Provider, NewProvider, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
-import { eq, desc, and, ne } from "drizzle-orm";
+import { eq, desc, and, notInArray } from "drizzle-orm";
+import type { IncidentKind } from "./fetchers/types";
 import {
     validate,
     idSchema,
@@ -88,6 +89,9 @@ export async function saveStatusCheck(data: Omit<NewStatusCheck, "id">): Promise
 // Incident Operations
 // ============================================================================
 
+/** Status em que um Incident está encerrado: problema resolved, manutenção completed. */
+const CLOSED_STATUSES = ["resolved", "completed"];
+
 export async function getActiveIncidents(providerId: string): Promise<Incident[]> {
     const { providerId: validId } = validate(providerIdParamSchema, { providerId }, "getActiveIncidents");
     const db = getDb();
@@ -95,7 +99,7 @@ export async function getActiveIncidents(providerId: string): Promise<Incident[]
     return await db.query.incidents.findMany({
         where: and(
             eq(incidents.providerId, validId),
-            ne(incidents.status, "resolved")
+            notInArray(incidents.status, CLOSED_STATUSES)
         ),
         orderBy: [desc(incidents.createdAt)],
     });
@@ -159,15 +163,26 @@ export async function createIncident(data: Omit<NewIncident, "id">): Promise<str
     return id;
 }
 
-export async function updateIncidentStatus(id: string, status: string, description?: string): Promise<void> {
-    const validData = validate(updateIncidentStatusSchema, { id, status, description }, "updateIncidentStatus");
+export async function updateIncidentStatus(
+    id: string,
+    status: string,
+    description?: string,
+    details?: { kind?: IncidentKind; scheduledFor?: Date | null },
+): Promise<void> {
+    const validData = validate(
+        updateIncidentStatusSchema,
+        { id, status, description, ...details },
+        "updateIncidentStatus",
+    );
 
     const db = getDb();
     await db.update(incidents).set({
         status: validData.status,
         description: validData.description || undefined,
+        ...(validData.kind ? { kind: validData.kind } : {}),
+        ...(validData.scheduledFor !== undefined ? { scheduledFor: validData.scheduledFor } : {}),
         updatedAt: new Date(),
-        ...(validData.status === "resolved" ? { resolvedAt: new Date() } : {}),
+        ...(CLOSED_STATUSES.includes(validData.status) ? { resolvedAt: new Date() } : {}),
     }).where(eq(incidents.id, validData.id));
 }
 
@@ -177,6 +192,18 @@ export async function resolveIncident(id: string): Promise<void> {
     const db = getDb();
     await db.update(incidents).set({
         status: "resolved",
+        updatedAt: new Date(),
+        resolvedAt: new Date(),
+    }).where(eq(incidents.id, validId));
+}
+
+/** Encerra uma manutenção que saiu do Feed: a fase passa a completed. */
+export async function completeMaintenance(id: string): Promise<void> {
+    const validId = validate(idSchema, id, "completeMaintenance");
+
+    const db = getDb();
+    await db.update(incidents).set({
+        status: "completed",
         updatedAt: new Date(),
         resolvedAt: new Date(),
     }).where(eq(incidents.id, validId));

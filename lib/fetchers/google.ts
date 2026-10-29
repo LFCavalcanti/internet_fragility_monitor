@@ -55,6 +55,7 @@ export class GoogleCloudFetcher implements Fetcher {
         const isResolved = !!incident.end;
 
         return {
+            kind: "problem",
             title: incident.service_name + ": " + (incident.external_desc || "Issue"),
             description: incident.updates?.[0]?.text || incident.external_desc,
             url: incident.uri,

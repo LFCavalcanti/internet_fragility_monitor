@@ -50,6 +50,7 @@ export class AzureFetcher implements Fetcher {
         const isResolved = title.toLowerCase().includes("resolved") || item.description?.toLowerCase().includes("resolved");
 
         return {
+            kind: "problem",
             title,
             description: item.description,
             url: item.link,

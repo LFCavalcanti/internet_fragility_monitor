@@ -79,13 +79,18 @@ export type StatusCheckInput = z.infer<typeof newStatusCheckSchema>;
 // ============================================================================
 
 export const incidentStatusSchema = z.enum([
+    // problema
     "investigating",
     "identified",
     "monitoring",
     "resolved",
-    "maintenance",
+    // manutenção
     "scheduled",
+    "in_progress",
+    "completed",
 ]);
+
+export const incidentKindSchema = z.enum(["problem", "maintenance"]);
 
 export const incidentSeveritySchema = z.enum(["minor", "major", "critical"]).optional().nullable();
 
@@ -95,8 +100,10 @@ export const incidentSchema = z.object({
     title: z.string().min(1, "Title is required").max(500, "Title exceeds maximum length").trim(),
     description: z.string().max(5000, "Description exceeds maximum length").optional().nullable(),
     status: z.string().min(1, "Status is required").max(50, "Status exceeds maximum length"),
+    kind: incidentKindSchema.optional(),
     severity: z.string().max(20, "Severity exceeds maximum length").optional().nullable(),
     url: flexibleUrlSchema.nullable(),
+    scheduledFor: z.date().optional().nullable(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),
     resolvedAt: z.date().optional().nullable(),
@@ -118,6 +125,8 @@ export const updateIncidentStatusSchema = z.object({
     id: idSchema,
     status: z.string().min(1, "Status is required").max(50, "Status exceeds maximum length"),
     description: z.string().max(5000, "Description exceeds maximum length").optional(),
+    kind: incidentKindSchema.optional(),
+    scheduledFor: z.date().optional().nullable(),
 });
 
 export type UpdateIncidentStatusInput = z.infer<typeof updateIncidentStatusSchema>;

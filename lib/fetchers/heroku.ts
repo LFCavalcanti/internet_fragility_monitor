@@ -53,6 +53,7 @@ export class HerokuFetcher implements Fetcher {
 
     private mapIncident(incident: any): IncidentData {
         return {
+            kind: "problem",
             title: incident.title,
             description: incident.updates?.[0]?.contents,
             url: incident.full_url,

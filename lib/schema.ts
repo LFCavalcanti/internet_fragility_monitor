@@ -14,9 +14,13 @@ export const incidents = sqliteTable("incidents", {
     providerId: text("provider_id").references(() => providers.id).notNull(),
     title: text("title").notNull(),
     description: text("description"),
-    status: text("status").notNull(), // 'investigating', 'identified', 'monitoring', 'resolved'
+    // problem: 'investigating', 'identified', 'monitoring', 'resolved'
+    // maintenance: 'scheduled', 'in_progress', 'completed'
+    status: text("status").notNull(),
+    kind: text("kind").notNull().default("problem"), // 'problem', 'maintenance'
     severity: text("severity"), // 'minor', 'major', 'critical'
     url: text("url"),
+    scheduledFor: integer("scheduled_for", { mode: "timestamp" }), // data marcada para a manutenção começar
     createdAt: integer("created_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),

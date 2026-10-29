@@ -1,5 +1,35 @@
-import { Fetcher, StatusResult, IncidentData } from "./types";
+import {
+    Fetcher,
+    StatusResult,
+    DeclaredState,
+    MaintenanceIncident,
+    MaintenancePhase,
+    ProblemIncident,
+    ProblemStatus,
+} from "./types";
 
+/** Item das listas `incidents` e `scheduled_maintenances` do summary.json (só os campos lidos). */
+interface StatuspageItem {
+    name: string;
+    status: string;
+    shortlink?: string;
+    created_at: string;
+    updated_at?: string | null;
+    scheduled_for?: string | null;
+    incident_updates?: { body?: string }[];
+}
+
+interface StatuspageSummary {
+    status: { indicator: string };
+    incidents?: StatuspageItem[];
+    scheduled_maintenances?: StatuspageItem[];
+}
+
+/**
+ * Leitor da família Statuspage.io (summary.json).
+ * A classificação vem do próprio Feed: a lista `incidents` traz problemas e a lista
+ * `scheduled_maintenances` traz manutenções, cada uma com a fase declarada.
+ */
 export class StatusPageFetcher implements Fetcher {
     providerId: string;
     private statusPageUrl: string;
@@ -12,18 +42,17 @@ export class StatusPageFetcher implements Fetcher {
     async fetchStatus(): Promise<StatusResult> {
         const start = Date.now();
         try {
-            // StatusPage.io standard API endpoint
             const response = await fetch(`${this.statusPageUrl}/api/v2/summary.json`, { next: { revalidate: 60 } });
             if (!response.ok) {
                 throw new Error(`Failed to fetch ${this.providerId} status: ${response.statusText}`);
             }
-            const data = await response.json();
+            const data = (await response.json()) as StatuspageSummary;
             const responseTime = Date.now() - start;
 
             const status = this.mapStatus(data.status.indicator);
             const incidents = [
-                ...data.incidents.map((inc: any) => this.mapIncident(inc)),
-                ...(data.scheduled_maintenances || []).map((inc: any) => this.mapIncident(inc))
+                ...(data.incidents || []).map(inc => this.mapProblem(inc)),
+                ...(data.scheduled_maintenances || []).map(inc => this.mapMaintenance(inc)),
             ];
 
             return {
@@ -36,67 +65,76 @@ export class StatusPageFetcher implements Fetcher {
             console.error(`Error fetching ${this.providerId} status:`, error);
             return {
                 providerId: this.providerId,
-                status: "outage", // Assume worst case on fetch failure for now, or could be 'unknown'
+                status: "outage", // Falha de leitura ainda vira Outage; o Ticket 03 troca por Unreachable
                 incidents: [],
                 responseTime: 0,
             };
         }
     }
 
-    private mapStatus(indicator: string): "operational" | "degraded" | "outage" {
+    private mapStatus(indicator: string): DeclaredState {
         switch (indicator) {
-            case "none":
-                return "operational";
             case "minor":
                 return "degraded";
             case "major":
             case "critical":
                 return "outage";
             default:
+                // "none" e "maintenance": Maintenance vem das manutenções em andamento, não do indicador
                 return "operational";
         }
     }
 
-    private mapIncident(incident: any): IncidentData {
-        const title = incident.name;
-        const description = incident.incident_updates?.[0]?.body || incident.shortlink || "";
-
-        let status = this.mapIncidentStatus(incident.status);
-
-        // Heuristic: If title or description contains "maintenance", force status to 'maintenance'
-        if (
-            title.toLowerCase().includes("maintenance") ||
-            description.toLowerCase().includes("maintenance") ||
-            title.toLowerCase().includes("scheduled")
-        ) {
-            status = "maintenance";
-        }
-
+    private mapProblem(incident: StatuspageItem): ProblemIncident {
         return {
-            title,
-            description,
+            kind: "problem",
+            ...this.mapCommon(incident),
+            status: this.mapProblemStatus(incident.status),
+        };
+    }
+
+    private mapMaintenance(incident: StatuspageItem): MaintenanceIncident {
+        return {
+            kind: "maintenance",
+            ...this.mapCommon(incident),
+            status: this.mapMaintenancePhase(incident.status),
+            scheduledFor: incident.scheduled_for ? new Date(incident.scheduled_for) : undefined,
+        };
+    }
+
+    private mapCommon(incident: StatuspageItem) {
+        return {
+            title: incident.name,
+            description: incident.incident_updates?.[0]?.body || incident.shortlink || "",
             url: incident.shortlink,
-            status,
             createdAt: new Date(incident.created_at),
             updatedAt: incident.updated_at ? new Date(incident.updated_at) : undefined,
         };
     }
 
-    private mapIncidentStatus(status: string): "investigating" | "identified" | "monitoring" | "resolved" | "maintenance" {
+    private mapProblemStatus(status: string): ProblemStatus {
         switch (status) {
-            case "investigating":
-                return "investigating";
             case "identified":
                 return "identified";
             case "monitoring":
                 return "monitoring";
             case "resolved":
+            case "postmortem":
                 return "resolved";
-            case "scheduled":
-            case "maintenance":
-                return "maintenance";
             default:
                 return "investigating";
+        }
+    }
+
+    private mapMaintenancePhase(status: string): MaintenancePhase {
+        switch (status) {
+            case "in_progress":
+            case "verifying":
+                return "in_progress";
+            case "completed":
+                return "completed";
+            default:
+                return "scheduled";
         }
     }
 }

@@ -68,8 +68,13 @@ describe('Validation Schemas', () => {
             expect(() => validate(incidentStatusSchema, 'identified')).not.toThrow();
             expect(() => validate(incidentStatusSchema, 'monitoring')).not.toThrow();
             expect(() => validate(incidentStatusSchema, 'resolved')).not.toThrow();
-            expect(() => validate(incidentStatusSchema, 'maintenance')).not.toThrow();
             expect(() => validate(incidentStatusSchema, 'scheduled')).not.toThrow();
+            expect(() => validate(incidentStatusSchema, 'in_progress')).not.toThrow();
+            expect(() => validate(incidentStatusSchema, 'completed')).not.toThrow();
+        });
+
+        it('rejeita o antigo status "maintenance": manutenção agora é um tipo, com fase própria', () => {
+            expect(() => validate(incidentStatusSchema, 'maintenance')).toThrow();
         });
     });
 

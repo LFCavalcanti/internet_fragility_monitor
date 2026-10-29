@@ -53,6 +53,7 @@ export class AWSFetcher implements Fetcher {
         const isResolved = title.toLowerCase().includes("resolved");
 
         return {
+            kind: "problem",
             title,
             description: item.description,
             url: item.link,

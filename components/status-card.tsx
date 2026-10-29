@@ -1,10 +1,19 @@
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { StatusResult } from "@/lib/fetchers/types";
-import { Activity, CircleCheckBig, TriangleAlert, CircleX, ExternalLink, Wrench, Globe } from "lucide-react";
+import type { ProviderStatus, ProviderStatusDecision, UpcomingMaintenanceSummary } from "@/lib/provider-status";
+import {
+    CircleCheckBig,
+    TriangleAlert,
+    CircleX,
+    ExternalLink,
+    Wrench,
+    Globe,
+    CircleHelp,
+    CircleOff,
+    type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BarChart, Bar, ResponsiveContainer, Tooltip } from "recharts";
 import { formatDistanceToNow } from "date-fns";
 
 interface StatusCardProps {
@@ -12,26 +21,45 @@ interface StatusCardProps {
     logo?: string;
     statusPageUrl?: string;
     result: StatusResult;
+    /** Estado, Incidents e Upcoming Maintenance decididos pelo módulo de Provider Status. */
+    decision: ProviderStatusDecision;
 }
 
-export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProps) {
-    // Check if there are any maintenance incidents in the recent timeframe
-    const hasMaintenanceIncident = result.incidents.some(inc => inc.status === 'maintenance');
+const STATUS_ICON: Record<ProviderStatus, { icon: LucideIcon; className: string }> = {
+    operational: { icon: CircleCheckBig, className: "text-green-500" },
+    degraded: { icon: TriangleAlert, className: "text-yellow-500" },
+    outage: { icon: CircleX, className: "text-red-500" },
+    maintenance: { icon: Wrench, className: "text-blue-500" },
+    unreachable: { icon: CircleHelp, className: "text-muted-foreground" },
+    down: { icon: CircleOff, className: "text-red-700" },
+};
 
-    const isOperational = result.status === "operational" && !hasMaintenanceIncident;
-    const isDegraded = result.status === "degraded" && !hasMaintenanceIncident;
-    const isOutage = result.status === "outage";
-    const isMaintenance = hasMaintenanceIncident;
+function formatUpcoming({ count, next }: UpcomingMaintenanceSummary): string {
+    const label = `${count} upcoming maintenance${count === 1 ? "" : "s"}`;
+    if (!next) return label;
+    const when = next.toLocaleString("en-US", {
+        timeZone: "UTC",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    });
+    return `${label} · next ${when} UTC`;
+}
+
+export function StatusCard({ name, logo, statusPageUrl, result, decision }: StatusCardProps) {
+    const displayStatus = decision.status;
+    const { icon: StatusIcon, className: statusColor } = STATUS_ICON[displayStatus];
 
     // Filter incidents to only show those from the last 48 hours
-    const recentIncidents = result.incidents.filter(inc => {
+    const recentIncidents = decision.incidents.filter(inc => {
         const incidentTime = new Date(inc.createdAt).getTime();
         const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
         return incidentTime > fortyEightHoursAgo;
     });
 
-    // Display status - prioritize maintenance if present
-    const displayStatus = isMaintenance ? "maintenance" : result.status;
+    const upcoming = decision.upcomingMaintenance;
 
     return (
         <Card className="w-full hover:shadow-lg transition-shadow duration-200 overflow-hidden flex flex-col h-full border-primary/20 bg-card/50 backdrop-blur-sm rounded-none">
@@ -42,11 +70,11 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                     {logo ? (
                         <div className="relative w-8 h-8 overflow-hidden">
                              {/* Keep logo original colors, just ensure it fits */}
-                            <Image 
-                                src={logo} 
-                                alt={name} 
-                                width={32} 
-                                height={32} 
+                            <Image
+                                src={logo}
+                                alt={name}
+                                width={32}
+                                height={32}
                                 className="object-contain w-full h-full"
                                 unoptimized
                             />
@@ -74,10 +102,7 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                                 <ExternalLink className="h-4 w-4" />
                             </a>
                         )}
-                        {isOperational && <CircleCheckBig className="h-6 w-6 text-green-500" />}
-                        {isDegraded && <TriangleAlert className="h-6 w-6 text-yellow-500" />}
-                        {isOutage && <CircleX className="h-6 w-6 text-red-500" />}
-                        {isMaintenance && <Wrench className="h-6 w-6 text-blue-500" />}
+                        <StatusIcon role="img" aria-label={displayStatus} className={cn("h-6 w-6", statusColor)} />
                     </div>
                 </div>
             </CardHeader>
@@ -95,6 +120,23 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                                 Updated {formatDistanceToNow(result.lastUpdated, { addSuffix: true })}
                             </p>
                         )}
+                        {upcoming && (
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                                <Wrench className="inline h-3 w-3 mr-1 align-[-2px]" aria-hidden="true" />
+                                {statusPageUrl ? (
+                                    <a
+                                        href={statusPageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:text-primary hover:underline transition-colors"
+                                    >
+                                        {formatUpcoming(upcoming)}
+                                    </a>
+                                ) : (
+                                    formatUpcoming(upcoming)
+                                )}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -105,7 +147,7 @@ export function StatusCard({ name, logo, statusPageUrl, result }: StatusCardProp
                             <div key={i} className="text-xs pl-2 border-l-2 border-primary/50 py-0.5">
                                 <p className="font-medium truncate">{inc.title}</p>
                                 <p className="text-muted-foreground text-[10px] flex justify-between">
-                                    <span>{inc.status}</span>
+                                    <span>{inc.status.replace("_", " ")}</span>
                                     <span>{formatDistanceToNow(new Date(inc.createdAt), { addSuffix: true })}</span>
                                 </p>
                             </div>

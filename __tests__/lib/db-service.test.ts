@@ -13,6 +13,7 @@ vi.mock('@/lib/dao', () => ({
     updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
     createIncident: vi.fn().mockResolvedValue('new-incident-id'),
     resolveIncident: vi.fn().mockResolvedValue(undefined),
+    completeMaintenance: vi.fn().mockResolvedValue(undefined),
     getAllProviders: vi.fn().mockResolvedValue([]),
     getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
 }));
@@ -39,6 +40,7 @@ import {
     updateIncidentStatus,
     createIncident,
     resolveIncident,
+    completeMaintenance,
     getAllProviders,
     getLatestStatusCheck,
 } from '@/lib/dao';
@@ -87,6 +89,7 @@ describe('db-service.ts', () => {
             const resultWithIncident: StatusResult = {
                 ...baseResult,
                 incidents: [{
+                    kind: 'problem',
                     title: 'New Issue',
                     description: 'Something happened',
                     status: 'investigating',
@@ -115,7 +118,9 @@ describe('db-service.ts', () => {
                 title: 'Existing Issue',
                 description: 'Old description',
                 status: 'investigating',
+                kind: 'problem',
                 severity: null,
+                scheduledFor: null,
                 url: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -125,6 +130,7 @@ describe('db-service.ts', () => {
             const resultWithUpdatedIncident: StatusResult = {
                 ...baseResult,
                 incidents: [{
+                    kind: 'problem',
                     title: 'Existing Issue',
                     description: 'Updated description',
                     status: 'monitoring', // Changed from investigating
@@ -140,7 +146,8 @@ describe('db-service.ts', () => {
             expect(updateIncidentStatus).toHaveBeenCalledWith(
                 'inc-1',
                 'monitoring',
-                expect.anything()
+                expect.anything(),
+                { kind: 'problem', scheduledFor: null }
             );
         });
 
@@ -151,7 +158,9 @@ describe('db-service.ts', () => {
                 title: 'Same Issue',
                 description: 'Same',
                 status: 'investigating',
+                kind: 'problem',
                 severity: null,
+                scheduledFor: null,
                 url: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -161,6 +170,7 @@ describe('db-service.ts', () => {
             const resultWithSameIncident: StatusResult = {
                 ...baseResult,
                 incidents: [{
+                    kind: 'problem',
                     title: 'Same Issue',
                     status: 'investigating', // Same status
                     createdAt: new Date(),
@@ -182,7 +192,9 @@ describe('db-service.ts', () => {
                 title: 'Stale Issue',
                 description: 'Was active, now gone',
                 status: 'investigating',
+                kind: 'problem',
                 severity: null,
+                scheduledFor: null,
                 url: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -199,6 +211,141 @@ describe('db-service.ts', () => {
             await saveStatusResult(baseResult);
 
             expect(resolveIncident).toHaveBeenCalledWith('inc-stale');
+        });
+
+        const maintenanceRow = (overrides: Record<string, unknown> = {}) => ({
+            id: 'mnt-1',
+            providerId: 'cloudflare',
+            title: 'LIM (Lima) datacenter',
+            description: null,
+            status: 'scheduled',
+            kind: 'maintenance',
+            severity: null,
+            url: null,
+            scheduledFor: new Date('2026-10-27T05:00:00Z') as Date | null,
+            createdAt: new Date('2026-10-20T10:00:00Z'),
+            updatedAt: new Date('2026-10-20T10:00:00Z'),
+            resolvedAt: null,
+            ...overrides,
+        });
+
+        it('grava manutenção nova com tipo, fase e data marcada', async () => {
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+
+            await saveStatusResult({
+                ...baseResult,
+                providerId: 'cloudflare',
+                incidents: [{
+                    kind: 'maintenance',
+                    title: 'LIM (Lima) datacenter',
+                    status: 'scheduled',
+                    scheduledFor: new Date('2026-10-27T05:00:00Z'),
+                    createdAt: new Date('2026-10-20T10:00:00Z'),
+                }],
+            });
+
+            expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({
+                providerId: 'cloudflare',
+                kind: 'maintenance',
+                status: 'scheduled',
+                scheduledFor: new Date('2026-10-27T05:00:00Z'),
+            }));
+        });
+
+        it('grava problema novo com tipo problema e sem data marcada', async () => {
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+
+            await saveStatusResult({
+                ...baseResult,
+                incidents: [{ kind: 'problem', title: 'API errors', status: 'investigating', createdAt: new Date() }],
+            });
+
+            expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({
+                kind: 'problem',
+                status: 'investigating',
+                scheduledFor: null,
+            }));
+        });
+
+        it('o Poll seguinte atualiza a manutenção migrada como completed que continua no Feed', async () => {
+            const migrated = maintenanceRow({ status: 'completed', scheduledFor: null });
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([migrated]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([]);
+
+            await saveStatusResult({
+                ...baseResult,
+                providerId: 'cloudflare',
+                incidents: [{
+                    kind: 'maintenance',
+                    title: 'LIM (Lima) datacenter',
+                    status: 'scheduled',
+                    scheduledFor: new Date('2026-10-27T05:00:00Z'),
+                    createdAt: new Date('2026-10-20T10:00:00Z'),
+                }],
+            });
+
+            expect(updateIncidentStatus).toHaveBeenCalledWith(
+                'mnt-1',
+                'scheduled',
+                undefined,
+                { kind: 'maintenance', scheduledFor: new Date('2026-10-27T05:00:00Z') },
+            );
+        });
+
+        it('atualiza a manutenção quando a data marcada muda, mesmo com a fase igual', async () => {
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow()]);
+
+            await saveStatusResult({
+                ...baseResult,
+                providerId: 'cloudflare',
+                incidents: [{
+                    kind: 'maintenance',
+                    title: 'LIM (Lima) datacenter',
+                    status: 'scheduled',
+                    scheduledFor: new Date('2026-10-28T05:00:00Z'),
+                    createdAt: new Date('2026-10-20T10:00:00Z'),
+                }],
+            });
+
+            expect(updateIncidentStatus).toHaveBeenCalledWith(
+                'mnt-1',
+                'scheduled',
+                undefined,
+                { kind: 'maintenance', scheduledFor: new Date('2026-10-28T05:00:00Z') },
+            );
+        });
+
+        it('não atualiza manutenção sem mudança de fase nem de data', async () => {
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow()]);
+
+            await saveStatusResult({
+                ...baseResult,
+                providerId: 'cloudflare',
+                incidents: [{
+                    kind: 'maintenance',
+                    title: 'LIM (Lima) datacenter',
+                    status: 'scheduled',
+                    scheduledFor: new Date('2026-10-27T05:00:00Z'),
+                    createdAt: new Date('2026-10-20T10:00:00Z'),
+                }],
+            });
+
+            expect(updateIncidentStatus).not.toHaveBeenCalled();
+        });
+
+        it('manutenção que some do Feed vira completed, não resolved', async () => {
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
+            vi.mocked(getActiveIncidents).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
+            vi.spyOn(console, 'log').mockImplementation(() => {});
+
+            await saveStatusResult({ ...baseResult, providerId: 'cloudflare' });
+
+            expect(completeMaintenance).toHaveBeenCalledWith('mnt-1');
+            expect(resolveIncident).not.toHaveBeenCalled();
         });
     });
 
@@ -246,7 +393,9 @@ describe('db-service.ts', () => {
                 title: `Incident ${i}`,
                 description: null,
                 status: 'investigating',
+                kind: 'problem',
                 severity: null,
+                scheduledFor: null,
                 url: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -260,6 +409,46 @@ describe('db-service.ts', () => {
             const results = await getLatestStatus();
 
             expect(results[0].incidents).toHaveLength(5);
+        });
+
+        it('traz todas as manutenções agendadas e em andamento, fora do corte de 5, e omite as completed', async () => {
+            const providers = [{ id: 'cloudflare', name: 'Cloudflare', url: 'https://cloudflare.com', type: 'cdn', logo: null }];
+            const row = (i: number, kind: string, status: string, scheduledFor: Date | null) => ({
+                id: `row-${kind}-${i}`,
+                providerId: 'cloudflare',
+                title: `${kind} ${i}`,
+                description: null,
+                status,
+                kind,
+                severity: null,
+                url: null,
+                scheduledFor,
+                createdAt: new Date(Date.UTC(2026, 9, 26, 12, 0) - i * 60_000),
+                updatedAt: null,
+                resolvedAt: null,
+            });
+            const rows = [
+                ...Array.from({ length: 25 }, (_, i) => row(i, 'maintenance', 'scheduled', new Date(Date.UTC(2026, 9, 27, i))),
+                ),
+                row(30, 'maintenance', 'in_progress', new Date('2026-10-26T10:00:00Z')),
+                row(31, 'maintenance', 'completed', new Date('2026-10-25T10:00:00Z')),
+                row(40, 'problem', 'identified', null),
+            ];
+
+            vi.mocked(getAllProviders).mockResolvedValueOnce(providers);
+            vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
+
+            const [result] = await getLatestStatus();
+
+            expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'scheduled')).toHaveLength(25);
+            expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'in_progress')).toHaveLength(1);
+            expect(result.incidents.some(i => i.kind === 'maintenance' && i.status === 'completed')).toBe(false);
+            expect(result.incidents.find(i => i.kind === 'problem')).toMatchObject({ title: 'problem 40', status: 'identified' });
+            expect(result.incidents.find(i => i.title === 'maintenance 0')).toMatchObject({
+                kind: 'maintenance',
+                scheduledFor: new Date(Date.UTC(2026, 9, 27, 0)),
+            });
         });
     });
 });
