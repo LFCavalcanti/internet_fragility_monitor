@@ -3,12 +3,12 @@
 import { NetworkIllustration } from "./network-illustration";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { STALE_TEXT, type HeroHighlight, type InternetHealth } from "@/lib/internet-health";
-import { formatLastPoll } from "./stale-snapshot-notice";
+import { STALE_TEXT, type HeroHighlight, type HeroState } from "@/lib/internet-health";
+import { formatLastPoll } from "@/lib/format-utc";
 
 interface HeroSectionProps {
-    /** Internet Health decidido pelo módulo; o hero só exibe. */
-    health: InternetHealth;
+    /** Internet Health (ou o estado neutro de Stale Snapshot) decidido pelo módulo; o hero só exibe. */
+    health: HeroState;
 }
 
 const HIGHLIGHT_ICON: Record<HeroHighlight["type"], string> = {
@@ -18,12 +18,12 @@ const HIGHLIGHT_ICON: Record<HeroHighlight["type"], string> = {
 };
 
 export function HeroSection({ health }: HeroSectionProps) {
-    const { status, highlight } = health;
+    const { status } = health;
     // Stale Snapshot: estado neutro com a hora do último Poll, no lugar de qualquer Internet Health.
-    const [label, description] =
+    const [label, description, highlight] =
         health.status === "Stale"
-            ? [STALE_TEXT, formatLastPoll(health.lastPollAt)]
-            : [health.status, health.description];
+            ? [STALE_TEXT, formatLastPoll(health.lastPollAt), undefined]
+            : [health.status, health.description, health.highlight];
 
     const getStatusColor = () => {
         switch (status) {

@@ -4,7 +4,7 @@ import { StatusCard } from "@/components/status-card";
 import { HeroSection } from "@/components/hero-section";
 import { StaleSnapshotNotice } from "@/components/stale-snapshot-notice";
 import { decideProviderStatus } from "@/lib/provider-status";
-import { decideInternetHealth, MAJOR_PROVIDERS } from "@/lib/internet-health";
+import { decideInternetHealth, lastAnsweredPollAt, MAJOR_PROVIDERS } from "@/lib/internet-health";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 
@@ -13,11 +13,8 @@ export const dynamic = 'force-dynamic';
 export default async function Home() {
     const snapshot = await getLatestStatus();
     const now = new Date();
-    // Hora do último Poll: a leitura mais recente do Snapshot (o Ticket 13 passa a trazê-la da leitura do Snapshot).
-    const lastPollAt = snapshot.reduce<Date | null>(
-        (latest, r) => (r.lastUpdated && (!latest || r.lastUpdated > latest) ? r.lastUpdated : latest),
-        null,
-    );
+    // Hora do último Poll: a leitura respondida mais recente do Snapshot (o Ticket 13 passa a trazê-la da leitura do Snapshot).
+    const lastPollAt = lastAnsweredPollAt(snapshot);
 
     // O módulo de Provider Status decide o estado de cada Provider; a página só exibe.
     // Cada Provider tem um Feed; quando a leitura falhou, ele vai como não lido, com os Incidents já gravados.

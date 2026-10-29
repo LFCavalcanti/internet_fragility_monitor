@@ -3,7 +3,7 @@
  * Módulo puro: recebe o resultado de cada Provider, os Major Providers, a hora do último Poll e o relógio.
  * Termos conforme GLOSSARY.md.
  */
-import type { IncidentData } from "./fetchers/types";
+import type { IncidentData, StatusResult } from "./fetchers/types";
 import type { ProviderStatus } from "./provider-status";
 import { isClosed } from "./incident-status";
 
@@ -40,7 +40,8 @@ export interface HeroHighlight {
     description: string;
 }
 
-export interface DecidedInternetHealth {
+/** Internet Health: Healthy, Unstable ou Critical, com o texto e o destaque do hero. */
+export interface InternetHealth {
     status: InternetHealthStatus;
     /** Texto do hero quando não há destaque. */
     description: string;
@@ -48,14 +49,14 @@ export interface DecidedInternetHealth {
 }
 
 /** Estado neutro de Stale Snapshot: nenhum Internet Health é afirmado, só a hora do último Poll. */
-export interface StaleInternetHealth {
+export interface StaleSnapshotState {
     status: "Stale";
     /** Hora do último Poll; `null` quando nenhum Poll foi registrado. */
     lastPollAt: Date | null;
-    highlight?: undefined;
 }
 
-export type InternetHealth = DecidedInternetHealth | StaleInternetHealth;
+/** O que o hero mostra: o Internet Health, ou o estado neutro de Stale Snapshot. */
+export type HeroState = InternetHealth | StaleSnapshotState;
 
 /** Texto do estado neutro (árvore de decisões, seção 3). */
 export const STALE_TEXT = "Sem leitura recente";
@@ -65,6 +66,19 @@ export const STALE_TEXT = "Sem leitura recente";
  * O Ticket 17 (Poll Schedule) passa a derivar o limite da cadência central.
  */
 export const STALE_SNAPSHOT_AFTER_MS = 3 * 5 * 60 * 1000;
+
+/**
+ * Hora do último Poll a partir do Snapshot: a leitura mais recente que não é `unreachable`.
+ * Um Poll em que nenhum Provider responde é falha do próprio monitor e não renova o Snapshot.
+ * Interino: o Ticket 13 troca pela hora real do Poll, gravada pela leitura do Snapshot.
+ */
+export function lastAnsweredPollAt(results: Pick<StatusResult, "status" | "lastUpdated">[]): Date | null {
+    return results.reduce<Date | null>(
+        (latest, r) =>
+            r.status !== "unreachable" && r.lastUpdated && (!latest || r.lastUpdated > latest) ? r.lastUpdated : latest,
+        null,
+    );
+}
 
 /** Texto combinado para Down (árvore de decisões, seção 10). */
 export const DOWN_TEXT = "Status page e serviço sem resposta";
@@ -77,7 +91,7 @@ export function decideInternetHealth({
     majorProviders,
     lastPollAt,
     now,
-}: InternetHealthInput): InternetHealth {
+}: InternetHealthInput): HeroState {
     // Um Stale Snapshot não pode ser apresentado como o estado atual: vence qualquer faixa, inclusive Critical.
     if (lastPollAt === null || now.getTime() - lastPollAt.getTime() > STALE_SNAPSHOT_AFTER_MS) {
         return { status: "Stale", lastPollAt };

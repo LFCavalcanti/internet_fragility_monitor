@@ -14,6 +14,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatUtc } from "@/lib/format-utc";
 import { formatDistanceToNow } from "date-fns";
 
 interface StatusCardProps {
@@ -36,16 +37,7 @@ const STATUS_ICON: Record<ProviderStatus, { icon: LucideIcon; className: string 
 
 function formatUpcoming({ count, next }: UpcomingMaintenanceSummary): string {
     const label = `${count} upcoming maintenance${count === 1 ? "" : "s"}`;
-    if (!next) return label;
-    const when = next.toLocaleString("en-US", {
-        timeZone: "UTC",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-    });
-    return `${label} · next ${when} UTC`;
+    return next ? `${label} · next ${formatUtc(next)}` : label;
 }
 
 export function StatusCard({ name, logo, statusPageUrl, result, decision }: StatusCardProps) {

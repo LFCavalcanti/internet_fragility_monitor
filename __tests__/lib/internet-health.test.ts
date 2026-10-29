@@ -2,11 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import {
     decideInternetHealth,
+    lastAnsweredPollAt,
     MAJOR_PROVIDERS,
+    type InternetHealth,
     type ProviderSnapshotEntry,
 } from '@/lib/internet-health';
 import type { ProviderStatus } from '@/lib/provider-status';
-import type { IncidentData } from '@/lib/fetchers/types';
+import type { IncidentData, StatusResult } from '@/lib/fetchers/types';
 
 const now = new Date('2026-10-26T15:00:00Z');
 
@@ -35,8 +37,12 @@ const provider = (
 /** Poll de 5 minutos atrás: Snapshot recente. */
 const recentPoll = new Date('2026-10-26T14:55:00Z');
 
-const decide = (providers: ProviderSnapshotEntry[]) =>
-    decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, lastPollAt: recentPoll, now });
+/** Internet Health de um Snapshot recente, que nunca é Stale. */
+const decide = (providers: ProviderSnapshotEntry[]): InternetHealth => {
+    const state = decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, lastPollAt: recentPoll, now });
+    if (state.status === 'Stale') throw new Error('Snapshot recente não pode ser Stale Snapshot');
+    return state;
+};
 
 describe('decideInternetHealth', () => {
     it('Healthy quando todos os Providers estão Operational, sem destaque', () => {
@@ -241,5 +247,53 @@ describe('decideInternetHealth: Stale Snapshot', () => {
         });
 
         expect(health).toEqual({ status: 'Stale', lastPollAt: null });
+    });
+});
+
+describe('lastAnsweredPollAt: hora do último Poll a partir do Snapshot', () => {
+    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+    const reading = (
+        status: StatusResult['status'],
+        lastUpdated?: Date,
+    ): Pick<StatusResult, 'status' | 'lastUpdated'> => ({ status, lastUpdated });
+
+    it('é a leitura respondida mais recente', () => {
+        expect(lastAnsweredPollAt([reading('operational', minutesAgo(9)), reading('outage', minutesAgo(4))])).toEqual(
+            minutesAgo(4),
+        );
+    });
+
+    it('leituras unreachable não contam: Poll em que nenhum Provider responde é falha do monitor', () => {
+        expect(
+            lastAnsweredPollAt([reading('unreachable', minutesAgo(1)), reading('operational', minutesAgo(16))]),
+        ).toEqual(minutesAgo(16));
+    });
+
+    it('todos Unreachable desde o último Poll respondido, há 16 minutos: Stale Snapshot', () => {
+        const lastPollAt = lastAnsweredPollAt([
+            reading('unreachable', minutesAgo(1)),
+            reading('unreachable', minutesAgo(1)),
+            reading('degraded', minutesAgo(16)),
+        ]);
+        const health = decideInternetHealth({
+            providers: [provider('aws', 'outage')],
+            majorProviders: MAJOR_PROVIDERS,
+            lastPollAt,
+            now,
+        });
+
+        expect(health).toEqual({ status: 'Stale', lastPollAt: minutesAgo(16) });
+    });
+
+    it('todos os Providers Unreachable: nenhum Poll respondido, Stale Snapshot', () => {
+        const lastPollAt = lastAnsweredPollAt([
+            reading('unreachable', minutesAgo(1)),
+            reading('unreachable', minutesAgo(1)),
+        ]);
+
+        expect(lastPollAt).toBeNull();
+        expect(decideInternetHealth({ providers: [], majorProviders: MAJOR_PROVIDERS, lastPollAt, now }).status).toBe(
+            'Stale',
+        );
     });
 });

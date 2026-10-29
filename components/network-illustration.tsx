@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { InternetHealth } from "@/lib/internet-health";
+import type { HeroState } from "@/lib/internet-health";
 
 interface NetworkIllustrationProps {
-    status: InternetHealth["status"];
+    status: HeroState["status"];
 }
 
 export function NetworkIllustration({ status }: NetworkIllustrationProps) {
