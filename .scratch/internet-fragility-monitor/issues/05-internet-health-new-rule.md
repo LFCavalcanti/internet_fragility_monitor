@@ -30,3 +30,5 @@
 **Migrations novas:** nenhuma.
 
 **Fica para depois:** Stale Snapshot no módulo e no hero (Ticket 06); Major Providers vindos do catálogo (Ticket 07); Down produzido de ponta a ponta (Ticket 15).
+
+**Correção pós-review das ondas 1 e 2 (28/10/2026).** Só renomes em `lib/internet-health.ts`, sem mudar o texto do hero: `ProviderHealthEntry` virou `ProviderSnapshotEntry` (o glossário evita "health" para Provider Status), `count` virou `providersPhrase` (devolve a frase "N provider(s) is/are") e `single` virou `singleHighlight`.

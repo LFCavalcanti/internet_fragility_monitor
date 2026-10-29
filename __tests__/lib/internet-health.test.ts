@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
     decideInternetHealth,
     MAJOR_PROVIDERS,
-    type ProviderHealthEntry,
+    type ProviderSnapshotEntry,
 } from '@/lib/internet-health';
 import type { ProviderStatus } from '@/lib/provider-status';
 import type { IncidentData } from '@/lib/fetchers/types';
@@ -24,7 +24,7 @@ const provider = (
     providerId: string,
     status: ProviderStatus,
     incidents: IncidentData[] = [],
-): ProviderHealthEntry => ({
+): ProviderSnapshotEntry => ({
     providerId,
     name: NAMES[providerId] ?? providerId,
     logo: `https://logos.example/${providerId}.svg`,
@@ -35,7 +35,7 @@ const provider = (
 /** Poll de 5 minutos atrás: Snapshot recente. */
 const recentPoll = new Date('2026-10-26T14:55:00Z');
 
-const decide = (providers: ProviderHealthEntry[]) =>
+const decide = (providers: ProviderSnapshotEntry[]) =>
     decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, lastPollAt: recentPoll, now });
 
 describe('decideInternetHealth', () => {

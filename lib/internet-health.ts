@@ -13,7 +13,7 @@ export const MAJOR_PROVIDERS: readonly string[] = ["aws", "google-cloud", "azure
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
 
 /** O que o Internet Health precisa saber de um Provider: o estado decidido e os Incidents a exibir. */
-export interface ProviderHealthEntry {
+export interface ProviderSnapshotEntry {
     providerId: string;
     name: string;
     logo?: string;
@@ -22,7 +22,7 @@ export interface ProviderHealthEntry {
 }
 
 export interface InternetHealthInput {
-    providers: ProviderHealthEntry[];
+    providers: ProviderSnapshotEntry[];
     /** Ids dos Major Providers. */
     majorProviders: readonly string[];
     /** Hora do último Poll; `null` quando nenhum Poll foi registrado. */
@@ -91,7 +91,7 @@ export function decideInternetHealth({
     if (critical) {
         return {
             status: "Critical",
-            description: `${count(severe.length)} reporting a major outage. Internet stability is at risk.`,
+            description: `${providersPhrase(severe.length)} reporting a major outage. Internet stability is at risk.`,
             highlight: highlightFor(severe),
         };
     }
@@ -101,7 +101,7 @@ export function decideInternetHealth({
         const affected = severe.length > 0 ? severe : degraded;
         return {
             status: "Unstable",
-            description: `${count(severe.length + degraded.length)} experiencing problems.`,
+            description: `${providersPhrase(severe.length + degraded.length)} experiencing problems.`,
             highlight: highlightFor(affected),
         };
     }
@@ -109,14 +109,14 @@ export function decideInternetHealth({
     return { status: "Healthy", description: "All monitored services are operating normally." };
 }
 
-function count(n: number): string {
+function providersPhrase(n: number): string {
     return `${n} provider${n === 1 ? " is" : "s are"}`;
 }
 
-function highlightFor(affected: ProviderHealthEntry[]): HeroHighlight {
+function highlightFor(affected: ProviderSnapshotEntry[]): HeroHighlight {
     if (affected.length === 1) {
         const [p] = affected;
-        return single(p);
+        return singleHighlight(p);
     }
 
     const type = affected.some(p => p.status === "down")
@@ -143,7 +143,7 @@ function highlightFor(affected: ProviderHealthEntry[]): HeroHighlight {
           };
 }
 
-function single(p: ProviderHealthEntry): HeroHighlight {
+function singleHighlight(p: ProviderSnapshotEntry): HeroHighlight {
     const base = { providerName: p.name, providerLogo: p.logo };
 
     if (p.status === "down") {
