@@ -109,6 +109,24 @@ describe('db-service.ts', () => {
             );
         });
 
+        it('grava a hora de resolução que o Feed publica num Incident novo já resolvido', async () => {
+            const resolvedAt = new Date('2026-10-27T08:00:00Z');
+            await saveStatusResult({
+                ...baseResult,
+                incidents: [{
+                    kind: 'problem',
+                    title: 'Cloud Run: elevated latency',
+                    status: 'resolved',
+                    createdAt: new Date('2026-10-25T08:00:00Z'),
+                    resolvedAt,
+                }],
+            });
+
+            expect(createIncident).toHaveBeenCalledWith(
+                expect.objectContaining({ title: 'Cloud Run: elevated latency', status: 'resolved', resolvedAt }),
+            );
+        });
+
         it('should update incident status when it changed', async () => {
             const existingIncident = {
                 id: 'inc-1',
@@ -404,7 +422,7 @@ describe('db-service.ts', () => {
                 .mockResolvedValueOnce([])
                 .mockResolvedValueOnce([]);
 
-            const results = await getLatestStatus();
+            const results = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(results).toHaveLength(2);
             expect(results[0]).toMatchObject({
@@ -443,7 +461,7 @@ describe('db-service.ts', () => {
                 resolvedAt: null,
             }]);
 
-            const [aws] = await getLatestStatus();
+            const [aws] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(aws.status).toBe('unreachable');
             expect(aws.incidents).toEqual([
@@ -451,30 +469,44 @@ describe('db-service.ts', () => {
             ]);
         });
 
-        it('should include up to 5 incidents per provider', async () => {
-            const providers = [{ id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null }];
-            const manyIncidents = Array.from({ length: 10 }, (_, i) => ({
-                id: `inc-${i}`,
+        it('traz todos os Incidents ativos, sem corte por quantidade, e só os resolvidos dentro de 48 horas da resolução', async () => {
+            const now = new Date('2026-10-28T12:00:00Z');
+            const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+            const row = (title: string, status: string, createdAt: Date, resolvedAt: Date | null = null) => ({
+                id: `row-${title}`,
                 providerId: 'aws',
-                title: `Incident ${i}`,
+                title,
                 description: null,
-                status: 'investigating',
+                status,
                 kind: 'problem',
                 severity: null,
                 scheduledFor: null,
                 url: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                resolvedAt: null,
-            }));
+                createdAt,
+                updatedAt: createdAt,
+                resolvedAt,
+            });
+            const active = Array.from({ length: 10 }, (_, i) => row(`Active ${i}`, 'investigating', hoursAgo(24 * (i + 1))));
+            const rows = [
+                ...active,
+                row('Resolved 47h', 'resolved', hoursAgo(24 * 10), hoursAgo(47)),
+                row('Resolved 49h', 'resolved', hoursAgo(50), hoursAgo(49)),
+                row('Resolved sem hora, criado há 30h', 'resolved', hoursAgo(30)),
+                row('Resolved sem hora, criado há 72h', 'resolved', hoursAgo(72)),
+            ];
 
-            vi.mocked(getAllProviders).mockResolvedValueOnce(providers);
+            vi.mocked(getAllProviders).mockResolvedValueOnce([{ id: 'aws', name: 'AWS', url: 'https://aws.amazon.com', type: 'cloud', logo: null }]);
             vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(manyIncidents);
+            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
 
-            const results = await getLatestStatus();
+            const [result] = await getLatestStatus(now);
 
-            expect(results[0].incidents).toHaveLength(5);
+            expect(result.incidents.map(i => i.title)).toEqual([
+                ...active.map(r => r.title),
+                'Resolved 47h',
+                'Resolved sem hora, criado há 30h',
+            ]);
+            expect(result.incidents.find(i => i.title === 'Resolved 47h')?.resolvedAt).toEqual(hoursAgo(47));
         });
 
         it('traz todas as manutenções agendadas e em andamento, fora do corte de 5, e omite as completed', async () => {
@@ -505,7 +537,7 @@ describe('db-service.ts', () => {
             vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
 
-            const [result] = await getLatestStatus();
+            const [result] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
 
             expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'scheduled')).toHaveLength(25);
             expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'in_progress')).toHaveLength(1);

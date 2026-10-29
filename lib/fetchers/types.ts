@@ -25,6 +25,8 @@ interface IncidentBase {
     url?: string;
     createdAt: Date;
     updatedAt?: Date;
+    /** Hora em que o Incident foi encerrado (resolved ou completed), quando conhecida. */
+    resolvedAt?: Date;
 }
 
 /** Incident do tipo problema: falha publicada pelo Provider. */

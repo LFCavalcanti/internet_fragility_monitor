@@ -20,18 +20,14 @@ export class AzureFetcher implements Fetcher {
             const items = data.rss?.channel?.item || [];
             const incidents: IncidentData[] = (Array.isArray(items) ? items : [items]).map((item: any) => this.mapIncident(item));
 
-            const recentIncidents = incidents.filter(inc => {
-                const age = Date.now() - inc.createdAt.getTime();
-                return age < 24 * 60 * 60 * 1000;
-            });
-
-            const hasActive = recentIncidents.some(inc => inc.status !== 'resolved');
+            // No age cut: the Provider Status module decides which Incidents are Recent Incidents.
+            const hasActive = incidents.some(inc => inc.status !== 'resolved');
             const status = hasActive ? 'degraded' : 'operational';
 
             return {
                 providerId: this.providerId,
                 status,
-                incidents: recentIncidents,
+                incidents,
                 responseTime,
             };
         } catch (error) {

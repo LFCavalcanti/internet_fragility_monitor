@@ -20,21 +20,15 @@ export class GoogleCloudFetcher implements Fetcher {
 
             const incidents: IncidentData[] = data.map((inc: any) => this.mapIncident(inc));
 
-            // Filter for recent (last 24h) or active
-            // GCP incidents usually have 'end' time if resolved.
-
+            // No age cut: the Provider Status module decides which Incidents are Recent Incidents.
             const activeIncidents = incidents.filter(inc => inc.status !== 'resolved');
-            const recentIncidents = incidents.filter(inc => {
-                const age = Date.now() - inc.createdAt.getTime();
-                return age < 24 * 60 * 60 * 1000;
-            });
 
             const status = activeIncidents.length > 0 ? 'degraded' : 'operational';
 
             return {
                 providerId: this.providerId,
                 status,
-                incidents: recentIncidents,
+                incidents,
                 responseTime,
             };
         } catch (error) {
@@ -62,6 +56,8 @@ export class GoogleCloudFetcher implements Fetcher {
             status: isResolved ? "resolved" : "investigating",
             createdAt: new Date(incident.begin),
             updatedAt: incident.modified ? new Date(incident.modified) : undefined,
+            // GCP incidents have an 'end' time once resolved: the Recent Incident window counts from it.
+            resolvedAt: isResolved ? new Date(incident.end) : undefined,
         };
     }
 }

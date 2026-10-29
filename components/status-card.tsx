@@ -15,15 +15,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatUtc } from "@/lib/format-utc";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistance } from "date-fns";
 
 interface StatusCardProps {
     name: string;
     logo?: string;
     statusPageUrl?: string;
     result: StatusResult;
-    /** Estado, Incidents e Upcoming Maintenance decididos pelo módulo de Provider Status. */
+    /** Estado, Recent Incidents e Upcoming Maintenance decididos pelo módulo de Provider Status. */
     decision: ProviderStatusDecision;
+    /** Hora do servidor que a página passou ao módulo: as idades exibidas contam dela, não do relógio. */
+    now: Date;
 }
 
 const STATUS_ICON: Record<ProviderStatus, { icon: LucideIcon; className: string }> = {
@@ -40,19 +42,14 @@ function formatUpcoming({ count, next }: UpcomingMaintenanceSummary): string {
     return next ? `${label} · next ${formatUtc(next)}` : label;
 }
 
-export function StatusCard({ name, logo, statusPageUrl, result, decision }: StatusCardProps) {
+export function StatusCard({ name, logo, statusPageUrl, result, decision, now }: StatusCardProps) {
     const displayStatus = decision.status;
     const { icon: StatusIcon, className: statusColor } = STATUS_ICON[displayStatus];
     // Unreachable descreve a leitura, não o Provider: card cinza e neutro, sem último status conhecido.
     const unreachable = displayStatus === "unreachable";
 
-    // Filter incidents to only show those from the last 48 hours
-    const recentIncidents = decision.incidents.filter(inc => {
-        const incidentTime = new Date(inc.createdAt).getTime();
-        const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
-        return incidentTime > fortyEightHoursAgo;
-    });
-
+    // Recent Incidents já vêm decididos e ordenados pelo módulo: o card só exibe.
+    const recentIncidents = decision.incidents;
     const upcoming = decision.upcomingMaintenance;
 
     return (
@@ -117,7 +114,7 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision }: Stat
                         )}
                         {result.lastUpdated && (
                             <p className="text-[10px] text-muted-foreground/70">
-                                Updated {formatDistanceToNow(result.lastUpdated, { addSuffix: true })}
+                                Updated {formatDistance(result.lastUpdated, now, { addSuffix: true })}
                             </p>
                         )}
                         {upcoming && (
@@ -142,13 +139,13 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision }: Stat
 
                 {recentIncidents.length > 0 && (
                     <div className="space-y-2 border-t pt-3 mt-auto">
-                        <p className="text-xs font-semibold text-muted-foreground">Recent Activity (48h)</p>
-                        {recentIncidents.slice(0, 3).map((inc, i) => (
+                        <p className="text-xs font-semibold text-muted-foreground">Recent Incidents</p>
+                        {recentIncidents.map((inc, i) => (
                             <div key={i} className="text-xs pl-2 border-l-2 border-primary/50 py-0.5">
                                 <p className="font-medium truncate">{inc.title}</p>
                                 <p className="text-muted-foreground text-[10px] flex justify-between">
                                     <span>{inc.status.replace("_", " ")}</span>
-                                    <span>{formatDistanceToNow(new Date(inc.createdAt), { addSuffix: true })}</span>
+                                    <span>{formatDistance(inc.createdAt, now, { addSuffix: true })}</span>
                                 </p>
                             </div>
                         ))}

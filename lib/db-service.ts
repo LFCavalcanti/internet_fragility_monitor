@@ -20,6 +20,7 @@ import type {
 } from "./fetchers/types";
 import { providersList } from "./fetchers";
 import { isClosed } from "./incident-status";
+import { isRecentlyResolved } from "./provider-status";
 
 export async function ensureProvidersExist() {
     for (const p of providersList) {
@@ -89,6 +90,8 @@ export async function saveStatusResult(result: StatusResult) {
                 scheduledFor,
                 url: inc.url,
                 createdAt: inc.createdAt,
+                // Já encerrado no Feed: a hora de resolução publicada, para a janela de Recent Incident.
+                resolvedAt: isClosed(inc) ? inc.resolvedAt ?? null : null,
             });
         }
     }
@@ -111,6 +114,7 @@ function toIncidentData(row: Incident): IncidentData {
         url: row.url || undefined,
         createdAt: row.createdAt || new Date(),
         updatedAt: row.updatedAt || undefined,
+        resolvedAt: row.resolvedAt || undefined,
     };
     if (row.kind === "maintenance") {
         return {
@@ -123,30 +127,30 @@ function toIncidentData(row: Incident): IncidentData {
     return { ...base, kind: "problem", status: row.status as ProblemStatus };
 }
 
-export async function getLatestStatus(): Promise<StatusResult[]> {
+/**
+ * Leitura do Snapshot. Por Provider, traz os Incidents que o módulo de Provider Status pode exibir ou contar:
+ * todos os abertos (problemas, manutenções agendadas e em andamento), sem corte por quantidade,
+ * e os problemas resolvidos dentro da janela de Recent Incident. Manutenção completed nunca vem.
+ * `now` é o mesmo relógio que a página passa ao módulo.
+ */
+export async function getLatestStatus(now: Date): Promise<StatusResult[]> {
     const allProviders = await getAllProviders();
     const results: StatusResult[] = [];
 
     for (const provider of allProviders) {
-        // Get latest check
         const latestCheck = await getLatestStatusCheck(provider.id);
 
-        // Get all incidents for this provider (newest first)
+        // All recorded incidents for this provider (newest first)
         const providerIncidents = await getAllIncidentsForProvider(provider.id);
+        const incidents = providerIncidents
+            .map(toIncidentData)
+            .filter(i => !isClosed(i) || isRecentlyResolved(i, now));
 
-        // Problems keep the cut at the 5 newest (Ticket 04 replaces it with the Recent Incident rule).
-        // Scheduled and in-progress maintenances all come along, so Upcoming Maintenance counts them all;
-        // completed maintenances never appear.
-        const recorded = providerIncidents.map(toIncidentData);
-        const problems = recorded.filter(i => i.kind === "problem").slice(0, 5);
-        const openMaintenances = recorded.filter(i => i.kind === "maintenance" && !isClosed(i));
-
-        // Map back to StatusResult
         results.push({
             providerId: provider.id,
             status: (latestCheck?.status as StatusResult['status']) || "operational",
             responseTime: latestCheck?.responseTime || 0,
-            incidents: [...problems, ...openMaintenances],
+            incidents,
             lastUpdated: latestCheck?.checkedAt || undefined,
         });
     }

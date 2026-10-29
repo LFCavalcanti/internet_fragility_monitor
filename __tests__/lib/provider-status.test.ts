@@ -232,6 +232,98 @@ describe('decideProviderStatus', () => {
         });
     });
 
+    describe('Recent Incidents', () => {
+        const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+        const decide = (incidents: IncidentData[], declared: 'operational' | 'degraded' | 'outage' = 'operational') =>
+            decideProviderStatus({ feeds: [feed(declared, incidents)], probes: [], previousPollUnanswered: false, now });
+        const titles = (incidents: IncidentData[]) => incidents.map(i => i.title);
+
+        it('Incident ativo do Google Cloud com mais de 24 horas aparece', () => {
+            const long = problem({ title: 'Cloud Run: elevated latency', createdAt: hoursAgo(30) });
+            expect(titles(decide([long], 'degraded').incidents)).toEqual(['Cloud Run: elevated latency']);
+        });
+
+        it('Incident ativo aparece de qualquer idade', () => {
+            const ancient = problem({ title: 'Region disruption', status: 'identified', createdAt: hoursAgo(24 * 200) });
+            expect(titles(decide([ancient], 'degraded').incidents)).toEqual(['Region disruption']);
+        });
+
+        it('resolvido há 47 horas aparece e há 49 horas não', () => {
+            const recent = problem({ title: 'Resolved 47h', status: 'resolved', createdAt: hoursAgo(60), resolvedAt: hoursAgo(47) });
+            const old = problem({ title: 'Resolved 49h', status: 'resolved', createdAt: hoursAgo(60), resolvedAt: hoursAgo(49) });
+            expect(titles(decide([recent, old]).incidents)).toEqual(['Resolved 47h']);
+        });
+
+        it('a janela de 48 horas conta da resolução, não da criação', () => {
+            const longOne = problem({ title: 'Long outage', status: 'resolved', createdAt: hoursAgo(24 * 5), resolvedAt: hoursAgo(2) });
+            expect(titles(decide([longOne]).incidents)).toEqual(['Long outage']);
+        });
+
+        it('resolvido sem hora de resolução conta a janela da criação', () => {
+            const recent = problem({ title: 'Recent', status: 'resolved', createdAt: hoursAgo(47) });
+            const old = problem({ title: 'Old', status: 'resolved', createdAt: hoursAgo(49) });
+            expect(titles(decide([recent, old]).incidents)).toEqual(['Recent']);
+        });
+
+        it('manutenção em andamento anunciada há dias aparece e o card mostra Maintenance', () => {
+            const ongoing = maintenance({
+                title: 'Datacenter migration',
+                status: 'in_progress',
+                createdAt: hoursAgo(24 * 6),
+                scheduledFor: hoursAgo(3),
+            });
+            const decision = decide([ongoing]);
+            expect(decision.status).toBe('maintenance');
+            expect(titles(decision.incidents)).toEqual(['Datacenter migration']);
+        });
+
+        it('manutenção agendada e completed recente não entram nos Recent Incidents', () => {
+            const done = maintenance({ title: 'Done', status: 'completed', createdAt: hoursAgo(5), resolvedAt: hoursAgo(1) });
+            const upcoming = maintenance({ title: 'Upcoming', createdAt: hoursAgo(5) });
+            expect(decide([done, upcoming]).incidents).toEqual([]);
+        });
+
+        it('ativos vêm antes dos resolvidos, cada grupo do mais novo para o mais antigo', () => {
+            const resolvedNew = problem({ title: 'Resolved new', status: 'resolved', createdAt: hoursAgo(3), resolvedAt: hoursAgo(1) });
+            const activeOld = problem({ title: 'Active old', createdAt: hoursAgo(40) });
+            const resolvedOld = problem({ title: 'Resolved old', status: 'resolved', createdAt: hoursAgo(20), resolvedAt: hoursAgo(10) });
+            const activeNew = maintenance({ title: 'Active new', status: 'in_progress', createdAt: hoursAgo(2) });
+            const resolvedNewer = problem({ title: 'Resolved newer', status: 'resolved', createdAt: hoursAgo(30), resolvedAt: hoursAgo(0.5) });
+            expect(titles(decide([resolvedNew, activeOld, resolvedOld, activeNew], 'degraded').incidents)).toEqual([
+                'Active new',
+                'Active old',
+                'Resolved new',
+            ]);
+            // Resolvidos ordenados pela resolução: o resolvido há meia hora vem antes, mesmo criado antes.
+            expect(titles(decide([resolvedNew, resolvedOld, resolvedNewer]).incidents)).toEqual([
+                'Resolved newer',
+                'Resolved new',
+                'Resolved old',
+            ]);
+        });
+
+        it('os resolvidos completam a lista até 3 itens', () => {
+            const resolved = [1, 2, 3, 4].map(h =>
+                problem({ title: `Resolved ${h}`, status: 'resolved', createdAt: hoursAgo(h + 1), resolvedAt: hoursAgo(h) }),
+            );
+            const active = problem({ title: 'Active', createdAt: hoursAgo(10) });
+            expect(titles(decide([...resolved, active], 'degraded').incidents)).toEqual(['Active', 'Resolved 1', 'Resolved 2']);
+        });
+
+        it('um sexto Incident ativo não é cortado, e nenhum resolvido entra quando os ativos já passam de 3', () => {
+            const active = [1, 2, 3, 4, 5, 6].map(h => problem({ title: `Active ${h}`, createdAt: hoursAgo(h) }));
+            const resolved = problem({ title: 'Resolved', status: 'resolved', resolvedAt: hoursAgo(1) });
+            expect(titles(decide([...active, resolved], 'outage').incidents)).toEqual([
+                'Active 1',
+                'Active 2',
+                'Active 3',
+                'Active 4',
+                'Active 5',
+                'Active 6',
+            ]);
+        });
+    });
+
     describe('Unreachable', () => {
         it('falha de leitura do único Feed, sem Probes, é Unreachable e não Outage', () => {
             const decision = decideProviderStatus({
@@ -258,7 +350,7 @@ describe('decideProviderStatus', () => {
             });
 
             expect(decision.status).toBe('unreachable');
-            expect(decision.incidents.map(i => i.title)).toEqual(['Elevated errors', 'API latency', 'Network upgrade']);
+            expect(decision.incidents.map(i => i.title)).toEqual(['Elevated errors', 'Network upgrade', 'API latency']);
             expect(decision.upcomingMaintenance).toBeNull();
         });
 

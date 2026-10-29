@@ -11,8 +11,9 @@ import { AutoRefresh } from "@/components/auto-refresh";
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-    const snapshot = await getLatestStatus();
+    // Hora do servidor na renderização: o mesmo relógio vai à leitura do Snapshot, aos módulos e aos cards.
     const now = new Date();
+    const snapshot = await getLatestStatus(now);
     // Hora do último Poll: a leitura respondida mais recente do Snapshot (o Ticket 13 passa a trazê-la da leitura do Snapshot).
     const lastPollAt = lastAnsweredPollAt(snapshot);
 
@@ -71,6 +72,7 @@ export default async function Home() {
                                     statusPageUrl={provider.statusPageUrl}
                                     result={entry.result}
                                     decision={entry.decision}
+                                    now={now}
                                 />
                             );
                         })}

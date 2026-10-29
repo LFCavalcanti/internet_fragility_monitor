@@ -4,6 +4,7 @@
  * Termos conforme GLOSSARY.md.
  */
 import type { DeclaredStatus, IncidentData, MaintenanceIncident } from "./fetchers/types";
+import { isClosed } from "./incident-status";
 
 export type ProviderStatus =
     | "down"
@@ -40,7 +41,7 @@ export interface UpcomingMaintenanceSummary {
 
 export interface ProviderStatusDecision {
     status: ProviderStatus;
-    /** Incidents a exibir: problemas e manutenções em andamento. */
+    /** Recent Incidents em ordem de exibição: ativos primeiro, resolvidos completando até 3. */
     incidents: IncidentData[];
     upcomingMaintenance: UpcomingMaintenanceSummary | null;
 }
@@ -48,15 +49,61 @@ export interface ProviderStatusDecision {
 /** Precedência dos estados que vêm de Feeds lidos, do pior para o melhor. */
 const PRECEDENCE: ProviderStatus[] = ["outage", "degraded", "maintenance", "operational"];
 
+/** Por quanto tempo um Incident resolvido continua Recent Incident, contado da resolução. */
+const RECENT_INCIDENT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/** Tamanho da lista que os resolvidos completam; os ativos nunca são cortados. */
+const RECENT_INCIDENTS_LIST_SIZE = 3;
+
 export function decideProviderStatus(input: ProviderStatusInput): ProviderStatusDecision {
     const readIncidents = input.feeds.flatMap(f => (f.read ? f.incidents : []));
     const allIncidents = input.feeds.flatMap(f => f.incidents ?? []);
 
     return {
         status: decideStatus(input),
-        incidents: allIncidents.filter(isVisible),
+        incidents: recentIncidents(allIncidents, input.now),
         upcomingMaintenance: summarizeUpcoming(readIncidents, input.now),
     };
+}
+
+/**
+ * Instante de onde conta a janela de um Incident encerrado: a resolução, ou a criação quando nem o Feed
+ * nem a gravação registraram a resolução (sem esse dado, a escolha que nunca estica a janela).
+ */
+function closedAt(incident: IncidentData): number {
+    return (incident.resolvedAt ?? incident.createdAt).getTime();
+}
+
+/**
+ * Problema encerrado dentro da janela de Recent Incident. A leitura do Snapshot usa a mesma regra
+ * para trazer só o que o módulo pode exibir. Manutenção completed nunca é Recent Incident.
+ */
+export function isRecentlyResolved(incident: IncidentData, now: Date): boolean {
+    return (
+        incident.kind === "problem" &&
+        isClosed(incident) &&
+        now.getTime() - closedAt(incident) < RECENT_INCIDENT_WINDOW_MS
+    );
+}
+
+/** Incident ativo exibido: problema aberto ou manutenção em andamento (a agendada é Upcoming Maintenance). */
+function isActive(incident: IncidentData): boolean {
+    return incident.kind === "problem" ? !isClosed(incident) : incident.status === "in_progress";
+}
+
+/**
+ * Recent Incidents: todos os ativos, de qualquer idade, primeiro; os resolvidos nas últimas 48 horas
+ * completam a lista até 3 itens. Cada grupo vem do mais novo para o mais antigo.
+ */
+function recentIncidents(incidents: IncidentData[], now: Date): IncidentData[] {
+    const active = incidents
+        .filter(isActive)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const resolved = incidents
+        .filter(i => isRecentlyResolved(i, now))
+        .sort((a, b) => closedAt(b) - closedAt(a));
+
+    return [...active, ...resolved.slice(0, Math.max(0, RECENT_INCIDENTS_LIST_SIZE - active.length))];
 }
 
 function decideStatus({ feeds, probes, previousPollUnanswered }: ProviderStatusInput): ProviderStatus {
@@ -75,10 +122,6 @@ function decideStatus({ feeds, probes, previousPollUnanswered }: ProviderStatusI
         return feeds.length === 0 ? "operational" : "unreachable";
     }
     return previousPollUnanswered ? "down" : "unreachable";
-}
-
-function isVisible(incident: IncidentData): boolean {
-    return incident.kind === "problem" || incident.status === "in_progress";
 }
 
 /**

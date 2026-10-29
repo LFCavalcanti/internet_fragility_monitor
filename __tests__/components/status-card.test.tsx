@@ -29,8 +29,13 @@ vi.mock('next/image', () => ({
     ),
 }));
 
+// Relógio fixo: a página passa a hora do servidor ao card, que não lê o relógio na renderização.
+const now = new Date('2026-10-28T12:00:00Z');
+const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+
 describe('StatusCard', () => {
     const baseProps = {
+        now,
         name: 'AWS',
         logo: '/logos/aws.svg',
         statusPageUrl: 'https://status.aws.amazon.com',
@@ -40,7 +45,7 @@ describe('StatusCard', () => {
         providerId: 'aws',
         status: 'operational',
         incidents: [],
-        lastUpdated: new Date(),
+        lastUpdated: hoursAgo(0.1),
         ...overrides,
     });
 
@@ -113,19 +118,18 @@ describe('StatusCard', () => {
         expect(screen.queryByText(/upcoming maintenance/)).not.toBeInTheDocument();
     });
 
-    it('shows recent incidents from last 48 hours', () => {
-        const recentDate = new Date();
+    it('mostra os Recent Incidents recebidos do módulo', () => {
         renderCard({
             status: 'degraded',
             incidents: [{
                 kind: 'problem',
                 title: 'API Latency Issues',
                 status: 'investigating',
-                createdAt: recentDate,
+                createdAt: hoursAgo(1),
             }],
         });
         expect(screen.getByText('API Latency Issues')).toBeInTheDocument();
-        expect(screen.getByText('Recent Activity (48h)')).toBeInTheDocument();
+        expect(screen.getByText('Recent Incidents')).toBeInTheDocument();
     });
 
     it('mostra a manutenção em andamento na lista com a fase legível', () => {
@@ -135,25 +139,16 @@ describe('StatusCard', () => {
                 kind: 'maintenance',
                 title: 'Network upgrade',
                 status: 'in_progress',
-                createdAt: new Date(),
+                createdAt: hoursAgo(24 * 6),
             }],
         });
         expect(screen.getByText('Network upgrade')).toBeInTheDocument();
         expect(screen.getByText('in progress')).toBeInTheDocument();
     });
 
-    it('does not show incidents older than 48 hours', () => {
-        const oldDate = new Date(Date.now() - 72 * 60 * 60 * 1000); // 72 hours ago
-        renderCard({
-            incidents: [{
-                kind: 'problem',
-                title: 'Old Incident',
-                status: 'resolved',
-                createdAt: oldDate,
-            }],
-        });
-        expect(screen.queryByText('Old Incident')).not.toBeInTheDocument();
-        expect(screen.queryByText('Recent Activity (48h)')).not.toBeInTheDocument();
+    it('sem Recent Incidents não há lista', () => {
+        renderCard();
+        expect(screen.queryByText('Recent Incidents')).not.toBeInTheDocument();
     });
 
     describe('Unreachable', () => {
@@ -188,7 +183,7 @@ describe('StatusCard', () => {
                     kind: 'problem',
                     title: 'Elevated errors',
                     status: 'identified',
-                    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                    createdAt: hoursAgo(2),
                 }],
             });
             expect(screen.getByText('Elevated errors')).toBeInTheDocument();
@@ -224,6 +219,7 @@ describe('StatusCard', () => {
         render(
             <StatusCard
                 name="Test Provider"
+                now={now}
                 result={createResult({ providerId: 'test-provider' })}
                 decision={createDecision()}
             />
@@ -232,20 +228,18 @@ describe('StatusCard', () => {
         expect(screen.queryByTitle('Visit Status Page')).not.toBeInTheDocument();
     });
 
-    it('limits displayed incidents to 3', () => {
-        const recentDate = new Date();
+    it('exibe todos os Incidents recebidos, na ordem do módulo, com a idade contada do relógio recebido', () => {
         renderCard({
-            status: 'degraded',
-            incidents: [
-                { kind: 'problem', title: 'Incident 1', status: 'investigating', createdAt: recentDate },
-                { kind: 'problem', title: 'Incident 2', status: 'investigating', createdAt: recentDate },
-                { kind: 'problem', title: 'Incident 3', status: 'investigating', createdAt: recentDate },
-                { kind: 'problem', title: 'Incident 4', status: 'investigating', createdAt: recentDate },
-            ],
+            status: 'outage',
+            incidents: [1, 2, 3, 4, 5].map(h => ({
+                kind: 'problem' as const,
+                title: `Incident ${h}`,
+                status: 'investigating' as const,
+                createdAt: hoursAgo(24 * h),
+            })),
         });
-        expect(screen.getByText('Incident 1')).toBeInTheDocument();
-        expect(screen.getByText('Incident 2')).toBeInTheDocument();
-        expect(screen.getByText('Incident 3')).toBeInTheDocument();
-        expect(screen.queryByText('Incident 4')).not.toBeInTheDocument();
+        const titles = screen.getAllByText(/^Incident \d$/).map(el => el.textContent);
+        expect(titles).toEqual(['Incident 1', 'Incident 2', 'Incident 3', 'Incident 4', 'Incident 5']);
+        expect(screen.getByText('5 days ago')).toBeInTheDocument();
     });
 });
