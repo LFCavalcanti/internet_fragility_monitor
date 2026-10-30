@@ -1,11 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AWSFetcher } from '@/lib/fetchers/aws';
 import { AzureFetcher } from '@/lib/fetchers/azure';
 import { GoogleCloudFetcher } from '@/lib/fetchers/google';
+import { hoursBefore } from '../../helpers/time';
 
-// Recent Incident é decidido pelo módulo de Provider Status; os leitores entregam tudo o que o Feed publica.
-const thirtyHoursAgo = () => new Date(Date.now() - 30 * 60 * 60 * 1000);
+// Recent Incident é decidido pelo módulo de Provider Status; os leitores entregam tudo o que o Feed publica,
+// de qualquer idade.
+const now = new Date('2026-10-28T12:00:00Z');
 
 const rss = (items: { title: string; pubDate: Date }[]) => `<?xml version="1.0"?>
 <rss version="2.0"><channel><title>Status</title>
@@ -22,16 +24,22 @@ const respond = (body: string, json = false) =>
         }),
     );
 
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+});
+
 afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
 });
 
-describe('os leitores não cortam Incidents em 24 horas', () => {
+describe('os leitores entregam todos os Incidents do Feed, de qualquer idade', () => {
     it.each([
         ['AWS', () => new AWSFetcher('aws', 'https://status.aws.amazon.com/rss/all.rss')],
         ['Azure', () => new AzureFetcher('azure', 'https://azure.status.microsoft/en-us/status/feed/')],
     ])('%s: Incident ativo publicado há 30 horas vem na leitura e mantém o Provider degradado', async (_name, make) => {
-        respond(rss([{ title: 'Increased Error Rates', pubDate: thirtyHoursAgo() }]));
+        respond(rss([{ title: 'Increased Error Rates', pubDate: hoursBefore(now, 30) }]));
 
         const result = await make().fetchStatus();
 
@@ -40,15 +48,15 @@ describe('os leitores não cortam Incidents em 24 horas', () => {
     });
 
     it('Google Cloud: Incident ativo há 30 horas vem na leitura, e o resolvido traz a hora de resolução', async () => {
-        const begin = thirtyHoursAgo();
-        const end = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        const begin = hoursBefore(now, 30);
+        const end = hoursBefore(now, 2);
         respond(
             JSON.stringify([
                 { service_name: 'Cloud Run', external_desc: 'Elevated latency', begin: begin.toISOString(), uri: 'incidents/1' },
                 {
                     service_name: 'BigQuery',
                     external_desc: 'Query failures',
-                    begin: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+                    begin: hoursBefore(now, 72).toISOString(),
                     end: end.toISOString(),
                     uri: 'incidents/2',
                 },

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { StatusCard } from '@/components/status-card';
 import type { StatusResult } from '@/lib/fetchers/types';
 import type { ProviderStatusDecision } from '@/lib/provider-status';
+import { hoursBefore } from '../helpers/time';
 
 // Mock recharts ResponsiveContainer which requires browser dimensions
 vi.mock('recharts', async () => {
@@ -31,7 +32,6 @@ vi.mock('next/image', () => ({
 
 // Relógio fixo: a página passa a hora do servidor ao card, que não lê o relógio na renderização.
 const now = new Date('2026-10-28T12:00:00Z');
-const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 
 describe('StatusCard', () => {
     const baseProps = {
@@ -45,7 +45,7 @@ describe('StatusCard', () => {
         providerId: 'aws',
         status: 'operational',
         incidents: [],
-        lastUpdated: hoursAgo(0.1),
+        lastUpdated: hoursBefore(now, 0.1),
         ...overrides,
     });
 
@@ -137,7 +137,7 @@ describe('StatusCard', () => {
                 kind: 'problem',
                 title: 'API Latency Issues',
                 status: 'investigating',
-                createdAt: hoursAgo(1),
+                createdAt: hoursBefore(now, 1),
             }],
         });
         expect(screen.getByText('API Latency Issues')).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('StatusCard', () => {
                 kind: 'maintenance',
                 title: 'Network upgrade',
                 status: 'in_progress',
-                createdAt: hoursAgo(24 * 6),
+                createdAt: hoursBefore(now, 24 * 6),
             }],
         });
         expect(screen.getByText('Network upgrade')).toBeInTheDocument();
@@ -195,7 +195,7 @@ describe('StatusCard', () => {
                     kind: 'problem',
                     title: 'Elevated errors',
                     status: 'identified',
-                    createdAt: hoursAgo(2),
+                    createdAt: hoursBefore(now, 2),
                 }],
             });
             expect(screen.getByText('Elevated errors')).toBeInTheDocument();
@@ -247,7 +247,7 @@ describe('StatusCard', () => {
                 kind: 'problem' as const,
                 title: `Incident ${h}`,
                 status: 'investigating' as const,
-                createdAt: hoursAgo(24 * h),
+                createdAt: hoursBefore(now, 24 * h),
             })),
         });
         const titles = screen.getAllByText(/^Incident \d$/).map(el => el.textContent);

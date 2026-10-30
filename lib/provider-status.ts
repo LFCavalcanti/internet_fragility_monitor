@@ -4,7 +4,7 @@
  * Termos conforme GLOSSARY.md.
  */
 import type { DeclaredStatus, IncidentData, MaintenanceIncident } from "./fetchers/types";
-import { isClosed } from "./incident-status";
+import { closedAtMs, isClosed, isRecentlyResolved } from "./incident-status";
 
 export type ProviderStatus =
     | "down"
@@ -54,9 +54,6 @@ export interface ProviderStatusDecision {
 /** Precedência dos estados que vêm de Feeds lidos, do pior para o melhor. */
 const PRECEDENCE: ProviderStatus[] = ["outage", "degraded", "maintenance", "operational"];
 
-/** Por quanto tempo um Incident resolvido continua Recent Incident, contado da resolução. */
-const RECENT_INCIDENT_WINDOW_MS = 48 * 60 * 60 * 1000;
-
 /** Tamanho da lista que os resolvidos completam; os ativos nunca são cortados. */
 const RECENT_INCIDENTS_LIST_SIZE = 3;
 
@@ -70,26 +67,6 @@ export function decideProviderStatus(input: ProviderStatusInput): ProviderStatus
         upcomingMaintenance: summarizeUpcoming(readIncidents, input.now),
         accessOnly: input.feeds.length === 0,
     };
-}
-
-/**
- * Instante de onde conta a janela de um Incident encerrado: a resolução, ou a criação quando nem o Feed
- * nem a gravação registraram a resolução (sem esse dado, a escolha que nunca estica a janela).
- */
-function closedAt(incident: IncidentData): number {
-    return (incident.resolvedAt ?? incident.createdAt).getTime();
-}
-
-/**
- * Problema encerrado dentro da janela de Recent Incident. A leitura do Snapshot usa a mesma regra
- * para trazer só o que o módulo pode exibir. Manutenção completed nunca é Recent Incident.
- */
-export function isRecentlyResolved(incident: IncidentData, now: Date): boolean {
-    return (
-        incident.kind === "problem" &&
-        isClosed(incident) &&
-        now.getTime() - closedAt(incident) < RECENT_INCIDENT_WINDOW_MS
-    );
 }
 
 /** Incident ativo exibido: problema aberto ou manutenção em andamento (a agendada é Upcoming Maintenance). */
@@ -107,7 +84,7 @@ function recentIncidents(incidents: IncidentData[], now: Date): IncidentData[] {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const resolved = incidents
         .filter(i => isRecentlyResolved(i, now))
-        .sort((a, b) => closedAt(b) - closedAt(a));
+        .sort((a, b) => closedAtMs(b) - closedAtMs(a));
 
     return [...active, ...resolved.slice(0, Math.max(0, RECENT_INCIDENTS_LIST_SIZE - active.length))];
 }

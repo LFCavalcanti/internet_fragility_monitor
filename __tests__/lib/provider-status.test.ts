@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { decideProviderStatus, type FeedReading } from '@/lib/provider-status';
 import type { IncidentData, MaintenanceIncident, ProblemIncident } from '@/lib/fetchers/types';
+import { hoursBefore } from '../helpers/time';
 
 const now = new Date('2026-10-26T15:00:00Z');
 
@@ -249,35 +250,34 @@ describe('decideProviderStatus', () => {
     });
 
     describe('Recent Incidents', () => {
-        const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
         const decide = (incidents: IncidentData[], declared: 'operational' | 'degraded' | 'outage' = 'operational') =>
             decideProviderStatus({ feeds: [feed(declared, incidents)], probes: [], previousPollUnanswered: false, now });
         const titles = (incidents: IncidentData[]) => incidents.map(i => i.title);
 
         it('Incident ativo do Google Cloud com mais de 24 horas aparece', () => {
-            const long = problem({ title: 'Cloud Run: elevated latency', createdAt: hoursAgo(30) });
+            const long = problem({ title: 'Cloud Run: elevated latency', createdAt: hoursBefore(now, 30) });
             expect(titles(decide([long], 'degraded').incidents)).toEqual(['Cloud Run: elevated latency']);
         });
 
         it('Incident ativo aparece de qualquer idade', () => {
-            const ancient = problem({ title: 'Region disruption', status: 'identified', createdAt: hoursAgo(24 * 200) });
+            const ancient = problem({ title: 'Region disruption', status: 'identified', createdAt: hoursBefore(now, 24 * 200) });
             expect(titles(decide([ancient], 'degraded').incidents)).toEqual(['Region disruption']);
         });
 
         it('resolvido há 47 horas aparece e há 49 horas não', () => {
-            const recent = problem({ title: 'Resolved 47h', status: 'resolved', createdAt: hoursAgo(60), resolvedAt: hoursAgo(47) });
-            const old = problem({ title: 'Resolved 49h', status: 'resolved', createdAt: hoursAgo(60), resolvedAt: hoursAgo(49) });
+            const recent = problem({ title: 'Resolved 47h', status: 'resolved', createdAt: hoursBefore(now, 60), resolvedAt: hoursBefore(now, 47) });
+            const old = problem({ title: 'Resolved 49h', status: 'resolved', createdAt: hoursBefore(now, 60), resolvedAt: hoursBefore(now, 49) });
             expect(titles(decide([recent, old]).incidents)).toEqual(['Resolved 47h']);
         });
 
         it('a janela de 48 horas conta da resolução, não da criação', () => {
-            const longOne = problem({ title: 'Long outage', status: 'resolved', createdAt: hoursAgo(24 * 5), resolvedAt: hoursAgo(2) });
+            const longOne = problem({ title: 'Long outage', status: 'resolved', createdAt: hoursBefore(now, 24 * 5), resolvedAt: hoursBefore(now, 2) });
             expect(titles(decide([longOne]).incidents)).toEqual(['Long outage']);
         });
 
         it('resolvido sem hora de resolução conta a janela da criação', () => {
-            const recent = problem({ title: 'Recent', status: 'resolved', createdAt: hoursAgo(47) });
-            const old = problem({ title: 'Old', status: 'resolved', createdAt: hoursAgo(49) });
+            const recent = problem({ title: 'Recent', status: 'resolved', createdAt: hoursBefore(now, 47) });
+            const old = problem({ title: 'Old', status: 'resolved', createdAt: hoursBefore(now, 49) });
             expect(titles(decide([recent, old]).incidents)).toEqual(['Recent']);
         });
 
@@ -285,8 +285,8 @@ describe('decideProviderStatus', () => {
             const ongoing = maintenance({
                 title: 'Datacenter migration',
                 status: 'in_progress',
-                createdAt: hoursAgo(24 * 6),
-                scheduledFor: hoursAgo(3),
+                createdAt: hoursBefore(now, 24 * 6),
+                scheduledFor: hoursBefore(now, 3),
             });
             const decision = decide([ongoing]);
             expect(decision.status).toBe('maintenance');
@@ -294,17 +294,17 @@ describe('decideProviderStatus', () => {
         });
 
         it('manutenção agendada e completed recente não entram nos Recent Incidents', () => {
-            const done = maintenance({ title: 'Done', status: 'completed', createdAt: hoursAgo(5), resolvedAt: hoursAgo(1) });
-            const upcoming = maintenance({ title: 'Upcoming', createdAt: hoursAgo(5) });
+            const done = maintenance({ title: 'Done', status: 'completed', createdAt: hoursBefore(now, 5), resolvedAt: hoursBefore(now, 1) });
+            const upcoming = maintenance({ title: 'Upcoming', createdAt: hoursBefore(now, 5) });
             expect(decide([done, upcoming]).incidents).toEqual([]);
         });
 
         it('ativos vêm antes dos resolvidos, cada grupo do mais novo para o mais antigo', () => {
-            const resolvedNew = problem({ title: 'Resolved new', status: 'resolved', createdAt: hoursAgo(3), resolvedAt: hoursAgo(1) });
-            const activeOld = problem({ title: 'Active old', createdAt: hoursAgo(40) });
-            const resolvedOld = problem({ title: 'Resolved old', status: 'resolved', createdAt: hoursAgo(20), resolvedAt: hoursAgo(10) });
-            const activeNew = maintenance({ title: 'Active new', status: 'in_progress', createdAt: hoursAgo(2) });
-            const resolvedNewer = problem({ title: 'Resolved newer', status: 'resolved', createdAt: hoursAgo(30), resolvedAt: hoursAgo(0.5) });
+            const resolvedNew = problem({ title: 'Resolved new', status: 'resolved', createdAt: hoursBefore(now, 3), resolvedAt: hoursBefore(now, 1) });
+            const activeOld = problem({ title: 'Active old', createdAt: hoursBefore(now, 40) });
+            const resolvedOld = problem({ title: 'Resolved old', status: 'resolved', createdAt: hoursBefore(now, 20), resolvedAt: hoursBefore(now, 10) });
+            const activeNew = maintenance({ title: 'Active new', status: 'in_progress', createdAt: hoursBefore(now, 2) });
+            const resolvedNewer = problem({ title: 'Resolved newer', status: 'resolved', createdAt: hoursBefore(now, 30), resolvedAt: hoursBefore(now, 0.5) });
             expect(titles(decide([resolvedNew, activeOld, resolvedOld, activeNew], 'degraded').incidents)).toEqual([
                 'Active new',
                 'Active old',
@@ -320,15 +320,15 @@ describe('decideProviderStatus', () => {
 
         it('os resolvidos completam a lista até 3 itens', () => {
             const resolved = [1, 2, 3, 4].map(h =>
-                problem({ title: `Resolved ${h}`, status: 'resolved', createdAt: hoursAgo(h + 1), resolvedAt: hoursAgo(h) }),
+                problem({ title: `Resolved ${h}`, status: 'resolved', createdAt: hoursBefore(now, h + 1), resolvedAt: hoursBefore(now, h) }),
             );
-            const active = problem({ title: 'Active', createdAt: hoursAgo(10) });
+            const active = problem({ title: 'Active', createdAt: hoursBefore(now, 10) });
             expect(titles(decide([...resolved, active], 'degraded').incidents)).toEqual(['Active', 'Resolved 1', 'Resolved 2']);
         });
 
         it('um sexto Incident ativo não é cortado, e nenhum resolvido entra quando os ativos já passam de 3', () => {
-            const active = [1, 2, 3, 4, 5, 6].map(h => problem({ title: `Active ${h}`, createdAt: hoursAgo(h) }));
-            const resolved = problem({ title: 'Resolved', status: 'resolved', resolvedAt: hoursAgo(1) });
+            const active = [1, 2, 3, 4, 5, 6].map(h => problem({ title: `Active ${h}`, createdAt: hoursBefore(now, h) }));
+            const resolved = problem({ title: 'Resolved', status: 'resolved', resolvedAt: hoursBefore(now, 1) });
             expect(titles(decide([...active, resolved], 'outage').incidents)).toEqual([
                 'Active 1',
                 'Active 2',

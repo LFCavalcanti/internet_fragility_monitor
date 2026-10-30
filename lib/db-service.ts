@@ -18,8 +18,7 @@ import type {
     ProblemStatus,
     StatusResult,
 } from "./fetchers/types";
-import { isClosed } from "./incident-status";
-import { isRecentlyResolved } from "./provider-status";
+import { isClosed, isRecentlyResolved } from "./incident-status";
 
 /** Um Provider ativo do Provider Catalog com o resultado dele no Snapshot. */
 export interface SnapshotEntry {

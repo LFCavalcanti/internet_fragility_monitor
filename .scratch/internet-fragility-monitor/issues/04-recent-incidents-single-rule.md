@@ -29,3 +29,5 @@
 - Sem migration e sem mudança de esquema.
 
 **Efeito visível a observar:** em 28/10/2026 o RSS da AWS trazia 37 itens, nenhum marcado "resolved", alguns de março de 2026 (disrupção das regiões do Oriente Médio). Sem o corte de 24 horas eles passam a ser Incidents ativos: a AWS aparece Degraded com esses Incidents na lista. É a regra decidida (ativo de qualquer idade aparece); a identidade por `guid` e a leitura do RSS são dos Tickets 10 e 14.
+
+Correções pós-review (29/10/2026): `isRecentlyResolved` e a janela de 48 horas saíram de `lib/provider-status.ts` para `lib/incident-status.ts`, junto da regra de Incident encerrado; `closedAt` virou `closedAtMs` (devolve milissegundos, usado no corte da janela e na ordenação); helper `hoursBefore(now, h)` em `__tests__/helpers/time.ts` no lugar dos `hoursAgo` repetidos; `__tests__/lib/fetchers/no-24h-cut.test.ts` virou `readers-deliver-every-incident.test.ts`, com relógio fixo (`vi.useFakeTimers`/`setSystemTime`). Sem mudança de comportamento.

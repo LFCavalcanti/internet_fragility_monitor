@@ -33,6 +33,7 @@ import {
     getLatestStatusCheck,
 } from '@/lib/dao';
 import type { Provider } from '@/lib/schema';
+import { hoursBefore } from '../helpers/time';
 
 /** Um Provider ativo do Provider Catalog, como o DAO devolve. */
 const catalogProvider = (id: string, name: string, displayOrder = 1): Provider => ({
@@ -458,7 +459,6 @@ describe('db-service.ts', () => {
 
         it('traz todos os Incidents ativos, sem corte por quantidade, e só os resolvidos dentro de 48 horas da resolução', async () => {
             const now = new Date('2026-10-28T12:00:00Z');
-            const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
             const row = (title: string, status: string, createdAt: Date, resolvedAt: Date | null = null) => ({
                 id: `row-${title}`,
                 providerId: 'aws',
@@ -473,13 +473,13 @@ describe('db-service.ts', () => {
                 updatedAt: createdAt,
                 resolvedAt,
             });
-            const active = Array.from({ length: 10 }, (_, i) => row(`Active ${i}`, 'investigating', hoursAgo(24 * (i + 1))));
+            const active = Array.from({ length: 10 }, (_, i) => row(`Active ${i}`, 'investigating', hoursBefore(now, 24 * (i + 1))));
             const rows = [
                 ...active,
-                row('Resolved 47h', 'resolved', hoursAgo(24 * 10), hoursAgo(47)),
-                row('Resolved 49h', 'resolved', hoursAgo(50), hoursAgo(49)),
-                row('Resolved sem hora, criado há 30h', 'resolved', hoursAgo(30)),
-                row('Resolved sem hora, criado há 72h', 'resolved', hoursAgo(72)),
+                row('Resolved 47h', 'resolved', hoursBefore(now, 24 * 10), hoursBefore(now, 47)),
+                row('Resolved 49h', 'resolved', hoursBefore(now, 50), hoursBefore(now, 49)),
+                row('Resolved sem hora, criado há 30h', 'resolved', hoursBefore(now, 30)),
+                row('Resolved sem hora, criado há 72h', 'resolved', hoursBefore(now, 72)),
             ];
 
             vi.mocked(getActiveProviders).mockResolvedValueOnce([catalogProvider('aws', 'AWS')]);
@@ -493,7 +493,7 @@ describe('db-service.ts', () => {
                 'Resolved 47h',
                 'Resolved sem hora, criado há 30h',
             ]);
-            expect(result.incidents.find(i => i.title === 'Resolved 47h')?.resolvedAt).toEqual(hoursAgo(47));
+            expect(result.incidents.find(i => i.title === 'Resolved 47h')?.resolvedAt).toEqual(hoursBefore(now, 47));
         });
 
         it('traz todas as manutenções agendadas e em andamento, fora do corte de 5, e omite as completed', async () => {
