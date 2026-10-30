@@ -13,6 +13,7 @@ Mantido pelo orquestrador (a sessão principal, na `main`). Agentes de ticket n�
 | 06 | [Stale Snapshot](.scratch/internet-fragility-monitor/issues/06-stale-snapshot.md) | `d97b0a4` |
 | 04 | [Recent Incidents com uma regra só](.scratch/internet-fragility-monitor/issues/04-recent-incidents-single-rule.md) | `7f0e369` |
 | 07 | [Catálogo no banco](.scratch/internet-fragility-monitor/issues/07-provider-catalog-in-database.md) | `5df46e3` |
+| 08 | [Poll guiado pelo catálogo, com Probes](.scratch/internet-fragility-monitor/issues/08-poll-driven-by-catalog-with-probes.md) | `b777f34` |
 
 ## 2. Ciclo atual: revisão de arquitetura (tickets 02–17)
 
@@ -26,7 +27,7 @@ Origem: `arvore-de-decisoes-2026-10-26-arquitetura.md` e as cinco specs em `.scr
 | ~~05~~ | ~~Nova regra do Internet Health~~ | provider-status | T2 | 02 |
 | ~~06~~ | ~~Stale Snapshot~~ | provider-status | T2 | 05 |
 | ~~07~~ | ~~Catálogo no banco~~ **(esquema)** | provider-catalog | T3 | 04, 06 |
-| 08 | Poll guiado pelo catálogo, com Probes para quem não tem Feed | provider-catalog | T3 | 03, 07 |
+| ~~08~~ | ~~Poll guiado pelo catálogo, com Probes para quem não tem Feed~~ | provider-catalog | T3 | 03, 07 |
 | 09 | Política de leitura única com a família Statuspage.io | status-feed | T3 | 08 |
 | 10 | Demais famílias na política única | status-feed | T3 | 09 |
 | 11 | Feeds reais da Salesforce e da IBM **(esquema)** | status-feed | T3 | 09, 10 |
@@ -45,7 +46,7 @@ Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos
 |---|---|---|
 | **T1 – Card e leitores** | ~~02~~ → ~~03~~ → ~~04~~ | leitores de status, card do Provider, módulo de Provider Status, leitura do Snapshot |
 | **T2 – Visão geral** | ~~05~~ → ~~06~~ | página, hero, módulo de Internet Health |
-| **T3 – Catálogo e Status Feed** | ~~07~~ → 08 → 09 → 10 → 11 → 12 | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
+| **T3 – Catálogo e Status Feed** | ~~07~~ → ~~08~~ → 09 → 10 → 11 → 12 | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
 | **T4 – Persistência** | 13 → 14 → 15 → 16 | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
 | **T5 – Agendamento** | 17 | agendador, inicialização, atualização automática da página |
 
@@ -70,7 +71,7 @@ Uma onda só começa quando os tickets da onda anterior de que ela depende estã
 | 2 | ~~**03**~~, ~~**05**~~ | T1, T2 |
 | 3 | ~~**04**~~, ~~**06**~~ | T1, T2 |
 | 4 | ~~**07**~~ (esquema) | T3 |
-| 5 | **08** | T3 |
+| 5 | ~~**08**~~ | T3 |
 | 6 | **09** | T3 |
 | 7 | **10** | T3 |
 | 8 | **11** (esquema) | T3 |
@@ -88,15 +89,18 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 - **Onda 2 (fechada, 28/10/2026):** Tickets 05 (`e0be78e`) e 03 (`785afc7`), sem migrations. Na `main`: 156 testes passando, tsc limpo, lint sem erro novo (16 erros já existentes). O 06 começou assim que o 05 entrou, sem esperar o 03 (trilhas diferentes). Code review da onda 1 achou defeitos no 02 (Upcoming Maintenance sem relógio, `resolved_at` não limpo ao reabrir manutenção, nomes fora do glossário, regra de Incident encerrado triplicada); a correção vai num `fix(...) (Ticket 02)` antes do 04.
 - **Onda 3 (fechada, 28/10/2026):** 04 integrado (`7f0e369`); na `main` 191 testes, tsc limpo, lint sem erro novo. Antes: 06 integrado (`d97b0a4`); code review do 06 feito. Correções pós-review das ondas 1–3, num agente só: `7edcfaa` (Ticket 02: Upcoming Maintenance com relógio, `resolved_at` limpo ao reabrir, regra única de Incident encerrado em `lib/incident-status.ts`, nomes do glossário), `3d98bad` (Ticket 05: nomes do módulo de Internet Health), `e71d499` (Ticket 06: hora do último Poll ignora leituras Unreachable, formatação UTC única em `lib/format-utc.ts`, tipo `HeroState`). Na `main`: 177 testes, tsc limpo, lint sem erro novo. 04 rodando depois das correções (mesmos arquivos). Decisões de produto pendentes para o usuário: Incidents gravados no card Unreachable com a última fase lida; card Unreachable sem Upcoming Maintenance; textos do hero com "major outage"/"Service Down"; Stale com banco vazio ("No Poll recorded yet."); aviso de Stale com português e inglês misturados.
 - **Onda 4 (fechada, 28/10/2026):** Ticket 07, commit `5df46e3`. Migrations `0003_provider_catalog` (esquema) e `0004_provider_catalog_load` (dados); `_journal.json` linear, aplicadas numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Na `main`: 194 testes, tsc limpo, lint sem erro novo (15 erros já existentes). Nota para o deploy: `build:prod` agora só aplica migrations; conferir antes que a `__drizzle_migrations` de produção tenha só 0000–0002 deste repositório. Decisão do usuário: o RSS da AWS agrupa atualizações por evento (prefixo do `guid`), ativo até a AWS resolver; entra no Ticket 10 (registrado nos Comments dele). Próxima: onda 5 (08).
+- **Onda 5 (fechada, 29/10/2026):** Ticket 08, commit `b777f34`, sem migrations. Agente sem travas (cerca de 10 min); rebase sobre `3447cae` sem conflito. Na `main`: 217 testes, tsc limpo, lint sem erro novo (15 erros já existentes). Code review do Ticket 07 feito nesta onda (sem defeito bloqueante); pendências registradas em `3447cae` (`ISSUES_ANNOTATION.md` 1.1 e 2.1, Comments do Ticket 10). Próxima: onda 6 (09).
 
-### Onde paramos (28/10/2026, fim do dia)
+### Onde paramos (29/10/2026)
 
-Tudo integrado na `main` (`fd18c36`): tickets 02–07 e as correções pós-review. Nenhum agente rodando, nenhum worktree aberto. Ao retomar, nesta ordem:
+Tudo integrado na `main` até o Ticket 08 (`b777f34`). Nenhum agente rodando, nenhum worktree aberto. Ao retomar, nesta ordem:
 
-1. **Code review do Ticket 07** (`git diff 7f0e369 5df46e3`), ainda não feito.
-2. **Correção pós-review do Ticket 04** (`refactor(status): ... (Ticket 04)`), achados ainda não aplicados: mover `isRecentlyResolved` de `lib/provider-status.ts` para `lib/incident-status.ts`; `closedAt` devolve número mas o nome sugere `Date`; helper de tempo compartilhado nos testes (`hoursAgo` repetido em 4 arquivos); renomear `__tests__/lib/fetchers/no-24h-cut.test.ts` pelo assunto e usar relógio fixo. O `status !== 'resolved'` nos leitores fica para o Ticket 10 (registrado nos Comments dele).
-3. **Onda 5: Ticket 08** (Poll guiado pelo catálogo, com Probes), que pode rodar junto com os itens 1 e 2.
+1. **Code review da onda 5** (Ticket 08: `git diff 3447cae b777f34`), se ainda não feito.
+2. **Correções pós-review dos Tickets 04 e 07 (e do 08, se houver)**, num agente só, um commit por ticket:
+   - Ticket 04 (`refactor(status): ... (Ticket 04)`): mover `isRecentlyResolved` de `lib/provider-status.ts` para `lib/incident-status.ts`; `closedAt` devolve número mas o nome sugere `Date`; helper de tempo compartilhado nos testes (`hoursAgo` repetido em 4 arquivos); renomear `__tests__/lib/fetchers/no-24h-cut.test.ts` pelo assunto e usar relógio fixo.
+   - Ticket 07 (`refactor(catalog): ... (Ticket 07)`): comentário obsoleto de `getAllProviders` em `lib/dao.ts`; testes de `getLatestStatus` em `db-service.test.ts` com banco mockado e repetidos em `snapshot-catalog.test.ts`; Major Provider como marca no item do Snapshot em vez de lista de ids paralela; unificar `SnapshotEntry` e `ProviderSnapshotEntry`; `?? undefined` repetido em `app/page.tsx`; `type` e `label` de `schema.ts` com `$type<>`; tipos sem uso (`ProviderSource`, `NewProvider`), se o 08 não passou a usá-los.
+3. **Onda 6: Ticket 09** (política de leitura única com Statuspage.io), depois das correções do item 2 (mexem nos mesmos leitores e testes).
 
 Decisões de produto e ações do usuário pendentes: ver `ISSUES_ANNOTATION.md` na raiz (nada bloqueado por elas).
 
-Situação visível conhecida até o Ticket 10: o card da AWS mostra uma lista longa de atualizações do RSS como Incidents ativos (decisão já tomada: agrupar por evento no Ticket 10).
+Situação visível conhecida até o Ticket 10: o card da AWS mostra uma lista longa de atualizações do RSS como Incidents ativos (decisão já tomada: agrupar por evento no Ticket 10). Salesforce e IBM aparecem com a marca de "só acesso" até o Ticket 11 ativar os Feeds reais.

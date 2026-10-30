@@ -19,7 +19,7 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Textos do hero fora do glossário:** o destaque usa "reporting a major outage", "Major outage reported.", "Major outages detected" (o glossário evita "major" para Outage) e "Service Down", "Service Outage", "Service Degraded" (o glossário evita "service" para Provider). Decidir se troca os textos (05).
 - **Banco sem nenhum Poll:** o hero entra no estado neutro de Stale Snapshot e mostra "No Poll recorded yet." no lugar da hora do último Poll. A spec não cobre o caso (06).
 - **Todos os Providers Unreachable:** até o Ticket 13 trazer a hora real do Poll, a hora do último Poll considera só leituras respondidas; com todos Unreachable desde sempre, o hero e o aviso mostram "No Poll recorded yet." em vez de uma hora (06, correção pós-review `e71d499`).
-- **Português e inglês misturados na tela:** a página é em inglês, mas alguns textos ficaram em português porque a spec e a árvore os citam assim: "Não foi possível ler a status page" (card Unreachable), "Status page e serviço sem resposta" (destaque de Down), "Sem leitura recente" (hero e aviso). O aviso de Stale ficou "Sem leitura recente. The provider cards may be out of date." Decidir o idioma da página (03, 05, 06).
+- **Português e inglês misturados na tela:** a página é em inglês, mas alguns textos ficaram em português porque a spec e a árvore os citam assim: "Não foi possível ler a status page" (card Unreachable), "Status page e serviço sem resposta" (destaque de Down), "Sem leitura recente" (hero e aviso), "verificação de acesso, sem feed de status" (marca de "só acesso" no card). O aviso de Stale ficou "Sem leitura recente. The provider cards may be out of date." Decidir o idioma da página (03, 05, 06, 08).
 
 - **Site do GitHub no catálogo:** o link do site do GitHub é `https://githubstatus.com`, a status page, e não `https://github.com`. A carga do catálogo copiou o valor que já existia, como a spec mandava. Trocar exige uma migration de dados (07, code review).
 
@@ -29,7 +29,9 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Linha de Upcoming Maintenance:** em inglês, como o resto do card, com a data em UTC ("25 upcoming maintenances · next Oct 27, 01:00 UTC") (02).
 - **Janela de 48 h dos resolvidos:** conta a partir da resolução (`resolvedAt`). Quando a hora da resolução não foi registrada (linhas antigas e RSS da AWS e da Azure, que não publicam essa hora), conta a partir da criação, e a janela nunca fica mais longa do que era antes. Quando um Incident é encerrado pelo Poll, a hora gravada é a do Poll, não a publicada pelo Feed (04).
 - **Título da lista no card:** passou de "Recent Activity (48h)" para "Recent Incidents", o termo do glossário (04).
-- **Probe por ping:** uma resposta HTTP de erro do ping vira Unreachable. Na regra de Probes da spec, resposta abaixo de 500 conta como de pé; o Ticket 08 substitui o ping pelos Probes (03).
+- **Marca de "só acesso" no card Unreachable:** quando nenhum Probe de Oracle, Salesforce ou IBM responde, o card fica Unreachable e continua mostrando "verificação de acesso, sem feed de status", porque a marca diz de onde vem o estado (08).
+- **Provider só com Probes sem Recent Incidents:** sem Feed, ninguém declara nem encerra Incidents, então o card não lista Incidents desses Providers. Hoje Oracle, Salesforce e IBM não têm Incidents gravados (08).
+- **Probes com timeout de 5 s:** o mesmo do ping antigo; o timeout da política de leitura é do Ticket 09 (08).
 
 ## 1.3 Faxina técnica
 
@@ -52,7 +54,6 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Card da AWS com lista longa:** sem o corte de 24 horas, cada atualização do RSS da AWS vira um Incident ativo (em 28/10/2026, 38 itens de 2 eventos do Oriente Médio, abertos desde 01/03/2026). A AWS aparece Degraded, o que o próprio RSS confirma, mas com dezenas de itens. **Decidido pelo usuário em 28/10/2026:** agrupar as atualizações por evento (parte do `guid` antes do `_`), ativo até a AWS marcar como resolvido. Entra no Ticket 10 (registrado nos Comments dele) (04).
 - **Incidents da AWS reabertos pelo título:** a gravação casa Incidents pelo título, e as atualizações da AWS repetem poucos títulos; um Incident encerrado pode voltar a abrir quando outra atualização com o mesmo título aparece. A identidade pela fonte é do Ticket 14; o agrupamento por evento do Ticket 10 reduz o efeito (04).
 - **Manutenções da Cloudflare com o mesmo título:** pela identidade por título, 25 manutenções agendadas aparecem como 22. Ticket 14 (02).
-- **Provider inativo ainda lido:** um Provider desativado no catálogo some da página, mas o Poll ainda o lê e grava em `status_checks` até o Ticket 08 (07).
 
 ---
 
