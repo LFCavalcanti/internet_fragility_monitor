@@ -10,8 +10,8 @@
 "use server";
 
 import { getDb } from "./db";
-import { providers, incidents, statusChecks } from "./schema";
-import type { Provider, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
+import { providers, providerSources, incidents, statusChecks } from "./schema";
+import type { Provider, ProviderSource, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
 import { eq, desc, asc, and, notInArray } from "drizzle-orm";
 import type { IncidentKind } from "./fetchers/types";
 import { CLOSED_STATUSES, closedStatusFor, isClosed, type IncidentStatus } from "./incident-status";
@@ -39,6 +39,17 @@ export async function getActiveProviders(): Promise<Provider[]> {
         .where(eq(providers.active, true))
         .orderBy(asc(providers.displayOrder), asc(providers.id))
         .all();
+}
+
+/** Provider Sources ativos dos Providers ativos: o que um Poll lê. Fonte inativa ou de Provider inativo nunca vem. */
+export async function getActiveSources(): Promise<ProviderSource[]> {
+    const db = getDb();
+    const rows = await db.select({ source: providerSources }).from(providerSources)
+        .innerJoin(providers, eq(providers.id, providerSources.providerId))
+        .where(and(eq(providers.active, true), eq(providerSources.active, true)))
+        .orderBy(asc(providerSources.providerId), asc(providerSources.id))
+        .all();
+    return rows.map(r => r.source);
 }
 
 export async function getProviderById(id: string): Promise<Provider | undefined> {

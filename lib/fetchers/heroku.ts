@@ -1,8 +1,14 @@
 import { Fetcher, StatusResult, IncidentData } from "./types";
 
 export class HerokuFetcher implements Fetcher {
-    providerId = "heroku";
-    private apiUrl = "https://status.heroku.com/api/v4/current-status";
+    providerId: string;
+    private apiUrl: string;
+
+    /** `apiUrl` vem do Provider Catalog: nenhuma URL de Feed fica fixa no código. */
+    constructor(providerId: string, apiUrl: string) {
+        this.providerId = providerId;
+        this.apiUrl = apiUrl;
+    }
 
     async fetchStatus(): Promise<StatusResult> {
         const start = Date.now();

@@ -53,6 +53,7 @@ describe('StatusCard', () => {
         status: 'operational',
         incidents: [],
         upcomingMaintenance: null,
+        accessOnly: false,
         ...overrides,
     });
 
@@ -111,6 +112,17 @@ describe('StatusCard', () => {
         renderCard({ upcomingMaintenance: { count: 2, next: null } }, { statusPageUrl: undefined });
         expect(screen.getByText('2 upcoming maintenances')).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: /upcoming/ })).not.toBeInTheDocument();
+    });
+
+    it('Provider só com Probes mostra a marca "verificação de acesso, sem feed de status" junto do estado', () => {
+        renderCard({ status: 'operational', accessOnly: true });
+        expect(screen.getByText('operational')).toBeInTheDocument();
+        expect(screen.getByText('verificação de acesso, sem feed de status')).toBeInTheDocument();
+    });
+
+    it('Provider com Feed não mostra a marca de "só acesso"', () => {
+        renderCard({ status: 'operational' });
+        expect(screen.queryByText(/verificação de acesso/)).not.toBeInTheDocument();
     });
 
     it('sem Upcoming Maintenance não há linha', () => {

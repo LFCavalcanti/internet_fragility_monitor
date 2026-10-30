@@ -1,9 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { StatusPageFetcher } from '@/lib/fetchers/statuspage';
-import { CloudflareFetcher } from '@/lib/fetchers/cloudflare';
-import { GitHubFetcher } from '@/lib/fetchers/github';
-import { VercelFetcher } from '@/lib/fetchers/vercel';
 import { decideProviderStatus } from '@/lib/provider-status';
 
 // Payload no formato do summary.json da Statuspage.io (recortado do caso da Cloudflare de 26/10/2026).
@@ -129,9 +126,14 @@ describe('StatusPageFetcher', () => {
         expect(decision.status).toBe('operational');
     });
 
-    it('as cópias de Cloudflare, GitHub e Vercel leem as manutenções do Feed', async () => {
+    it('Cloudflare, GitHub e Vercel usam o mesmo leitor, cada um com a URL do seu Feed', async () => {
         const fetchMock = stubFetch(summary);
-        for (const fetcher of [new CloudflareFetcher(), new GitHubFetcher(), new VercelFetcher()]) {
+        const fetchers = [
+            new StatusPageFetcher('cloudflare', 'https://www.cloudflarestatus.com'),
+            new StatusPageFetcher('github', 'https://www.githubstatus.com'),
+            new StatusPageFetcher('vercel', 'https://www.vercel-status.com'),
+        ];
+        for (const fetcher of fetchers) {
             const result = await fetcher.fetchStatus();
             expect(result.incidents.filter(i => i.kind === 'maintenance')).toHaveLength(4);
         }

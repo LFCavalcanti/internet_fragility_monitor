@@ -112,6 +112,10 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision, now }:
                         {unreachable && (
                             <p className="text-xs text-muted-foreground mt-1">Não foi possível ler a status page</p>
                         )}
+                        {decision.accessOnly && (
+                            // Provider só com Probes: o estado vem só da verificação de acesso.
+                            <p className="text-xs text-muted-foreground mt-1">verificação de acesso, sem feed de status</p>
+                        )}
                         {result.lastUpdated && (
                             <p className="text-[10px] text-muted-foreground/70">
                                 Updated {formatDistance(result.lastUpdated, now, { addSuffix: true })}

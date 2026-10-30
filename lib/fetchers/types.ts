@@ -13,6 +13,8 @@ export interface StatusResult {
     incidents: IncidentData[];
     responseTime?: number;
     lastUpdated?: Date;
+    /** Leitura feita só por Probes (Provider sem Feed): não declara estado nem Incidents. */
+    accessOnly?: boolean;
 }
 
 export type ProblemStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';

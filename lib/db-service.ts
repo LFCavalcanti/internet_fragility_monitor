@@ -8,6 +8,7 @@ import {
     createIncident,
     closeIncident,
     getActiveProviders,
+    getActiveSources,
     getLatestStatusCheck,
 } from "./dao";
 import type { Incident, Provider } from "./schema";
@@ -23,6 +24,8 @@ import { isRecentlyResolved } from "./provider-status";
 /** Um Provider ativo do Provider Catalog com o resultado dele no Snapshot. */
 export interface SnapshotEntry {
     provider: Provider;
+    /** Se o Provider tem Feed ativo no catálogo; sem Feed, ele é lido só por Probes. */
+    hasFeed: boolean;
     result: StatusResult;
 }
 
@@ -44,8 +47,8 @@ export async function saveStatusResult(result: StatusResult) {
     });
 
     // A read failure says nothing about the Provider's Incidents: the recorded ones stay as they are,
-    // and the card keeps showing them as Recent Incidents.
-    if (result.status === "unreachable") return;
+    // and the card keeps showing them as Recent Incidents. Probes never declare Incidents either.
+    if (result.status === "unreachable" || result.accessOnly) return;
 
     // 2. Sync Incidents
     // We need to handle:
@@ -134,6 +137,9 @@ function toIncidentData(row: Incident): IncidentData {
  */
 export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
     const activeProviders = await getActiveProviders();
+    const withFeed = new Set(
+        (await getActiveSources()).filter(s => s.kind === "feed").map(s => s.providerId),
+    );
     const entries: SnapshotEntry[] = [];
 
     for (const provider of activeProviders) {
@@ -147,6 +153,7 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
 
         entries.push({
             provider,
+            hasFeed: withFeed.has(provider.id),
             result: {
                 providerId: provider.id,
                 status: (latestCheck?.status as StatusResult['status']) || "operational",

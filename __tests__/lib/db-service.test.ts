@@ -13,6 +13,7 @@ vi.mock('@/lib/dao', () => ({
     createIncident: vi.fn().mockResolvedValue('new-incident-id'),
     closeIncident: vi.fn().mockResolvedValue(undefined),
     getActiveProviders: vi.fn().mockResolvedValue([]),
+    getActiveSources: vi.fn().mockResolvedValue([]),
     getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
 }));
 

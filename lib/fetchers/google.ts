@@ -1,8 +1,14 @@
 import { Fetcher, StatusResult, IncidentData } from "./types";
 
 export class GoogleCloudFetcher implements Fetcher {
-    providerId = "google-cloud";
-    private apiUrl = "https://status.cloud.google.com/incidents.json";
+    providerId: string;
+    private apiUrl: string;
+
+    /** `apiUrl` vem do Provider Catalog: nenhuma URL de Feed fica fixa no código. */
+    constructor(providerId: string, apiUrl: string) {
+        this.providerId = providerId;
+        this.apiUrl = apiUrl;
+    }
 
     async fetchStatus(): Promise<StatusResult> {
         const start = Date.now();

@@ -2,8 +2,14 @@ import { Fetcher, StatusResult, IncidentData } from "./types";
 import { XMLParser } from "fast-xml-parser";
 
 export class AzureFetcher implements Fetcher {
-    providerId = "azure";
-    private rssUrl = "https://azure.status.microsoft/en-us/status/feed/";
+    providerId: string;
+    private rssUrl: string;
+
+    /** `rssUrl` vem do Provider Catalog: nenhuma URL de Feed fica fixa no código. */
+    constructor(providerId: string, rssUrl: string) {
+        this.providerId = providerId;
+        this.rssUrl = rssUrl;
+    }
 
     async fetchStatus(): Promise<StatusResult> {
         const start = Date.now();

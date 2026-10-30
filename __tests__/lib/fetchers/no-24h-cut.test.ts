@@ -28,8 +28,8 @@ afterEach(() => {
 
 describe('os leitores não cortam Incidents em 24 horas', () => {
     it.each([
-        ['AWS', () => new AWSFetcher()],
-        ['Azure', () => new AzureFetcher()],
+        ['AWS', () => new AWSFetcher('aws', 'https://status.aws.amazon.com/rss/all.rss')],
+        ['Azure', () => new AzureFetcher('azure', 'https://azure.status.microsoft/en-us/status/feed/')],
     ])('%s: Incident ativo publicado há 30 horas vem na leitura e mantém o Provider degradado', async (_name, make) => {
         respond(rss([{ title: 'Increased Error Rates', pubDate: thirtyHoursAgo() }]));
 
@@ -56,7 +56,7 @@ describe('os leitores não cortam Incidents em 24 horas', () => {
             true,
         );
 
-        const result = await new GoogleCloudFetcher().fetchStatus();
+        const result = await new GoogleCloudFetcher('google-cloud', 'https://status.cloud.google.com/incidents.json').fetchStatus();
 
         expect(result.status).toBe('degraded');
         expect(result.incidents).toEqual([

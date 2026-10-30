@@ -44,6 +44,11 @@ export interface ProviderStatusDecision {
     /** Recent Incidents em ordem de exibição: ativos primeiro, resolvidos completando até 3. */
     incidents: IncidentData[];
     upcomingMaintenance: UpcomingMaintenanceSummary | null;
+    /**
+     * Marca de "só acesso": o Provider não tem Feed, só Probes. O estado dele vem só da verificação de acesso
+     * e nunca é Degraded, Outage ou Maintenance, que só um Feed pode declarar.
+     */
+    accessOnly: boolean;
 }
 
 /** Precedência dos estados que vêm de Feeds lidos, do pior para o melhor. */
@@ -63,6 +68,7 @@ export function decideProviderStatus(input: ProviderStatusInput): ProviderStatus
         status: decideStatus(input),
         incidents: recentIncidents(allIncidents, input.now),
         upcomingMaintenance: summarizeUpcoming(readIncidents, input.now),
+        accessOnly: input.feeds.length === 0,
     };
 }
 

@@ -3,6 +3,7 @@ import { StatusCard } from "@/components/status-card";
 import { HeroSection } from "@/components/hero-section";
 import { StaleSnapshotNotice } from "@/components/stale-snapshot-notice";
 import { decideProviderStatus } from "@/lib/provider-status";
+import { toProviderStatusInput } from "@/lib/snapshot-reading";
 import { decideInternetHealth, lastAnsweredPollAt } from "@/lib/internet-health";
 
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -18,20 +19,11 @@ export default async function Home() {
     const lastPollAt = lastAnsweredPollAt(snapshot.map(e => e.result));
 
     // O módulo de Provider Status decide o estado de cada Provider; a página só exibe.
-    // Cada Provider tem um Feed; quando a leitura falhou, ele vai como não lido, com os Incidents já gravados.
-    const statuses = snapshot.map(({ provider, result }) => ({
-        provider,
-        result,
-        decision: decideProviderStatus({
-            feeds: [
-                result.status === "unreachable"
-                    ? { read: false, incidents: result.incidents }
-                    : { read: true, declared: result.status, incidents: result.incidents },
-            ],
-            probes: [],
-            previousPollUnanswered: false,
-            now,
-        }),
+    // Provider com Feed vai com o Feed, lido ou não; Provider só com Probes vai sem Feed, com a resposta dos Probes.
+    const statuses = snapshot.map(entry => ({
+        provider: entry.provider,
+        result: entry.result,
+        decision: decideProviderStatus(toProviderStatusInput(entry, now)),
     }));
 
     // O módulo de Internet Health decide o hero; a página só passa o resultado.

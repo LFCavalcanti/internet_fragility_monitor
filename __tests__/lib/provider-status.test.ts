@@ -221,6 +221,22 @@ describe('decideProviderStatus', () => {
             expect(decision.status).toBe('operational');
         });
 
+        it('Provider só com Probes leva a marca de "só acesso"; com Feed, não', () => {
+            const accessOnly = decideProviderStatus({ feeds: [], probes: [true, false], previousPollUnanswered: false, now });
+            const withFeed = decideProviderStatus({ feeds: [feed('operational')], probes: [], previousPollUnanswered: false, now });
+            const unreadFeed = decideProviderStatus({ feeds: [{ read: false }], probes: [true], previousPollUnanswered: false, now });
+
+            expect(accessOnly).toMatchObject({ status: 'operational', accessOnly: true });
+            expect(withFeed.accessOnly).toBe(false);
+            expect(unreadFeed.accessOnly).toBe(false);
+        });
+
+        it('Provider só com Probes sem nenhuma resposta fica Unreachable, ainda com a marca de "só acesso"', () => {
+            const decision = decideProviderStatus({ feeds: [], probes: [false, false], previousPollUnanswered: false, now });
+
+            expect(decision).toMatchObject({ status: 'unreachable', accessOnly: true });
+        });
+
         it('Feed não lido ao lado de Feed lido: o estado vem do lido', () => {
             const decision = decideProviderStatus({
                 feeds: [{ read: false }, feed('degraded')],

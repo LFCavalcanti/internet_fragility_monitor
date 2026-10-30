@@ -5,23 +5,16 @@ import { AzureFetcher } from '@/lib/fetchers/azure';
 import { GoogleCloudFetcher } from '@/lib/fetchers/google';
 import { HerokuFetcher } from '@/lib/fetchers/heroku';
 import { StatusPageFetcher } from '@/lib/fetchers/statuspage';
-import { CloudflareFetcher } from '@/lib/fetchers/cloudflare';
-import { GitHubFetcher } from '@/lib/fetchers/github';
-import { VercelFetcher } from '@/lib/fetchers/vercel';
-import { PingFetcher } from '@/lib/fetchers/ping';
 import type { Fetcher } from '@/lib/fetchers/types';
 
 // Falha de leitura descreve a leitura, não o Provider: nunca é Outage (GLOSSARY.md, Unreachable).
+// A falha de Probe é coberta em __tests__/lib/poll-catalog.test.ts.
 const fetchers: [string, () => Fetcher][] = [
-    ['AWS', () => new AWSFetcher()],
-    ['Azure', () => new AzureFetcher()],
-    ['Google Cloud', () => new GoogleCloudFetcher()],
-    ['Heroku', () => new HerokuFetcher()],
+    ['AWS', () => new AWSFetcher('aws', 'https://status.aws.amazon.com/rss/all.rss')],
+    ['Azure', () => new AzureFetcher('azure', 'https://azure.status.microsoft/en-us/status/feed/')],
+    ['Google Cloud', () => new GoogleCloudFetcher('google-cloud', 'https://status.cloud.google.com/incidents.json')],
+    ['Heroku', () => new HerokuFetcher('heroku', 'https://status.heroku.com/api/v4/current-status')],
     ['Statuspage.io', () => new StatusPageFetcher('jira', 'https://jira-software.status.atlassian.com')],
-    ['Cloudflare', () => new CloudflareFetcher()],
-    ['GitHub', () => new GitHubFetcher()],
-    ['Vercel', () => new VercelFetcher()],
-    ['Probe (ping)', () => new PingFetcher('salesforce', 'https://www.salesforce.com')],
 ];
 
 beforeEach(() => {
@@ -43,7 +36,7 @@ describe('falha de leitura vira Unreachable', () => {
         expect(result.incidents).toEqual([]);
     });
 
-    it.each(fetchers.filter(([name]) => name !== 'Probe (ping)'))(
+    it.each(fetchers)(
         '%s: resposta HTTP de erro resulta em Unreachable',
         async (_name, make) => {
             vi.stubGlobal(
