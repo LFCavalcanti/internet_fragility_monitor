@@ -21,6 +21,8 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Todos os Providers Unreachable:** até o Ticket 13 trazer a hora real do Poll, a hora do último Poll considera só leituras respondidas; com todos Unreachable desde sempre, o hero e o aviso mostram "No Poll recorded yet." em vez de uma hora (06, correção pós-review `e71d499`).
 - **Português e inglês misturados na tela:** a página é em inglês, mas alguns textos ficaram em português porque a spec e a árvore os citam assim: "Não foi possível ler a status page" (card Unreachable), "Status page e serviço sem resposta" (destaque de Down), "Sem leitura recente" (hero e aviso). O aviso de Stale ficou "Sem leitura recente. The provider cards may be out of date." Decidir o idioma da página (03, 05, 06).
 
+- **Site do GitHub no catálogo:** o link do site do GitHub é `https://githubstatus.com`, a status page, e não `https://github.com`. A carga do catálogo copiou o valor que já existia, como a spec mandava. Trocar exige uma migration de dados (07, code review).
+
 ## 1.2 Escolhas dos agentes ainda não confirmadas
 
 - **Upcoming Maintenance sem data:** manutenção `scheduled` sem data marcada continua contando na linha de Upcoming Maintenance, mas não define a "próxima" data. Manutenção marcada exatamente para agora já conta como começada (02, correção pós-review `7edcfaa`).
@@ -41,6 +43,7 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 ## 2.1 Ação do usuário antes do próximo deploy
 
 - **`build:prod` mudou:** agora roda só `npm run db:migrate && next build` (antes rodava `drizzle-kit up` e `generate` no servidor). Antes do deploy, conferir que a tabela `__drizzle_migrations` de produção tem só as migrations `0000` a `0002` deste repositório; o migrator aplica as que têm data posterior à última registrada (07).
+- **Providers fora do catálogo na produção:** a `0003` cria `active` com padrão ativo e `display_order` com padrão 0. Se a tabela `providers` de produção tiver alguma linha além dos 13 do catálogo, ela fica ativa, sem Feed, e aparece no topo da página. Antes do deploy, conferir que `providers` tem só os 13 ids (code review do 07).
 - **Migrations novas para a produção:** `0001_incident_kind_and_scheduled_for` e `0002_maintenance_incidents_to_kind` (02), `0003_provider_catalog` e `0004_provider_catalog_load` (07). A `0004` atualiza os Providers existentes sem trocar os ids; Incidents e leituras continuam ligados. A partir dela, toda mudança no catálogo, inclusive trocar um logo, é uma migration de dados nova (07).
 - **Manutenções logo após o deploy:** a `0002` marca como `completed` as manutenções antigas. Até o primeiro Poll depois do deploy, a linha de Upcoming Maintenance não aparece; o Poll devolve a fase e a data às que continuam no Feed (02).
 
