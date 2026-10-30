@@ -13,7 +13,10 @@ export interface StatusResult {
     incidents: IncidentData[];
     responseTime?: number;
     lastUpdated?: Date;
-    /** Leitura feita só por Probes (Provider sem Feed): não declara estado nem Incidents. */
+    /**
+     * Marca de "só acesso" (`isAccessOnly` em lib/provider-catalog.ts): o Provider não tem Feed ativo e a leitura
+     * vem só dos Probes, que não declaram estado nem Incidents.
+     */
     accessOnly?: boolean;
 }
 

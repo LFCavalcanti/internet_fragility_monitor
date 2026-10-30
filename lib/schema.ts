@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import type { SourceKind } from "./provider-catalog";
 
 /** Tipo de serviço de um Provider no catálogo. */
 export type ProviderType = "cloud" | "cdn" | "paas" | "saas" | "hosting";
@@ -27,7 +28,7 @@ export const providers = sqliteTable("providers", {
 export const providerSources = sqliteTable("provider_sources", {
     id: text("id").primaryKey(),
     providerId: text("provider_id").references(() => providers.id).notNull(),
-    kind: text("kind").$type<"feed" | "probe">().notNull(),
+    kind: text("kind").$type<SourceKind>().notNull(),
     family: text("family"), // família do Feed (FEED_FAMILIES em lib/provider-catalog.ts); null para Probes.
     // Texto livre de propósito: uma família desconhecida pelo código vira Feed não lido, não erro de leitura do banco.
     url: text("url").notNull(),

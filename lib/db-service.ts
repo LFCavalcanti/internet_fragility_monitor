@@ -19,6 +19,7 @@ import type {
     StatusResult,
 } from "./fetchers/types";
 import { isClosed, isRecentlyResolved } from "./incident-status";
+import { isAccessOnly, sourcesByProvider } from "./provider-catalog";
 import type { SnapshotEntry, SnapshotProvider } from "./snapshot-reading";
 
 function scheduledForOf(inc: IncidentData): Date | null {
@@ -140,9 +141,7 @@ function toIncidentData(row: Incident): IncidentData {
  */
 export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
     const activeProviders = await getActiveProviders();
-    const withFeed = new Set(
-        (await getActiveSources()).filter(s => s.kind === "feed").map(s => s.providerId),
-    );
+    const sources = sourcesByProvider(await getActiveSources());
     const entries: SnapshotEntry[] = [];
 
     for (const provider of activeProviders) {
@@ -156,13 +155,13 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
 
         entries.push({
             provider: toSnapshotProvider(provider),
-            hasFeed: withFeed.has(provider.id),
             result: {
                 providerId: provider.id,
                 status: (latestCheck?.status as StatusResult['status']) || "operational",
                 responseTime: latestCheck?.responseTime || 0,
                 incidents,
                 lastUpdated: latestCheck?.checkedAt || undefined,
+                accessOnly: isAccessOnly(sources.get(provider.id) ?? []),
             },
         });
     }

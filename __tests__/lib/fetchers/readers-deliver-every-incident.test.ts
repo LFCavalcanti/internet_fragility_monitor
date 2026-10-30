@@ -4,6 +4,7 @@ import { AWSFetcher } from '@/lib/fetchers/aws';
 import { AzureFetcher } from '@/lib/fetchers/azure';
 import { GoogleCloudFetcher } from '@/lib/fetchers/google';
 import { hoursBefore } from '../../helpers/time';
+import { FEED_URLS } from '../../helpers/feed-urls';
 
 // Recent Incident é decidido pelo módulo de Provider Status; os leitores entregam tudo o que o Feed publica,
 // de qualquer idade.
@@ -36,8 +37,8 @@ afterEach(() => {
 
 describe('os leitores entregam todos os Incidents do Feed, de qualquer idade', () => {
     it.each([
-        ['AWS', () => new AWSFetcher('aws', 'https://status.aws.amazon.com/rss/all.rss')],
-        ['Azure', () => new AzureFetcher('azure', 'https://azure.status.microsoft/en-us/status/feed/')],
+        ['AWS', () => new AWSFetcher('aws', FEED_URLS.aws)],
+        ['Azure', () => new AzureFetcher('azure', FEED_URLS.azure)],
     ])('%s: Incident ativo publicado há 30 horas vem na leitura e mantém o Provider degradado', async (_name, make) => {
         respond(rss([{ title: 'Increased Error Rates', pubDate: hoursBefore(now, 30) }]));
 
@@ -64,7 +65,7 @@ describe('os leitores entregam todos os Incidents do Feed, de qualquer idade', (
             true,
         );
 
-        const result = await new GoogleCloudFetcher('google-cloud', 'https://status.cloud.google.com/incidents.json').fetchStatus();
+        const result = await new GoogleCloudFetcher('google-cloud', FEED_URLS.googleCloud).fetchStatus();
 
         expect(result.status).toBe('degraded');
         expect(result.incidents).toEqual([

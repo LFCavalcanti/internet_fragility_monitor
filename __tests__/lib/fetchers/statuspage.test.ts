@@ -118,6 +118,7 @@ describe('StatusPageFetcher', () => {
         expect(result.status).toBe('operational');
 
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [{ read: true, declared: 'operational', incidents: result.incidents }],
             probes: [],
             previousPollUnanswered: false,

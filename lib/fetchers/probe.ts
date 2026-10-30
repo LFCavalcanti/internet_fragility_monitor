@@ -8,7 +8,7 @@ export const PROBE_TIMEOUT_MS = 5000;
  * inclusive 302 e 403 (o redirecionamento não é seguido: a resposta do próprio endereço é a que conta).
  * Timeout, erro de rede e 5xx contam como falha.
  */
-export async function probeAnswers(url: string): Promise<boolean> {
+async function probeAnswers(url: string): Promise<boolean> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
@@ -30,8 +30,8 @@ export async function probeAnswers(url: string): Promise<boolean> {
 }
 
 /**
- * Leitura de um Provider só com Probes: de pé quando algum Probe responde, Unreachable quando nenhum responde.
- * Probes não declaram estado nem Incidents, e o resultado leva a marca de "só acesso".
+ * Leitura dos Probes de um Provider: de pé quando algum Probe responde, Unreachable quando nenhum responde.
+ * Probes não declaram estado nem Incidents. A marca de "só acesso" é do Poll, que conhece as fontes do Provider.
  */
 export async function readProbes(providerId: string, urls: string[]): Promise<StatusResult> {
     const start = Date.now();
@@ -43,6 +43,5 @@ export async function readProbes(providerId: string, urls: string[]): Promise<St
         status: answered ? "operational" : "unreachable",
         incidents: [],
         responseTime: answered ? Date.now() - start : 0,
-        accessOnly: true,
     };
 }

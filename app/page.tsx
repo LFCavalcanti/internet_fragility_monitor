@@ -22,7 +22,7 @@ export default async function Home() {
     // Provider com Feed vai com o Feed, lido ou não; Provider só com Probes vai sem Feed, com a resposta dos Probes.
     const statuses = snapshot.map(entry => ({
         ...entry,
-        decision: decideProviderStatus(toProviderStatusInput(entry, now)),
+        decision: decideProviderStatus(toProviderStatusInput(entry.result, now)),
     }));
 
     // O módulo de Internet Health decide o hero a partir dos mesmos itens; a página só passa o resultado.

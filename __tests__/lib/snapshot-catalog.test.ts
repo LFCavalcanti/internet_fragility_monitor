@@ -199,7 +199,7 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         });
 
     async function decisionFor(providerId: string) {
-        return decideProviderStatus(toProviderStatusInput(await snapshotOf(providerId), now));
+        return decideProviderStatus(toProviderStatusInput((await snapshotOf(providerId)).result, now));
     }
 
     it("Oracle, Salesforce e IBM, sem Feed ativo, ficam Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {

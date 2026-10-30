@@ -11,6 +11,7 @@ vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
 
 import { fetchAllStatuses } from "@/lib/fetchers";
 import { saveStatusResult } from "@/lib/db-service";
+import { PROBE_TIMEOUT_MS } from "@/lib/fetchers/probe";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -55,6 +56,12 @@ async function statusChecks(providerId: string): Promise<string[]> {
 
 const ORACLE_STATUS_PAGE = "https://ocistatus.oraclecloud.com";
 const ORACLE_LOGIN = "https://www.oracle.com/cloud/sign-in.html";
+
+/** Faz os dois Probes da Oracle (status page e login) responderem com `handler`. */
+function routeOracleProbes(handler: FetchHandler) {
+    route(ORACLE_STATUS_PAGE, handler);
+    route(ORACLE_LOGIN, handler);
+}
 
 beforeEach(async () => {
     current = await createMigratedDb();
@@ -142,14 +149,13 @@ describe("Probes de Providers sem Feed ativo", () => {
             ]),
         );
         for (const id of ["oracle-cloud", "salesforce", "ibm-cloud"]) {
-            expect(results.find(r => r.providerId === id)).toMatchObject({ status: "operational", incidents: [] });
+            expect(results.find(r => r.providerId === id)).toMatchObject({ status: "operational", incidents: [], accessOnly: true });
             expect(await statusChecks(id)).toEqual(["operational"]);
         }
     });
 
     it.each([200, 302, 403, 404, 499])("resposta %i conta como de pé", async code => {
-        route(ORACLE_STATUS_PAGE, async () => new Response(null, { status: code }));
-        route(ORACLE_LOGIN, async () => new Response(null, { status: code }));
+        routeOracleProbes(async () => new Response(null, { status: code }));
 
         await poll();
 
@@ -157,8 +163,7 @@ describe("Probes de Providers sem Feed ativo", () => {
     });
 
     it.each([500, 503])("resposta %i conta como falha", async code => {
-        route(ORACLE_STATUS_PAGE, async () => new Response(null, { status: code }));
-        route(ORACLE_LOGIN, async () => new Response(null, { status: code }));
+        routeOracleProbes(async () => new Response(null, { status: code }));
 
         await poll();
 
@@ -166,8 +171,7 @@ describe("Probes de Providers sem Feed ativo", () => {
     });
 
     it("erro de rede conta como falha", async () => {
-        route(ORACLE_STATUS_PAGE, async () => { throw new TypeError("fetch failed"); });
-        route(ORACLE_LOGIN, async () => { throw new TypeError("fetch failed"); });
+        routeOracleProbes(async () => { throw new TypeError("fetch failed"); });
 
         await poll();
 
@@ -180,11 +184,10 @@ describe("Probes de Providers sem Feed ativo", () => {
             new Promise((_resolve, reject) => {
                 init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
             });
-        route(ORACLE_STATUS_PAGE, hang);
-        route(ORACLE_LOGIN, hang);
+        routeOracleProbes(hang);
 
         const polling = poll();
-        await vi.advanceTimersByTimeAsync(60_000);
+        await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS);
         await polling;
 
         expect(await statusChecks("oracle-cloud")).toEqual(["unreachable"]);

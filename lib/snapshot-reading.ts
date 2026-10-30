@@ -16,11 +16,12 @@ export interface SnapshotProvider {
     isMajor: boolean;
 }
 
-/** Um Provider ativo no Snapshot: os dados do catálogo e o resultado gravado do último Poll. */
+/**
+ * Um Provider ativo no Snapshot: os dados do catálogo e o resultado gravado do último Poll, com a marca de
+ * "só acesso" (`result.accessOnly`) tirada das fontes ativas do Provider no catálogo.
+ */
 export interface SnapshotEntry {
     provider: SnapshotProvider;
-    /** Se o Provider tem Feed ativo no Provider Catalog; sem Feed, ele é lido só por Probes. */
-    hasFeed: boolean;
     result: StatusResult;
 }
 
@@ -30,21 +31,19 @@ export interface SnapshotEntry {
  * declarado gravado antes (de quando havia Feed) não conta: só um Feed declara Degraded, Outage ou Maintenance.
  * O Poll anterior sem resposta, que habilita Down, chega com o Ticket 15.
  */
-export function toProviderStatusInput(
-    { hasFeed, result }: Pick<SnapshotEntry, "hasFeed" | "result">,
-    now: Date,
-): ProviderStatusInput {
-    if (!hasFeed) {
-        return { feeds: [], probes: [result.status !== "unreachable"], previousPollUnanswered: false, now };
+export function toProviderStatusInput(result: StatusResult, now: Date): ProviderStatusInput {
+    const base = { previousPollUnanswered: false, now };
+    if (result.accessOnly) {
+        return { ...base, accessOnly: true, feeds: [], probes: [result.status !== "unreachable"] };
     }
     return {
+        ...base,
+        accessOnly: false,
         feeds: [
             result.status === "unreachable"
                 ? { read: false, incidents: result.incidents }
                 : { read: true, declared: result.status, incidents: result.incidents },
         ],
         probes: [],
-        previousPollUnanswered: false,
-        now,
     };
 }

@@ -24,6 +24,11 @@ export type FeedReading =
     | { read: false; incidents?: IncidentData[] };
 
 export interface ProviderStatusInput {
+    /**
+     * Marca de "só acesso" do Provider, decidida pelas fontes dele no catálogo (`isAccessOnly`). Com a marca,
+     * o Provider não tem Feed: nenhuma leitura de Feed conta, só os Probes.
+     */
+    accessOnly: boolean;
     feeds: FeedReading[];
     /** Se cada Probe do Provider respondeu neste Poll. */
     probes: boolean[];
@@ -58,14 +63,16 @@ const PRECEDENCE: ProviderStatus[] = ["outage", "degraded", "maintenance", "oper
 const RECENT_INCIDENTS_LIST_SIZE = 3;
 
 export function decideProviderStatus(input: ProviderStatusInput): ProviderStatusDecision {
-    const readIncidents = input.feeds.flatMap(f => (f.read ? f.incidents : []));
-    const allIncidents = input.feeds.flatMap(f => f.incidents ?? []);
+    const { accessOnly, probes, previousPollUnanswered, now } = input;
+    const feeds = accessOnly ? [] : input.feeds;
+    const readIncidents = feeds.flatMap(f => (f.read ? f.incidents : []));
+    const allIncidents = feeds.flatMap(f => f.incidents ?? []);
 
     return {
-        status: decideStatus(input),
-        incidents: recentIncidents(allIncidents, input.now),
-        upcomingMaintenance: summarizeUpcoming(readIncidents, input.now),
-        accessOnly: input.feeds.length === 0,
+        status: decideStatus({ accessOnly, feeds, probes, previousPollUnanswered }),
+        incidents: recentIncidents(allIncidents, now),
+        upcomingMaintenance: summarizeUpcoming(readIncidents, now),
+        accessOnly,
     };
 }
 
@@ -89,7 +96,12 @@ function recentIncidents(incidents: IncidentData[], now: Date): IncidentData[] {
     return [...active, ...resolved.slice(0, Math.max(0, RECENT_INCIDENTS_LIST_SIZE - active.length))];
 }
 
-function decideStatus({ feeds, probes, previousPollUnanswered }: ProviderStatusInput): ProviderStatus {
+function decideStatus({
+    accessOnly,
+    feeds,
+    probes,
+    previousPollUnanswered,
+}: Omit<ProviderStatusInput, "now">): ProviderStatus {
     const readFeeds = feeds.filter(f => f.read);
 
     if (readFeeds.length > 0) {
@@ -102,7 +114,7 @@ function decideStatus({ feeds, probes, previousPollUnanswered }: ProviderStatusI
 
     const probeAnswered = probes.some(Boolean);
     if (probeAnswered) {
-        return feeds.length === 0 ? "operational" : "unreachable";
+        return accessOnly ? "operational" : "unreachable";
     }
     return previousPollUnanswered ? "down" : "unreachable";
 }

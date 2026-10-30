@@ -39,6 +39,7 @@ describe('decideProviderStatus', () => {
         const outage = problem({ title: 'Partial System Outage' });
 
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('outage', [outage, ...scheduled])],
             probes: [],
             previousPollUnanswered: false,
@@ -55,6 +56,7 @@ describe('decideProviderStatus', () => {
 
     it('manutenção agendada não muda Operational e vira Upcoming Maintenance', () => {
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('operational', [maintenance()])],
             probes: [],
             previousPollUnanswered: false,
@@ -69,6 +71,7 @@ describe('decideProviderStatus', () => {
     it('manutenção em andamento vira Maintenance quando o Provider declara Operational', () => {
         const ongoing = maintenance({ status: 'in_progress', title: 'Network upgrade' });
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('operational', [ongoing])],
             probes: [],
             previousPollUnanswered: false,
@@ -84,6 +87,7 @@ describe('decideProviderStatus', () => {
         const ongoing = maintenance({ status: 'in_progress' });
         for (const declared of ['degraded', 'outage'] as const) {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [feed(declared, [ongoing])],
                 probes: [],
                 previousPollUnanswered: false,
@@ -96,6 +100,7 @@ describe('decideProviderStatus', () => {
     it('manutenção completed não aparece nem afeta o estado', () => {
         const done = maintenance({ status: 'completed', title: 'Old maintenance' });
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('operational', [done])],
             probes: [],
             previousPollUnanswered: false,
@@ -109,6 +114,7 @@ describe('decideProviderStatus', () => {
 
     it('sem manutenção agendada não há Upcoming Maintenance', () => {
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('operational', [problem({ status: 'resolved' })])],
             probes: [],
             previousPollUnanswered: false,
@@ -119,6 +125,7 @@ describe('decideProviderStatus', () => {
 
     it('manutenção agendada sem data marcada conta, e a próxima data vem das que têm data', () => {
         const decision = decideProviderStatus({
+            accessOnly: false,
             feeds: [feed('operational', [
                 maintenance({ scheduledFor: undefined }),
                 maintenance({ scheduledFor: new Date('2026-10-29T00:00:00Z') }),
@@ -133,6 +140,7 @@ describe('decideProviderStatus', () => {
     describe('Upcoming Maintenance usa o relógio', () => {
         it('manutenção ainda scheduled com data já passada não conta, e a próxima data nunca fica no passado', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [feed('operational', [
                     maintenance({ title: 'Atrasada', scheduledFor: new Date('2026-10-26T12:00:00Z') }),
                     maintenance({ title: 'Futura', scheduledFor: new Date('2026-10-28T03:00:00Z') }),
@@ -146,6 +154,7 @@ describe('decideProviderStatus', () => {
 
         it('manutenção marcada para agora já começou: não é Upcoming Maintenance', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [feed('operational', [maintenance({ scheduledFor: now })])],
                 probes: [],
                 previousPollUnanswered: false,
@@ -156,8 +165,9 @@ describe('decideProviderStatus', () => {
 
         it('a mesma leitura muda com o relógio: depois da data marcada, a manutenção sai da conta', () => {
             const feeds = [feed('operational', [maintenance({ scheduledFor: new Date('2026-10-27T02:00:00Z') })])];
-            const before = decideProviderStatus({ feeds, probes: [], previousPollUnanswered: false, now });
+            const before = decideProviderStatus({ accessOnly: false, feeds, probes: [], previousPollUnanswered: false, now });
             const after = decideProviderStatus({
+                accessOnly: false,
                 feeds,
                 probes: [],
                 previousPollUnanswered: false,
@@ -173,7 +183,7 @@ describe('decideProviderStatus', () => {
 
         it('o pior estado declarado entre os Feeds lidos vence', () => {
             const decide = (...feeds: FeedReading[]) =>
-                decideProviderStatus({ feeds, probes: [], previousPollUnanswered: false, now }).status;
+                decideProviderStatus({ accessOnly: false, feeds, probes: [], previousPollUnanswered: false, now }).status;
 
             expect(decide(feed('operational'), feed('outage'), feed('degraded'))).toBe('outage');
             expect(decide(feed('operational'), feed('degraded'))).toBe('degraded');
@@ -184,6 +194,7 @@ describe('decideProviderStatus', () => {
 
         it('Down vence tudo: nenhuma fonte respondeu neste Poll e no anterior', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false }],
                 probes: [false],
                 previousPollUnanswered: true,
@@ -194,6 +205,7 @@ describe('decideProviderStatus', () => {
 
         it('sem resposta só neste Poll é Unreachable, não Down', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false }],
                 probes: [false],
                 previousPollUnanswered: false,
@@ -204,6 +216,7 @@ describe('decideProviderStatus', () => {
 
         it('nenhum Feed lido mas um Probe respondeu é Unreachable, mesmo com Poll anterior sem resposta', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false }],
                 probes: [true],
                 previousPollUnanswered: true,
@@ -214,6 +227,7 @@ describe('decideProviderStatus', () => {
 
         it('Provider só com Probes fica Operational quando algum Probe responde', () => {
             const decision = decideProviderStatus({
+                accessOnly: true,
                 feeds: [],
                 probes: [false, true],
                 previousPollUnanswered: false,
@@ -223,9 +237,9 @@ describe('decideProviderStatus', () => {
         });
 
         it('Provider só com Probes leva a marca de "só acesso"; com Feed, não', () => {
-            const accessOnly = decideProviderStatus({ feeds: [], probes: [true, false], previousPollUnanswered: false, now });
-            const withFeed = decideProviderStatus({ feeds: [feed('operational')], probes: [], previousPollUnanswered: false, now });
-            const unreadFeed = decideProviderStatus({ feeds: [{ read: false }], probes: [true], previousPollUnanswered: false, now });
+            const accessOnly = decideProviderStatus({ accessOnly: true, feeds: [], probes: [true, false], previousPollUnanswered: false, now });
+            const withFeed = decideProviderStatus({ accessOnly: false, feeds: [feed('operational')], probes: [], previousPollUnanswered: false, now });
+            const unreadFeed = decideProviderStatus({ accessOnly: false, feeds: [{ read: false }], probes: [true], previousPollUnanswered: false, now });
 
             expect(accessOnly).toMatchObject({ status: 'operational', accessOnly: true });
             expect(withFeed.accessOnly).toBe(false);
@@ -233,13 +247,26 @@ describe('decideProviderStatus', () => {
         });
 
         it('Provider só com Probes sem nenhuma resposta fica Unreachable, ainda com a marca de "só acesso"', () => {
-            const decision = decideProviderStatus({ feeds: [], probes: [false, false], previousPollUnanswered: false, now });
+            const decision = decideProviderStatus({ accessOnly: true, feeds: [], probes: [false, false], previousPollUnanswered: false, now });
 
             expect(decision).toMatchObject({ status: 'unreachable', accessOnly: true });
         });
 
+        it('com a marca de "só acesso", nenhuma leitura de Feed conta: nem estado declarado nem Incidents', () => {
+            const decision = decideProviderStatus({
+                accessOnly: true,
+                feeds: [feed('outage', [problem(), maintenance({ status: 'in_progress' }), maintenance()])],
+                probes: [true],
+                previousPollUnanswered: false,
+                now,
+            });
+
+            expect(decision).toEqual({ status: 'operational', incidents: [], upcomingMaintenance: null, accessOnly: true });
+        });
+
         it('Feed não lido ao lado de Feed lido: o estado vem do lido', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false }, feed('degraded')],
                 probes: [],
                 previousPollUnanswered: true,
@@ -251,7 +278,7 @@ describe('decideProviderStatus', () => {
 
     describe('Recent Incidents', () => {
         const decide = (incidents: IncidentData[], declared: 'operational' | 'degraded' | 'outage' = 'operational') =>
-            decideProviderStatus({ feeds: [feed(declared, incidents)], probes: [], previousPollUnanswered: false, now });
+            decideProviderStatus({ accessOnly: false, feeds: [feed(declared, incidents)], probes: [], previousPollUnanswered: false, now });
         const titles = (incidents: IncidentData[]) => incidents.map(i => i.title);
 
         it('Incident ativo do Google Cloud com mais de 24 horas aparece', () => {
@@ -343,6 +370,7 @@ describe('decideProviderStatus', () => {
     describe('Unreachable', () => {
         it('falha de leitura do único Feed, sem Probes, é Unreachable e não Outage', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false }],
                 probes: [],
                 previousPollUnanswered: false,
@@ -359,6 +387,7 @@ describe('decideProviderStatus', () => {
             const ongoing = maintenance({ title: 'Network upgrade', status: 'in_progress' });
 
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false, incidents: [active, resolved, ongoing, maintenance()] }],
                 probes: [],
                 previousPollUnanswered: false,
@@ -372,6 +401,7 @@ describe('decideProviderStatus', () => {
 
         it('Incidents gravados de um Feed não lido não pesam no estado vindo de outro Feed lido', () => {
             const decision = decideProviderStatus({
+                accessOnly: false,
                 feeds: [{ read: false, incidents: [problem({ title: 'Old outage' })] }, feed('operational')],
                 probes: [],
                 previousPollUnanswered: false,

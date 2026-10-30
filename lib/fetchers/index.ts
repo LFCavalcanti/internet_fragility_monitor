@@ -6,7 +6,7 @@ import { HerokuFetcher } from "./heroku";
 import { readProbes } from "./probe";
 import { Fetcher, StatusResult } from "./types";
 import { getActiveProviders, getActiveSources } from "../dao";
-import { isFeedFamily, type FeedFamily } from "../provider-catalog";
+import { isAccessOnly, isFeedFamily, sourcesByProvider, type FeedFamily } from "../provider-catalog";
 import type { ProviderSource } from "../schema";
 
 /**
@@ -32,13 +32,13 @@ function feedReaderFor(feed: ProviderSource): Fetcher | null {
  * Sem Feed, roda os Probes e o resultado leva a marca de "só acesso".
  */
 async function readProvider(providerId: string, sources: ProviderSource[]): Promise<StatusResult> {
-    const feeds = sources.filter(s => s.kind === "feed");
-    if (feeds.length === 0) {
-        return readProbes(providerId, sources.filter(s => s.kind === "probe").map(s => s.url));
+    if (isAccessOnly(sources)) {
+        const probes = await readProbes(providerId, sources.map(s => s.url));
+        return { ...probes, accessOnly: true };
     }
 
     // Vários Feeds por Provider são do Ticket 12; até lá, só o primeiro é lido.
-    const [feed, ...ignored] = feeds;
+    const [feed, ...ignored] = sources.filter(s => s.kind === "feed");
     if (ignored.length > 0) {
         console.warn(`${providerId}: Feeds a mais ignorados até o Ticket 12 (${ignored.map(f => f.id).join(", ")})`);
     }
@@ -55,5 +55,6 @@ async function readProvider(providerId: string, sources: ProviderSource[]): Prom
 /** Um Poll: lê o Provider Catalog no banco a cada rodada e cada Provider ativo pelas suas fontes ativas. */
 export async function fetchAllStatuses(): Promise<StatusResult[]> {
     const [providers, sources] = await Promise.all([getActiveProviders(), getActiveSources()]);
-    return Promise.all(providers.map(p => readProvider(p.id, sources.filter(s => s.providerId === p.id))));
+    const byProvider = sourcesByProvider(sources);
+    return Promise.all(providers.map(p => readProvider(p.id, byProvider.get(p.id) ?? [])));
 }
