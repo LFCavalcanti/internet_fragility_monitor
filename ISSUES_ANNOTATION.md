@@ -29,7 +29,8 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Linha de Upcoming Maintenance:** em inglês, como o resto do card, com a data em UTC ("25 upcoming maintenances · next Oct 27, 01:00 UTC") (02).
 - **Janela de 48 h dos resolvidos:** conta a partir da resolução (`resolvedAt`). Quando a hora da resolução não foi registrada (linhas antigas e RSS da AWS e da Azure, que não publicam essa hora), conta a partir da criação, e a janela nunca fica mais longa do que era antes. Quando um Incident é encerrado pelo Poll, a hora gravada é a do Poll, não a publicada pelo Feed (04).
 - **Título da lista no card:** passou de "Recent Activity (48h)" para "Recent Incidents", o termo do glossário (04).
-- **Marca de "só acesso" no card Unreachable:** quando nenhum Probe de Oracle, Salesforce ou IBM responde, o card fica Unreachable e continua mostrando "verificação de acesso, sem feed de status", porque a marca diz de onde vem o estado (08).
+- **Marca de "só acesso" no card Unreachable:** quando nenhum Probe de Oracle, Salesforce ou IBM responde, o card fica Unreachable e continua mostrando "verificação de acesso, sem feed de status", porque a marca diz de onde vem o estado. A spec só prevê a marca no card Operational ("o estado verde dele é só de acesso"); com ela, o card cinza mostra ao mesmo tempo "Não foi possível ler a status page" e "sem feed de status" (08, code review).
+- **Glossário sem a marca de "só acesso":** o `GLOSSARY.md` não tem o termo, e define Operational como o estado que o Provider "declara", mas um Provider só com Probes fica Operational sem declarar nada. Proposta: acrescentar o termo e ajustar a definição de Operational (08, code review).
 - **Provider só com Probes sem Recent Incidents:** sem Feed, ninguém declara nem encerra Incidents, então o card não lista Incidents desses Providers. Hoje Oracle, Salesforce e IBM não têm Incidents gravados (08).
 - **Probes com timeout de 5 s:** o mesmo do ping antigo; o timeout da política de leitura é do Ticket 09 (08).
 
@@ -53,6 +54,7 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 
 - **Card da AWS com lista longa:** sem o corte de 24 horas, cada atualização do RSS da AWS vira um Incident ativo (em 28/10/2026, 38 itens de 2 eventos do Oriente Médio, abertos desde 01/03/2026). A AWS aparece Degraded, o que o próprio RSS confirma, mas com dezenas de itens. **Decidido pelo usuário em 28/10/2026:** agrupar as atualizações por evento (parte do `guid` antes do `_`), ativo até a AWS marcar como resolvido. Entra no Ticket 10 (registrado nos Comments dele) (04).
 - **Incidents da AWS reabertos pelo título:** a gravação casa Incidents pelo título, e as atualizações da AWS repetem poucos títulos; um Incident encerrado pode voltar a abrir quando outra atualização com o mesmo título aparece. A identidade pela fonte é do Ticket 14; o agrupamento por evento do Ticket 10 reduz o efeito (04).
+- **Um Poll lido pelo catálogo novo:** a leitura gravada não registra se veio de Feed ou de Probes; a página decide pelo catálogo atual. Logo depois de uma migration que ative ou desative um Feed, e até o Poll seguinte, a última leitura é interpretada pelo tipo novo (ex.: um "operational" dos Probes da Salesforce lido como Feed). Janela de um Poll; a leitura do Snapshot é refeita no Ticket 13 (08, code review).
 - **Manutenções da Cloudflare com o mesmo título:** pela identidade por título, 25 manutenções agendadas aparecem como 22. Ticket 14 (02).
 
 ---
