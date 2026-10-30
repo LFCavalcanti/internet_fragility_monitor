@@ -17,10 +17,7 @@ vi.mock('@/lib/dao', () => ({
     getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
 }));
 
-import {
-    saveStatusResult,
-    getLatestStatus,
-} from '@/lib/db-service';
+import { saveStatusResult } from '@/lib/db-service';
 
 import {
     saveStatusCheck,
@@ -29,24 +26,7 @@ import {
     updateIncidentStatus,
     createIncident,
     closeIncident,
-    getActiveProviders,
-    getLatestStatusCheck,
 } from '@/lib/dao';
-import type { Provider } from '@/lib/schema';
-import { hoursBefore } from '../helpers/time';
-
-/** Um Provider ativo do Provider Catalog, como o DAO devolve. */
-const catalogProvider = (id: string, name: string, displayOrder = 1): Provider => ({
-    id,
-    name,
-    url: `https://${id}.example`,
-    statusPageUrl: `https://status.${id}.example`,
-    type: 'cloud',
-    logo: null,
-    isMajor: false,
-    active: true,
-    displayOrder,
-});
 
 describe('db-service.ts', () => {
     beforeEach(() => {
@@ -387,153 +367,6 @@ describe('db-service.ts', () => {
 
             expect(closeIncident).toHaveBeenCalledWith('mnt-1', 'maintenance');
             expect(closeIncident).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe('getLatestStatus', () => {
-        it('should return status results for all active providers, each with its catalog data', async () => {
-            const providers = [catalogProvider('aws', 'AWS', 1), catalogProvider('azure', 'Azure', 2)];
-
-            const awsCheck = {
-                id: 1,
-                providerId: 'aws',
-                status: 'operational',
-                responseTime: 100,
-                checkedAt: new Date(),
-            };
-
-            vi.mocked(getActiveProviders).mockResolvedValueOnce(providers);
-            vi.mocked(getLatestStatusCheck)
-                .mockResolvedValueOnce(awsCheck)
-                .mockResolvedValueOnce(undefined);
-            vi.mocked(getAllIncidentsForProvider)
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([]);
-
-            const results = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
-
-            expect(results).toHaveLength(2);
-            expect(results[0].provider).toBe(providers[0]);
-            expect(results[0].result).toMatchObject({
-                providerId: 'aws',
-                status: 'operational',
-            });
-            expect(results[1].provider).toBe(providers[1]);
-            expect(results[1].result).toMatchObject({
-                providerId: 'azure',
-                status: 'operational', // Default when no check found
-            });
-        });
-
-        it('traz a falha de leitura como unreachable, com os Incidents gravados', async () => {
-            vi.mocked(getActiveProviders).mockResolvedValueOnce([catalogProvider('aws', 'AWS')]);
-            vi.mocked(getLatestStatusCheck).mockResolvedValueOnce({
-                id: 1,
-                providerId: 'aws',
-                status: 'unreachable',
-                responseTime: 0,
-                checkedAt: new Date('2026-10-26T15:00:00Z'),
-            });
-            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([{
-                id: 'inc-open',
-                providerId: 'aws',
-                title: 'Elevated errors',
-                description: null,
-                status: 'identified',
-                kind: 'problem',
-                severity: null,
-                scheduledFor: null,
-                url: null,
-                createdAt: new Date('2026-10-26T14:00:00Z'),
-                updatedAt: new Date('2026-10-26T14:00:00Z'),
-                resolvedAt: null,
-            }]);
-
-            const [{ result: aws }] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
-
-            expect(aws.status).toBe('unreachable');
-            expect(aws.incidents).toEqual([
-                expect.objectContaining({ kind: 'problem', title: 'Elevated errors', status: 'identified' }),
-            ]);
-        });
-
-        it('traz todos os Incidents ativos, sem corte por quantidade, e só os resolvidos dentro de 48 horas da resolução', async () => {
-            const now = new Date('2026-10-28T12:00:00Z');
-            const row = (title: string, status: string, createdAt: Date, resolvedAt: Date | null = null) => ({
-                id: `row-${title}`,
-                providerId: 'aws',
-                title,
-                description: null,
-                status,
-                kind: 'problem',
-                severity: null,
-                scheduledFor: null,
-                url: null,
-                createdAt,
-                updatedAt: createdAt,
-                resolvedAt,
-            });
-            const active = Array.from({ length: 10 }, (_, i) => row(`Active ${i}`, 'investigating', hoursBefore(now, 24 * (i + 1))));
-            const rows = [
-                ...active,
-                row('Resolved 47h', 'resolved', hoursBefore(now, 24 * 10), hoursBefore(now, 47)),
-                row('Resolved 49h', 'resolved', hoursBefore(now, 50), hoursBefore(now, 49)),
-                row('Resolved sem hora, criado há 30h', 'resolved', hoursBefore(now, 30)),
-                row('Resolved sem hora, criado há 72h', 'resolved', hoursBefore(now, 72)),
-            ];
-
-            vi.mocked(getActiveProviders).mockResolvedValueOnce([catalogProvider('aws', 'AWS')]);
-            vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
-
-            const [{ result }] = await getLatestStatus(now);
-
-            expect(result.incidents.map(i => i.title)).toEqual([
-                ...active.map(r => r.title),
-                'Resolved 47h',
-                'Resolved sem hora, criado há 30h',
-            ]);
-            expect(result.incidents.find(i => i.title === 'Resolved 47h')?.resolvedAt).toEqual(hoursBefore(now, 47));
-        });
-
-        it('traz todas as manutenções agendadas e em andamento, fora do corte de 5, e omite as completed', async () => {
-            const providers = [catalogProvider('cloudflare', 'Cloudflare')];
-            const row = (i: number, kind: string, status: string, scheduledFor: Date | null) => ({
-                id: `row-${kind}-${i}`,
-                providerId: 'cloudflare',
-                title: `${kind} ${i}`,
-                description: null,
-                status,
-                kind,
-                severity: null,
-                url: null,
-                scheduledFor,
-                createdAt: new Date(Date.UTC(2026, 9, 26, 12, 0) - i * 60_000),
-                updatedAt: null,
-                resolvedAt: null,
-            });
-            const rows = [
-                ...Array.from({ length: 25 }, (_, i) => row(i, 'maintenance', 'scheduled', new Date(Date.UTC(2026, 9, 27, i))),
-                ),
-                row(30, 'maintenance', 'in_progress', new Date('2026-10-26T10:00:00Z')),
-                row(31, 'maintenance', 'completed', new Date('2026-10-25T10:00:00Z')),
-                row(40, 'problem', 'identified', null),
-            ];
-
-            vi.mocked(getActiveProviders).mockResolvedValueOnce(providers);
-            vi.mocked(getLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce(rows);
-
-            const [{ result }] = await getLatestStatus(new Date('2026-10-26T15:00:00Z'));
-
-            expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'scheduled')).toHaveLength(25);
-            expect(result.incidents.filter(i => i.kind === 'maintenance' && i.status === 'in_progress')).toHaveLength(1);
-            expect(result.incidents.some(i => i.kind === 'maintenance' && i.status === 'completed')).toBe(false);
-            expect(result.incidents.find(i => i.kind === 'problem')).toMatchObject({ title: 'problem 40', status: 'identified' });
-            expect(result.incidents.find(i => i.title === 'maintenance 0')).toMatchObject({
-                kind: 'maintenance',
-                scheduledFor: new Date(Date.UTC(2026, 9, 27, 0)),
-            });
         });
     });
 });

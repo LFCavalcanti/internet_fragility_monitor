@@ -11,8 +11,39 @@ vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
 import { getLatestStatus } from "@/lib/db-service";
 import { toProviderStatusInput } from "@/lib/snapshot-reading";
 import { decideProviderStatus } from "@/lib/provider-status";
+import { hoursBefore } from "../helpers/time";
 
 const now = new Date("2026-10-28T12:00:00Z");
+
+/** Instante como o Drizzle grava as colunas `timestamp`: segundos desde a época. */
+const seconds = (d: Date | null) => (d ? Math.floor(d.getTime() / 1000) : null);
+
+interface IncidentRow {
+    providerId: string;
+    title: string;
+    status: string;
+    kind?: "problem" | "maintenance";
+    createdAt: Date;
+    resolvedAt?: Date | null;
+    scheduledFor?: Date | null;
+}
+
+let incidentSeq = 0;
+function insertIncident({ providerId, title, status, kind = "problem", createdAt, resolvedAt = null, scheduledFor = null }: IncidentRow) {
+    return current.client.execute({
+        sql: `INSERT INTO incidents (id, provider_id, title, status, kind, created_at, updated_at, resolved_at, scheduled_for)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+            `inc-${++incidentSeq}`, providerId, title, status, kind,
+            seconds(createdAt), seconds(createdAt), seconds(resolvedAt), seconds(scheduledFor),
+        ],
+    });
+}
+
+async function snapshotOf(providerId: string) {
+    const snapshot = await getLatestStatus(now);
+    return snapshot.find(e => e.provider.id === providerId)!;
+}
 
 describe("getLatestStatus lê o Provider Catalog", () => {
     beforeEach(async () => {
@@ -67,6 +98,93 @@ describe("getLatestStatus lê o Provider Catalog", () => {
         const cloudflare = snapshot.find(e => e.provider.id === "cloudflare");
         expect(cloudflare?.result).toMatchObject({ providerId: "cloudflare", status: "degraded" });
     });
+
+    it("um Provider sem leitura gravada vem Operational", async () => {
+        expect((await snapshotOf("aws")).result).toMatchObject({ providerId: "aws", status: "operational", incidents: [] });
+    });
+
+    it("um Provider sem logo nem status page no catálogo vem com os campos ausentes, não nulos", async () => {
+        await current.client.execute("UPDATE providers SET logo = NULL, status_page_url = NULL WHERE id = 'heroku'");
+
+        const { provider } = await snapshotOf("heroku");
+
+        expect(provider.logo).toBeUndefined();
+        expect(provider.statusPageUrl).toBeUndefined();
+    });
+});
+
+describe("Incidents do Snapshot", () => {
+    beforeEach(async () => {
+        current = await createMigratedDb();
+    });
+
+    it("traz a falha de leitura como unreachable, com os Incidents gravados", async () => {
+        await current.client.execute({
+            sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('aws', 'unreachable', ?)",
+            args: [seconds(hoursBefore(now, 0.1))],
+        });
+        await insertIncident({ providerId: "aws", title: "Elevated errors", status: "identified", createdAt: hoursBefore(now, 1) });
+
+        const { result } = await snapshotOf("aws");
+
+        expect(result.status).toBe("unreachable");
+        expect(result.incidents).toEqual([
+            expect.objectContaining({ kind: "problem", title: "Elevated errors", status: "identified" }),
+        ]);
+    });
+
+    it("traz todos os Incidents ativos, sem corte por quantidade, e só os resolvidos dentro de 48 horas da resolução", async () => {
+        const active = Array.from({ length: 10 }, (_, i) => `Active ${i}`);
+        for (const [i, title] of active.entries()) {
+            await insertIncident({ providerId: "aws", title, status: "investigating", createdAt: hoursBefore(now, 24 * (i + 1)) });
+        }
+        await insertIncident({
+            providerId: "aws", title: "Resolved 47h", status: "resolved",
+            createdAt: hoursBefore(now, 24 * 10), resolvedAt: hoursBefore(now, 47),
+        });
+        await insertIncident({
+            providerId: "aws", title: "Resolved 49h", status: "resolved",
+            createdAt: hoursBefore(now, 50), resolvedAt: hoursBefore(now, 49),
+        });
+        await insertIncident({ providerId: "aws", title: "Resolved sem hora, criado há 30h", status: "resolved", createdAt: hoursBefore(now, 30) });
+        await insertIncident({ providerId: "aws", title: "Resolved sem hora, criado há 72h", status: "resolved", createdAt: hoursBefore(now, 72) });
+
+        const { result } = await snapshotOf("aws");
+
+        expect(result.incidents.map(i => i.title).sort()).toEqual(
+            [...active, "Resolved 47h", "Resolved sem hora, criado há 30h"].sort(),
+        );
+        expect(result.incidents.find(i => i.title === "Resolved 47h")?.resolvedAt).toEqual(hoursBefore(now, 47));
+    });
+
+    it("traz todas as manutenções agendadas e em andamento, sem corte por quantidade, e omite as completed", async () => {
+        for (let i = 0; i < 25; i++) {
+            await insertIncident({
+                providerId: "cloudflare", title: `maintenance ${i}`, status: "scheduled", kind: "maintenance",
+                createdAt: hoursBefore(now, 48), scheduledFor: new Date(Date.UTC(2026, 9, 29, i)),
+            });
+        }
+        await insertIncident({
+            providerId: "cloudflare", title: "in progress", status: "in_progress", kind: "maintenance",
+            createdAt: hoursBefore(now, 48), scheduledFor: hoursBefore(now, 2),
+        });
+        await insertIncident({
+            providerId: "cloudflare", title: "completed", status: "completed", kind: "maintenance",
+            createdAt: hoursBefore(now, 48), scheduledFor: hoursBefore(now, 30), resolvedAt: hoursBefore(now, 1),
+        });
+        await insertIncident({ providerId: "cloudflare", title: "problem", status: "identified", createdAt: hoursBefore(now, 3) });
+
+        const { result } = await snapshotOf("cloudflare");
+
+        expect(result.incidents.filter(i => i.kind === "maintenance" && i.status === "scheduled")).toHaveLength(25);
+        expect(result.incidents.filter(i => i.kind === "maintenance" && i.status === "in_progress")).toHaveLength(1);
+        expect(result.incidents.some(i => i.kind === "maintenance" && i.status === "completed")).toBe(false);
+        expect(result.incidents.find(i => i.kind === "problem")).toMatchObject({ title: "problem", status: "identified" });
+        expect(result.incidents.find(i => i.title === "maintenance 0")).toMatchObject({
+            kind: "maintenance",
+            scheduledFor: new Date(Date.UTC(2026, 9, 29, 0)),
+        });
+    });
 });
 
 describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status", () => {
@@ -81,9 +199,7 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         });
 
     async function decisionFor(providerId: string) {
-        const snapshot = await getLatestStatus(now);
-        const entry = snapshot.find(e => e.provider.id === providerId)!;
-        return decideProviderStatus(toProviderStatusInput(entry, now));
+        return decideProviderStatus(toProviderStatusInput(await snapshotOf(providerId), now));
     }
 
     it("Oracle, Salesforce e IBM, sem Feed ativo, ficam Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {

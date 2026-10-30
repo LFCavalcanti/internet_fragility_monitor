@@ -1,27 +1,26 @@
 /**
  * Internet Health: o único lugar que decide o estado da internet como um todo e o destaque do hero.
- * Módulo puro: recebe o resultado de cada Provider, os Major Providers, a hora do último Poll e o relógio.
+ * Módulo puro: recebe cada Provider do Snapshot com o estado decidido, a hora do último Poll e o relógio.
  * Termos conforme GLOSSARY.md.
  */
-import type { IncidentData, StatusResult } from "./fetchers/types";
-import type { ProviderStatus } from "./provider-status";
+import type { StatusResult } from "./fetchers/types";
+import type { ProviderStatus, ProviderStatusDecision } from "./provider-status";
+import type { SnapshotProvider } from "./snapshot-reading";
 import { isClosed } from "./incident-status";
 
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
 
-/** O que o Internet Health precisa saber de um Provider: o estado decidido e os Incidents a exibir. */
-export interface ProviderSnapshotEntry {
-    providerId: string;
-    name: string;
-    logo?: string;
-    status: ProviderStatus;
-    incidents: IncidentData[];
+/**
+ * O que o Internet Health precisa de um Provider do Snapshot: nome, logo e a marca de Major Provider do catálogo,
+ * e o estado e os Incidents decididos pelo módulo de Provider Status.
+ */
+export interface ProviderHealthEntry {
+    provider: Pick<SnapshotProvider, "name" | "logo" | "isMajor">;
+    decision: Pick<ProviderStatusDecision, "status" | "incidents">;
 }
 
 export interface InternetHealthInput {
-    providers: ProviderSnapshotEntry[];
-    /** Ids dos Major Providers, marcados no Provider Catalog. */
-    majorProviders: readonly string[];
+    providers: ProviderHealthEntry[];
     /** Hora do último Poll; `null` quando nenhum Poll foi registrado. */
     lastPollAt: Date | null;
     /** Relógio: a hora em que o Snapshot é apresentado. */
@@ -85,7 +84,6 @@ const isSevere = (s: ProviderStatus) => s === "outage" || s === "down";
 
 export function decideInternetHealth({
     providers,
-    majorProviders,
     lastPollAt,
     now,
 }: InternetHealthInput): HeroState {
@@ -94,10 +92,10 @@ export function decideInternetHealth({
         return { status: "Stale", lastPollAt };
     }
 
-    const severe = providers.filter(p => isSevere(p.status));
-    const degraded = providers.filter(p => p.status === "degraded");
+    const severe = providers.filter(p => isSevere(p.decision.status));
+    const degraded = providers.filter(p => p.decision.status === "degraded");
 
-    const critical = severe.length >= 2 || severe.some(p => majorProviders.includes(p.providerId));
+    const critical = severe.length >= 2 || severe.some(p => p.provider.isMajor);
 
     if (critical) {
         return {
@@ -124,19 +122,21 @@ function providersPhrase(n: number): string {
     return `${n} provider${n === 1 ? " is" : "s are"}`;
 }
 
-function highlightFor(affected: ProviderSnapshotEntry[]): HeroHighlight {
+function highlightFor(affected: ProviderHealthEntry[]): HeroHighlight {
     if (affected.length === 1) {
         const [p] = affected;
         return singleHighlight(p);
     }
 
-    const type = affected.some(p => p.status === "down")
+    const type = affected.some(p => p.decision.status === "down")
         ? "down"
-        : affected.some(p => p.status === "outage")
+        : affected.some(p => p.decision.status === "outage")
           ? "outage"
           : "degraded";
     const names = affected
-        .map(p => (p.status === "down" ? `${p.name} (${DOWN_TEXT.toLowerCase()})` : p.name))
+        .map(({ provider, decision }) =>
+            decision.status === "down" ? `${provider.name} (${DOWN_TEXT.toLowerCase()})` : provider.name,
+        )
         .join(", ");
 
     return type === "degraded"
@@ -154,17 +154,17 @@ function highlightFor(affected: ProviderSnapshotEntry[]): HeroHighlight {
           };
 }
 
-function singleHighlight(p: ProviderSnapshotEntry): HeroHighlight {
-    const base = { providerName: p.name, providerLogo: p.logo };
+function singleHighlight({ provider, decision }: ProviderHealthEntry): HeroHighlight {
+    const base = { providerName: provider.name, providerLogo: provider.logo };
 
-    if (p.status === "down") {
+    if (decision.status === "down") {
         // Down não tem Feed lido, então não há Incident a citar.
         return { ...base, type: "down", title: "Service Down", description: DOWN_TEXT };
     }
 
-    const active = p.incidents.find(i => i.kind === "problem" && !isClosed(i));
+    const active = decision.incidents.find(i => i.kind === "problem" && !isClosed(i));
 
-    return p.status === "outage"
+    return decision.status === "outage"
         ? { ...base, type: "outage", title: "Service Outage", description: active?.title ?? "Major outage reported." }
         : {
               ...base,

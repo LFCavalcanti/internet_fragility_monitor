@@ -1,6 +1,12 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
+/** Tipo de serviço de um Provider no catálogo. */
+export type ProviderType = "cloud" | "cdn" | "paas" | "saas" | "hosting";
+
+/** Rótulo curto de um Provider Source no catálogo. */
+export type SourceLabel = "feed" | "status page" | "login";
+
 /**
  * Provider Catalog (ADR 0001): o banco é a única fonte. Muda só por migrations de dados;
  * um Provider nunca é apagado, sai do monitoramento pela marcação de inativo.
@@ -10,7 +16,7 @@ export const providers = sqliteTable("providers", {
     name: text("name").notNull(),
     url: text("url").notNull(), // site do Provider
     statusPageUrl: text("status_page_url"), // link do card
-    type: text("type").notNull(), // 'cloud', 'cdn', 'paas', 'saas', 'hosting'
+    type: text("type").$type<ProviderType>().notNull(),
     logo: text("logo"),
     isMajor: integer("is_major", { mode: "boolean" }).notNull().default(false),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
@@ -25,7 +31,7 @@ export const providerSources = sqliteTable("provider_sources", {
     family: text("family"), // família do Feed (FEED_FAMILIES em lib/provider-catalog.ts); null para Probes.
     // Texto livre de propósito: uma família desconhecida pelo código vira Feed não lido, não erro de leitura do banco.
     url: text("url").notNull(),
-    label: text("label").notNull(), // rótulo curto: 'feed', 'status page', 'login'
+    label: text("label").$type<SourceLabel>().notNull(),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
 });
 
@@ -55,7 +61,6 @@ export const statusChecks = sqliteTable("status_checks", {
 });
 
 export type Provider = typeof providers.$inferSelect;
-export type NewProvider = typeof providers.$inferInsert;
 
 export type ProviderSource = typeof providerSources.$inferSelect;
 

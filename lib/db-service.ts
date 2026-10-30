@@ -19,14 +19,7 @@ import type {
     StatusResult,
 } from "./fetchers/types";
 import { isClosed, isRecentlyResolved } from "./incident-status";
-
-/** Um Provider ativo do Provider Catalog com o resultado dele no Snapshot. */
-export interface SnapshotEntry {
-    provider: Provider;
-    /** Se o Provider tem Feed ativo no catálogo; sem Feed, ele é lido só por Probes. */
-    hasFeed: boolean;
-    result: StatusResult;
-}
+import type { SnapshotEntry, SnapshotProvider } from "./snapshot-reading";
 
 function scheduledForOf(inc: IncidentData): Date | null {
     return inc.kind === "maintenance" ? inc.scheduledFor ?? null : null;
@@ -107,6 +100,17 @@ export async function saveStatusResult(result: StatusResult) {
     }
 }
 
+/** Borda do Snapshot: os campos anuláveis do catálogo viram opcionais uma vez, aqui. */
+function toSnapshotProvider(row: Provider): SnapshotProvider {
+    return {
+        id: row.id,
+        name: row.name,
+        logo: row.logo ?? undefined,
+        statusPageUrl: row.statusPageUrl ?? undefined,
+        isMajor: row.isMajor,
+    };
+}
+
 function toIncidentData(row: Incident): IncidentData {
     const base = {
         title: row.title,
@@ -151,7 +155,7 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
             .filter(i => !isClosed(i) || isRecentlyResolved(i, now));
 
         entries.push({
-            provider,
+            provider: toSnapshotProvider(provider),
             hasFeed: withFeed.has(provider.id),
             result: {
                 providerId: provider.id,

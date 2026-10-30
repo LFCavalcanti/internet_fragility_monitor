@@ -21,24 +21,12 @@ export default async function Home() {
     // O módulo de Provider Status decide o estado de cada Provider; a página só exibe.
     // Provider com Feed vai com o Feed, lido ou não; Provider só com Probes vai sem Feed, com a resposta dos Probes.
     const statuses = snapshot.map(entry => ({
-        provider: entry.provider,
-        result: entry.result,
+        ...entry,
         decision: decideProviderStatus(toProviderStatusInput(entry, now)),
     }));
 
-    // O módulo de Internet Health decide o hero; a página só passa o resultado.
-    const health = decideInternetHealth({
-        providers: statuses.map(({ provider, decision }) => ({
-            providerId: provider.id,
-            name: provider.name,
-            logo: provider.logo ?? undefined,
-            status: decision.status,
-            incidents: decision.incidents,
-        })),
-        majorProviders: statuses.filter(s => s.provider.isMajor).map(s => s.provider.id),
-        lastPollAt,
-        now,
-    });
+    // O módulo de Internet Health decide o hero a partir dos mesmos itens; a página só passa o resultado.
+    const health = decideInternetHealth({ providers: statuses, lastPollAt, now });
 
     return (
         <main className="min-h-screen bg-transparent flex flex-col">
@@ -54,8 +42,8 @@ export default async function Home() {
                             <StatusCard
                                 key={provider.id}
                                 name={provider.name}
-                                logo={provider.logo ?? undefined}
-                                statusPageUrl={provider.statusPageUrl ?? undefined}
+                                logo={provider.logo}
+                                statusPageUrl={provider.statusPageUrl}
                                 result={result}
                                 decision={decision}
                                 now={now}

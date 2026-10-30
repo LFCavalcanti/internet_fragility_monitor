@@ -4,7 +4,7 @@ import {
     decideInternetHealth,
     lastAnsweredPollAt,
     type InternetHealth,
-    type ProviderSnapshotEntry,
+    type ProviderHealthEntry,
 } from '@/lib/internet-health';
 import type { ProviderStatus } from '@/lib/provider-status';
 import type { IncidentData, StatusResult } from '@/lib/fetchers/types';
@@ -24,24 +24,27 @@ const NAMES: Record<string, string> = {
     github: 'GitHub',
 };
 
+/** Um Provider do Snapshot com o estado decidido; a marca de Major Provider segue a carga do catálogo. */
 const provider = (
     providerId: string,
     status: ProviderStatus,
     incidents: IncidentData[] = [],
-): ProviderSnapshotEntry => ({
-    providerId,
-    name: NAMES[providerId] ?? providerId,
-    logo: `https://logos.example/${providerId}.svg`,
-    status,
-    incidents,
+    isMajor = MAJOR_PROVIDERS.includes(providerId),
+): ProviderHealthEntry => ({
+    provider: {
+        name: NAMES[providerId] ?? providerId,
+        logo: `https://logos.example/${providerId}.svg`,
+        isMajor,
+    },
+    decision: { status, incidents },
 });
 
 /** Poll de 5 minutos atrás: Snapshot recente. */
 const recentPoll = new Date('2026-10-26T14:55:00Z');
 
 /** Internet Health de um Snapshot recente, que nunca é Stale. */
-const decide = (providers: ProviderSnapshotEntry[]): InternetHealth => {
-    const state = decideInternetHealth({ providers, majorProviders: MAJOR_PROVIDERS, lastPollAt: recentPoll, now });
+const decide = (providers: ProviderHealthEntry[]): InternetHealth => {
+    const state = decideInternetHealth({ providers, lastPollAt: recentPoll, now });
     if (state.status === 'Stale') throw new Error('Snapshot recente não pode ser Stale Snapshot');
     return state;
 };
@@ -190,15 +193,9 @@ describe('decideInternetHealth', () => {
         expect(health.highlight?.providerName).toBe('Heroku');
     });
 
-    it('a lista de Major Providers recebida decide, não a constante', () => {
-        const health = decideInternetHealth({
-            providers: [provider('heroku', 'outage')],
-            majorProviders: ['heroku'],
-            lastPollAt: recentPoll,
-            now,
-        });
-
-        expect(health.status).toBe('Critical');
+    it('a marca de Major Provider do item decide, não o id', () => {
+        expect(decide([provider('heroku', 'outage', [], true)]).status).toBe('Critical');
+        expect(decide([provider('aws', 'outage', [], false)]).status).toBe('Unstable');
     });
 });
 
@@ -209,7 +206,6 @@ describe('decideInternetHealth: Stale Snapshot', () => {
     it('Snapshot de 14 minutos mantém o Internet Health', () => {
         const health = decideInternetHealth({
             providers: critical,
-            majorProviders: MAJOR_PROVIDERS,
             lastPollAt: minutesAgo(14),
             now,
         });
@@ -220,7 +216,6 @@ describe('decideInternetHealth: Stale Snapshot', () => {
     it('Snapshot de exatamente 15 minutos ainda não é Stale Snapshot (são mais de três ciclos)', () => {
         const health = decideInternetHealth({
             providers: [provider('heroku', 'operational')],
-            majorProviders: MAJOR_PROVIDERS,
             lastPollAt: minutesAgo(15),
             now,
         });
@@ -231,7 +226,6 @@ describe('decideInternetHealth: Stale Snapshot', () => {
     it('Snapshot de 16 minutos vira o estado neutro, inclusive sobre Critical, com a hora do último Poll e sem destaque', () => {
         const health = decideInternetHealth({
             providers: critical,
-            majorProviders: MAJOR_PROVIDERS,
             lastPollAt: minutesAgo(16),
             now,
         });
@@ -242,7 +236,6 @@ describe('decideInternetHealth: Stale Snapshot', () => {
     it('sem nenhum Poll registrado também é o estado neutro, sem hora', () => {
         const health = decideInternetHealth({
             providers: [],
-            majorProviders: MAJOR_PROVIDERS,
             lastPollAt: null,
             now,
         });
@@ -278,7 +271,6 @@ describe('lastAnsweredPollAt: hora do último Poll a partir do Snapshot', () => 
         ]);
         const health = decideInternetHealth({
             providers: [provider('aws', 'outage')],
-            majorProviders: MAJOR_PROVIDERS,
             lastPollAt,
             now,
         });
@@ -293,7 +285,7 @@ describe('lastAnsweredPollAt: hora do último Poll a partir do Snapshot', () => 
         ]);
 
         expect(lastPollAt).toBeNull();
-        expect(decideInternetHealth({ providers: [], majorProviders: MAJOR_PROVIDERS, lastPollAt, now }).status).toBe(
+        expect(decideInternetHealth({ providers: [], lastPollAt, now }).status).toBe(
             'Stale',
         );
     });

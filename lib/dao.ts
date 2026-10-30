@@ -203,4 +203,4 @@ export async function closeIncident(id: string, kind: IncidentKind): Promise<voi
 
 // Note: All functions are exported individually above.
 // "use server" files can only export async functions, not objects.
-// Import functions directly: import { getAllProviders, getProviderById, ... } from "./dao";
+// Import functions directly: import { getActiveProviders, getProviderById, ... } from "./dao";
