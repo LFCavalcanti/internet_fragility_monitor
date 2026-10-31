@@ -4,9 +4,11 @@ import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 const RESOLVED = /\bresolved\b/i;
+const ACTIVE_TITLE = /^active\b/i;
 
 function toIncident(item: RssItem): PublishedIncident {
-    const resolved = RESOLVED.test(item.title) || RESOLVED.test(item.description ?? "");
+    // O título "Active - ..." já diz que segue aberto: "resolved" no texto não encerra o problema nem esconde a Outage.
+    const resolved = !ACTIVE_TITLE.test(item.title) && (RESOLVED.test(item.title) || RESOLVED.test(item.description ?? ""));
 
     return {
         kind: "problem",

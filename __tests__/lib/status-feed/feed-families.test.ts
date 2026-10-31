@@ -381,6 +381,20 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
         });
     });
 
+    it('um item Active continua aberto, mesmo com "resolved" no texto da descrição', async () => {
+        respondWith(
+            FEED_URLS.azure,
+            azureRss(
+                '<item><guid>a</guid><title>Active - Storage latency</title><description>We will update this page until the issue is resolved.</description><pubDate>Thu, 26 Dec 2024 18:44:00 Z</pubDate></item>',
+            ),
+        );
+
+        expect(await readProvider('azure', new Date('2024-12-27T12:00:00Z'))).toMatchObject({
+            status: 'outage',
+            incidents: [expect.objectContaining({ status: 'investigating' })],
+        });
+    });
+
     it('sem guid publicado, o título é o id', async () => {
         respondWith(
             FEED_URLS.azure,
