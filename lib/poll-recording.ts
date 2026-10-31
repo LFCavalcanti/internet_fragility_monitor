@@ -18,12 +18,11 @@ import {
     isRecentlyResolved,
 } from "./incident-status";
 import { groupByProvider } from "./provider-catalog";
-import { readIncidentsOf, sourcesUnanswered, type ProviderStatusInput } from "./provider-status";
+import { readIncidentsOf, sourcesUnanswered, worstDeclared, type ProviderStatusInput } from "./provider-status";
 import { incidents, providers, providerSources, statusChecks } from "./schema";
 import type { Incident, Provider, ProviderSource, RecordedFeed } from "./schema";
 import type { ProviderReading } from "./status-feed/provider-reading";
 import type {
-    DeclaredStatus,
     IncidentData,
     MaintenancePhase,
     ProblemStatus,
@@ -110,7 +109,7 @@ const incidentText = {
 };
 
 const recordableReading = z.object({
-    readings: z.array(z.enum(["operational", "degraded", "outage", "unreachable"] satisfies ReadingStatus[])),
+    readings: z.array(z.enum(["operational", "maintenance", "degraded", "outage", "unreachable"] satisfies ReadingStatus[])),
     incidents: z.array(
         z.discriminatedUnion("kind", [
             z.object({
@@ -138,21 +137,18 @@ function assertRecordable(reading: ProviderReading) {
     }
 }
 
-/** Do pior para o melhor. Sem Feed lido, nenhum deles vale, e a leitura é "unreachable". */
-const DECLARED_WORST_FIRST: DeclaredStatus[] = ["outage", "degraded", "operational"];
-
 /**
- * A linha que um Poll grava de um Provider em `status_checks`. O pior estado lido basta para o vence-o-pior da leitura:
- * manutenção em andamento só vale quando o pior é "operational", e aí todos os Feeds lidos são "operational".
- * `feeds` guarda o resto, quais Feeds foram lidos neste Poll, e diz como a leitura foi feita: lista vazia, por Probes.
+ * A linha que um Poll grava de um Provider em `status_checks`. O pior estado lido basta para o vence-o-pior da leitura;
+ * sem Feed lido, a leitura é "unreachable". `feeds` guarda o resto, quais Feeds foram lidos neste Poll e o que cada um
+ * declarou, e diz como a leitura foi feita: lista vazia, por Probes.
  */
 function toRecordedReading({ feeds, probes }: ProviderReading) {
     const recordedFeeds = feeds.map((f): RecordedFeed => ({ sourceId: f.sourceId, declared: f.read ? f.declared : null }));
-    const declared = recordedFeeds.map(f => f.declared);
+    const declared = recordedFeeds.flatMap(f => f.declared ?? []);
     const readByProbes = feeds.length === 0 && probes.some(Boolean);
 
     return {
-        status: readByProbes ? "operational" : DECLARED_WORST_FIRST.find(s => declared.includes(s)) ?? "unreachable",
+        status: readByProbes ? "operational" : worstDeclared(declared) ?? "unreachable",
         noSourceAnswered: sourcesUnanswered(feeds, probes),
         feeds: recordedFeeds,
     };
@@ -400,10 +396,10 @@ function recordedProbes(latest: RecordedCheck | undefined): boolean[] {
 /**
  * Remonta a entrada do módulo de Provider Status a partir das duas últimas leituras gravadas.
  * Provider com Feed: cada Feed vai lido, com o estado da gravação, ou não lido, levando os seus Incidents: os de um
- * Feed não lido entram na lista, mas não decidem o estado nem a Upcoming Maintenance. Sem Feed certo (linha antiga,
- * Feed fora do Poll), o Incident vai no primeiro Feed não lido, onde não decide nada, ou no primeiro Feed se todos
- * foram lidos. A linha guarda a resposta por Provider, não por fonte: os Probes de um Provider com Feed não voltam, e
- * a resposta deles vale como a do Feed não lido, o que dá a mesma decisão.
+ * Feed não lido entram na lista, mas não contam para a Upcoming Maintenance. Sem Feed certo (linha antiga, Feed fora
+ * do Poll), o Incident vai no primeiro Feed não lido, onde só entra na lista, ou no primeiro Feed se todos foram lidos.
+ * A linha guarda a resposta por Provider, não por fonte: os Probes de um Provider com Feed não voltam, e a resposta
+ * deles vale como a do Feed não lido, o que dá a mesma decisão.
  */
 function toStatusInput(
     latest: RecordedCheck | undefined,

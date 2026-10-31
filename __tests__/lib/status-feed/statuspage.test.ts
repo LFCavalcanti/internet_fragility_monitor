@@ -13,6 +13,7 @@ const fixture = (name: string): string => feedFixture('statuspage', name);
 
 const CLOUDFLARE = { id: 'cloudflare-feed', url: 'https://www.cloudflarestatus.com' };
 const HOSTINGER = { id: 'hostinger-feed', url: 'https://statuspage.hostinger.com' };
+const POLL_AT = new Date('2026-10-31T00:48:00Z');
 
 function respondWith(body: string, init?: ResponseInit) {
     const fetchMock = vi.fn(async () => new Response(body, init));
@@ -22,7 +23,7 @@ function respondWith(body: string, init?: ResponseInit) {
 
 async function read(body: string, source = CLOUDFLARE) {
     respondWith(body);
-    const reading = await readFeed(source, statuspageReader);
+    const reading = await readFeed(source, statuspageReader, POLL_AT);
     if (!reading.read) throw new Error('Feed não lido');
     return reading;
 }
@@ -79,10 +80,10 @@ describe('payload real da Cloudflare: indicador major e manutenções agendadas'
 });
 
 describe('payload real da Zoom: manutenção em andamento', () => {
-    it('com indicador none e manutenção in_progress, o Provider fica em Maintenance', async () => {
+    it('com indicador none e manutenção in_progress, o Feed declara Maintenance e o Provider fica em Maintenance', async () => {
         const reading = await read(fixture('zoom-maintenance-in-progress.json'));
 
-        expect(reading.declared).toBe('operational');
+        expect(reading.declared).toBe('maintenance');
         expect(reading.incidents.find(i => i.externalId === 'v5w5rpvqj35f')).toMatchObject({
             kind: 'maintenance',
             status: 'in_progress',
@@ -165,9 +166,48 @@ describe('classificação pela estrutura do Feed', () => {
         ['major', 'outage'],
         ['critical', 'outage'],
     ])('indicador %s declara %s', async (indicator, declared) => {
+        const reading = await read(JSON.stringify({ ...summary, scheduled_maintenances: [], status: { indicator } }));
+
+        expect(reading.declared).toBe(declared);
+    });
+
+    it.each([
+        ['none', 'maintenance'],
+        ['maintenance', 'maintenance'],
+        ['minor', 'degraded'],
+        ['major', 'outage'],
+        ['critical', 'outage'],
+    ])('com manutenção em andamento, o indicador %s declara %s: Maintenance nunca prevalece sobre um problema', async (indicator, declared) => {
         const reading = await read(JSON.stringify({ ...summary, status: { indicator } }));
 
         expect(reading.declared).toBe(declared);
+    });
+
+    it('a fase verifying também declara Maintenance, porque ainda é em andamento', async () => {
+        const reading = await read(
+            JSON.stringify({
+                status: { indicator: 'none' },
+                incidents: [],
+                scheduled_maintenances: [summary.scheduled_maintenances[1]],
+            }),
+        );
+
+        expect(reading.declared).toBe('maintenance');
+    });
+
+    it('manutenção agendada ou encerrada não declara Maintenance', async () => {
+        const reading = await read(
+            JSON.stringify({
+                status: { indicator: 'none' },
+                incidents: [],
+                scheduled_maintenances: [
+                    summary.scheduled_maintenances[2],
+                    { id: 'mnt4', name: 'Window', status: 'scheduled', created_at: '2026-10-20T10:00:00Z', scheduled_for: '2026-10-27T05:00:00Z' },
+                ],
+            }),
+        );
+
+        expect(reading.declared).toBe('operational');
     });
 
     it('indicador maintenance sem manutenção em andamento resulta em Operational', async () => {
@@ -194,7 +234,7 @@ describe('endereço do Feed', () => {
     ])('a URL do catálogo %s é lida em summary.json', async (url, expected) => {
         const fetchMock = respondWith(JSON.stringify({ status: { indicator: 'none' }, incidents: [], scheduled_maintenances: [] }));
 
-        await readFeed({ id: 'feed', url }, statuspageReader);
+        await readFeed({ id: 'feed', url }, statuspageReader, POLL_AT);
 
         expect(String((fetchMock.mock.calls as unknown[][])[0][0])).toBe(expected);
     });
@@ -218,7 +258,7 @@ describe('conteúdo fora do formato vira Feed não lido, com registro no log', (
     ])('%s', async (_case, body) => {
         respondWith(body);
 
-        const reading = await readFeed(CLOUDFLARE, statuspageReader);
+        const reading = await readFeed(CLOUDFLARE, statuspageReader, POLL_AT);
 
         expect(reading).toEqual({ read: false, answered: true });
         expect(console.error).toHaveBeenCalledWith(expect.stringContaining('cloudflare-feed'), expect.anything());

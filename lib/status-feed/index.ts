@@ -28,27 +28,27 @@ const FEED_READERS: Record<FeedFamily, FeedReader> = {
     "ibm-rss": ibmRssReader,
 };
 
-async function readFeedSource(feed: ProviderSource): Promise<SourcedFeedReading<ReadIncident>> {
+async function readFeedSource(feed: ProviderSource, pollAt: Date): Promise<SourcedFeedReading<ReadIncident>> {
     const reader = isFeedFamily(feed.family) ? FEED_READERS[feed.family] : undefined;
     if (!reader) {
         // Feed não lido, sem ir à rede: o Poll segue com os demais.
         console.error(`Feed ${feed.id} de ${feed.providerId} não lido: a família "${feed.family}" não tem leitor no código`);
         return { sourceId: feed.id, read: false, answered: false };
     }
-    return { sourceId: feed.id, ...(await readFeed(feed, reader)) };
+    return { sourceId: feed.id, ...(await readFeed(feed, reader, pollAt)) };
 }
 
 /** Lê um Provider por todas as fontes ativas dele, ao mesmo tempo: cada uma tem o próprio timeout. */
-async function readProvider(providerId: string, sources: ProviderSource[]): Promise<ProviderReading<ReadIncident>> {
+async function readProvider(providerId: string, sources: ProviderSource[], pollAt: Date): Promise<ProviderReading<ReadIncident>> {
     const [feeds, probes] = await Promise.all([
-        Promise.all(sources.filter(s => s.kind === "feed").map(readFeedSource)),
+        Promise.all(sources.filter(s => s.kind === "feed").map(feed => readFeedSource(feed, pollAt))),
         Promise.all(sources.filter(s => s.kind === "probe").map(readProbe)),
     ]);
     return { providerId, accessOnly: isAccessOnly(sources), feeds, probes };
 }
 
-/** A leitura de um Poll: cada Provider ativo do catálogo, pelas suas fontes ativas. */
-export async function readAllProviders({ providers, sources }: ActiveCatalog): Promise<ProviderReading<ReadIncident>[]> {
+/** A leitura de um Poll: cada Provider ativo do catálogo, pelas suas fontes ativas. `pollAt` é a hora do Poll, dada aos leitores. */
+export async function readAllProviders({ providers, sources }: ActiveCatalog, pollAt: Date): Promise<ProviderReading<ReadIncident>[]> {
     const byProvider = groupByProvider(sources);
-    return Promise.all(providers.map(p => readProvider(p.id, byProvider.get(p.id) ?? [])));
+    return Promise.all(providers.map(p => readProvider(p.id, byProvider.get(p.id) ?? [], pollAt)));
 }

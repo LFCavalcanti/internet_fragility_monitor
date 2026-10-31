@@ -73,7 +73,7 @@ export interface RecordedFeed {
 export const statusChecks = sqliteTable("status_checks", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     providerId: text("provider_id").references(() => providers.id).notNull(),
-    // Pior estado entre os Feeds lidos ('operational', 'degraded', 'outage') ou 'unreachable' sem Feed lido.
+    // Pior estado entre os Feeds lidos ('operational', 'maintenance', 'degraded', 'outage') ou 'unreachable' sem Feed lido.
     // Provider só com Probes: 'operational' com algum Probe de pé. Down não é gravado: depende do Poll anterior.
     status: text("status").notNull(),
     checkedAt: integer("checked_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),

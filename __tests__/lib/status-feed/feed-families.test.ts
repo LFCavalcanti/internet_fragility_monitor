@@ -17,7 +17,7 @@ import { decideProviderStatus } from '@/lib/provider-status';
 
 let current: MigratedDb;
 
-const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
+const readAll = async () => readAllProviders(await readActiveCatalog(current.db), new Date());
 
 type Network = (url: string, init?: RequestInit) => Promise<Response>;
 

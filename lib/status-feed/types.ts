@@ -1,5 +1,5 @@
-/** Estado que o próprio Provider declara num Feed. */
-export type DeclaredStatus = 'operational' | 'degraded' | 'outage';
+/** Estado que a leitura de um Feed declara pelo Provider. Maintenance é uma manutenção em andamento sem problema declarado. */
+export type DeclaredStatus = 'operational' | 'maintenance' | 'degraded' | 'outage';
 
 /**
  * Resultado gravado de uma leitura: o estado declarado pelo Feed, ou "unreachable" quando

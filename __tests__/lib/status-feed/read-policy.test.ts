@@ -9,6 +9,7 @@ import { hang } from '../../helpers/status-feed';
 
 const FEED = { id: 'acme-feed', url: 'https://status.acme.test/feed' };
 const PROBE = { id: 'acme-login', url: 'https://login.acme.test' };
+const POLL_AT = new Date('2026-10-31T12:00:00Z');
 
 const reader: FeedReader = {
     read: ([body]) => ({
@@ -58,7 +59,7 @@ describe('o tempo de uma leitura é de 10 segundos por Provider Source', () => {
         stubNetwork(network);
         let reading: unknown;
 
-        const pending = readFeed(FEED, reader).then(r => (reading = r));
+        const pending = readFeed(FEED, reader, POLL_AT).then(r => (reading = r));
 
         await vi.advanceTimersByTimeAsync(9_999);
         expect(reading).toBeUndefined();
@@ -88,7 +89,7 @@ describe('leitura de um Feed', () => {
     it('resposta 200: estado declarado e Incidents com a Provider Source de origem', async () => {
         stubNetwork(async () => new Response('conteúdo'));
 
-        expect(await readFeed(FEED, reader)).toEqual({
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({
             read: true,
             declared: 'degraded',
             incidents: [expect.objectContaining({ title: 'conteúdo', sourceId: 'acme-feed', externalId: 'x1' })],
@@ -98,13 +99,13 @@ describe('leitura de um Feed', () => {
     it.each([500, 503])('resposta %i: Feed não lido e sem resposta, como um Probe com 5xx', async code => {
         stubNetwork(async () => new Response('erro', { status: code }));
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: false });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false });
     });
 
     it.each([404, 403])('resposta %i: Feed não lido, mas a fonte respondeu, como um Probe abaixo de 500', async code => {
         stubNetwork(async () => new Response('erro', { status: code }));
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true });
     });
 
     it('erro de rede: Feed não lido e sem resposta', async () => {
@@ -112,7 +113,7 @@ describe('leitura de um Feed', () => {
             throw new TypeError('fetch failed');
         });
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: false });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false });
     });
 
     it('um leitor que rejeita o conteúdo resulta em Feed não lido, mas a fonte respondeu', async () => {
@@ -123,16 +124,25 @@ describe('leitura de um Feed', () => {
             },
         };
 
-        expect(await readFeed(FEED, refuses)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, refuses, POLL_AT)).toEqual({ read: false, answered: true });
     });
 
     it('o leitor recebe o endereço de onde o conteúdo veio', async () => {
         stubNetwork(async () => new Response('x'));
         const read = vi.fn(reader.read);
 
-        await readFeed(FEED, { addresses: url => [`${url}/v2`], read });
+        await readFeed(FEED, { addresses: url => [`${url}/v2`], read }, POLL_AT);
 
-        expect(read).toHaveBeenCalledWith(['x'], [`${FEED.url}/v2`]);
+        expect(read).toHaveBeenCalledWith(['x'], [`${FEED.url}/v2`], POLL_AT);
+    });
+
+    it('o leitor recebe a hora do Poll também para escolher os endereços', async () => {
+        stubNetwork(async () => new Response('x'));
+        const addresses = vi.fn((url: string) => [url]);
+
+        await readFeed(FEED, { addresses, read: reader.read }, POLL_AT);
+
+        expect(addresses).toHaveBeenCalledWith(FEED.url, POLL_AT);
     });
 
     describe('Feed em dois endereços', () => {
@@ -153,7 +163,7 @@ describe('leitura de um Feed', () => {
         it('o leitor recebe um corpo por endereço, na mesma ordem', async () => {
             stubNetwork(async url => new Response(String(url).slice(-1)));
 
-            const reading = await readFeed(FEED, twoAddresses);
+            const reading = await readFeed(FEED, twoAddresses, POLL_AT);
 
             expect(reading).toMatchObject({ read: true, incidents: [{ title: 'a' }, { title: 'b' }] });
         });
@@ -165,7 +175,7 @@ describe('leitura de um Feed', () => {
             );
             let reading: unknown;
 
-            const pending = readFeed(FEED, twoAddresses).then(r => (reading = r));
+            const pending = readFeed(FEED, twoAddresses, POLL_AT).then(r => (reading = r));
 
             await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
             expect(reading).toBeUndefined();
@@ -183,7 +193,7 @@ describe('leitura de um Feed', () => {
                 return new Response('ok');
             });
 
-            const reading = readFeed(FEED, twoAddresses);
+            const reading = readFeed(FEED, twoAddresses, POLL_AT);
             await vi.advanceTimersByTimeAsync(1_000);
 
             expect(await reading).toEqual({ read: false, answered: true });
@@ -194,14 +204,14 @@ describe('leitura de um Feed', () => {
                 String(url).endsWith('/a') ? new Response('ok') : new Response('erro', { status: 503 }),
             );
 
-            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false, answered: true });
+            expect(await readFeed(FEED, twoAddresses, POLL_AT)).toEqual({ read: false, answered: true });
         });
 
         it('o timeout vale para os dois endereços juntos', async () => {
             vi.useFakeTimers();
             stubNetwork(hang);
 
-            const reading = readFeed(FEED, twoAddresses);
+            const reading = readFeed(FEED, twoAddresses, POLL_AT);
             await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
 
             expect(await reading).toEqual({ read: false, answered: false });
@@ -226,7 +236,7 @@ describe('leitura de um Feed', () => {
             }),
         };
 
-        const reading = await readFeed(FEED, long);
+        const reading = await readFeed(FEED, long, POLL_AT);
 
         if (!reading.read) throw new Error('Feed não lido');
         expect(reading.incidents[0].title).toHaveLength(500);
@@ -236,14 +246,14 @@ describe('leitura de um Feed', () => {
     it.each([['vazio', ''], ['só com espaços', '   ']])('Incident com título %s é conteúdo fora do formato: Feed não lido', async (_, title) => {
         stubNetwork(async () => new Response(title));
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true });
         expect(console.error).toHaveBeenCalledWith(expect.stringContaining(FEED.id), expect.any(Error));
     });
 
     it('sem endereço próprio no leitor, busca a URL do catálogo', async () => {
         const fetchMock = stubNetwork(async () => new Response('x'));
 
-        await readFeed(FEED, reader);
+        await readFeed(FEED, reader, POLL_AT);
 
         expect(fetchMock.mock.calls[0][0]).toBe(FEED.url);
     });
@@ -275,7 +285,7 @@ describe('a duração e o resultado de cada leitura vão para o log', () => {
     it('uma leitura bem-sucedida registra a fonte, o resultado e a duração', async () => {
         stubNetwork(async () => new Response('x'));
 
-        await readFeed(FEED, reader);
+        await readFeed(FEED, reader, POLL_AT);
 
         expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/acme-feed.*lida.*\d+ ms/));
     });
@@ -295,7 +305,7 @@ describe('a duração e o resultado de cada leitura vão para o log', () => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         stubNetwork(hang);
 
-        const pending = readFeed(FEED, reader);
+        const pending = readFeed(FEED, reader, POLL_AT);
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
         await pending;
 
@@ -308,7 +318,7 @@ describe('a duração e o resultado de cada leitura vão para o log', () => {
     it('a duração não faz parte do resultado', async () => {
         stubNetwork(async () => new Response('x'));
 
-        const reading = await readFeed(FEED, reader);
+        const reading = await readFeed(FEED, reader, POLL_AT);
 
         expect(Object.keys(reading).sort()).toEqual(['declared', 'incidents', 'read']);
     });

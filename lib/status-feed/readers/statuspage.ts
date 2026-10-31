@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { DeclaredStatus, MaintenancePhase, ProblemStatus, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
+import { withOngoingMaintenance } from "./problem-state";
 
 /** "maintenance" não conta aqui: Maintenance vem das manutenções em andamento, não do indicador. */
 const INDICATOR_STATUS = {
@@ -66,7 +67,8 @@ function toFeedContent(summary: Summary): FeedContent {
         }),
     );
 
-    return { declared: INDICATOR_STATUS[summary.status.indicator], incidents: [...problems, ...maintenances] };
+    const incidents = [...problems, ...maintenances];
+    return { declared: withOngoingMaintenance(INDICATOR_STATUS[summary.status.indicator], incidents), incidents };
 }
 
 /**

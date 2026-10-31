@@ -24,6 +24,7 @@ export interface FeedContent {
  * Leitor de uma família de Feed: só interpreta o conteúdo que a política já obteve, sem nada de rede.
  * `read` valida o conteúdo (schema do Zod) e lança quando ele está fora do formato: o Feed fica não lido.
  * Recebe um corpo por endereço, na mesma ordem. O endereço serve para resolver os links relativos que o Feed publica.
+ * `pollAt` é a hora do Poll: um leitor nunca lê o relógio por conta própria.
  */
 export interface FeedReader {
     /**
@@ -31,8 +32,8 @@ export interface FeedReader {
      * é uma fonte só: um timeout para todos, e o Feed só conta como lido com todos. Basta um responder para a fonte
      * ter respondido.
      */
-    addresses?(catalogUrl: string): string[];
-    read(bodies: string[], addresses: string[]): FeedContent;
+    addresses?(catalogUrl: string, pollAt: Date): string[];
+    read(bodies: string[], addresses: string[], pollAt: Date): FeedContent;
 }
 
 /** Executa uma leitura dentro do timeout, registrando duração e resultado. Devolve null quando ela falha. */
@@ -79,8 +80,8 @@ const isAnswer = (response: Response) => response.status < 500;
  * um não cancela os outros, que correm até o timeout. Um 503 rápido não pode calar um endereço que ia responder,
  * porque "sem resposta" é a base de Down.
  */
-export async function readFeed(source: ReadableSource, reader: FeedReader): Promise<FeedReading<ReadIncident>> {
-    const addresses = reader.addresses?.(source.url) ?? [source.url];
+export async function readFeed(source: ReadableSource, reader: FeedReader, pollAt: Date): Promise<FeedReading<ReadIncident>> {
+    const addresses = reader.addresses?.(source.url, pollAt) ?? [source.url];
     let answered = false;
 
     const fetchBody = async (address: string, signal: AbortSignal): Promise<string> => {
@@ -96,7 +97,7 @@ export async function readFeed(source: ReadableSource, reader: FeedReader): Prom
             if (result.status === "rejected") throw result.reason;
             return result.value;
         });
-        const read = reader.read(bodies, addresses);
+        const read = reader.read(bodies, addresses, pollAt);
         assertTitled(read);
         return read;
     });

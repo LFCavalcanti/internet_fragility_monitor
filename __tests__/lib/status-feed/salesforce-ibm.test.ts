@@ -15,7 +15,7 @@ import type { ReadIncident } from '@/lib/status-feed/types';
 
 let current: MigratedDb;
 
-const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
+const readAll = async (pollAt = new Date()) => readAllProviders(await readActiveCatalog(current.db), pollAt);
 
 async function snapshotEntry(providerId: string) {
     const now = new Date();
@@ -75,7 +75,6 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
 });
@@ -124,12 +123,29 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
         expect((await readProvider('salesforce')).status).toBe('degraded');
     });
 
-    it('sem incidentes ativos: declara Operational, mesmo com manutenção em andamento', async () => {
+    it('sem incidentes ativos: declara Maintenance com manutenção em andamento', async () => {
         respondWith(FEED_URLS.salesforceIncidents, '[]');
 
-        const { feeds, incidents } = await readProvider('salesforce');
+        const { feeds, incidents, status } = await readProvider('salesforce');
+
+        expect(feeds).toMatchObject([{ read: true, declared: 'maintenance' }]);
+        expect(status).toBe('maintenance');
+        expect(incidents.some(i => i.status === 'in_progress')).toBe(true);
+    });
+
+    it('sem incidentes ativos nem manutenção em andamento: declara Operational', async () => {
+        respondWith(FEED_URLS.salesforceIncidents, '[]');
+        respondWith(FEED_URLS.salesforceMaintenances, JSON.stringify(salesforceMaintenances().filter((m: { status: string }) => m.status !== 'Active')));
+
+        const { feeds } = await readProvider('salesforce');
 
         expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
+    });
+
+    it('payload real: um problema aberto prevalece sobre a manutenção em andamento', async () => {
+        const { feeds, incidents } = await readProvider('salesforce');
+
+        expect(feeds).toMatchObject([{ read: true, declared: 'outage' }]);
         expect(incidents.some(i => i.status === 'in_progress')).toBe(true);
     });
 
@@ -177,10 +193,8 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
         });
     });
 
-    it('pede as manutenções a partir de três dias atrás, pela data marcada, no limite da API', async () => {
-        vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-31T12:00:00Z') });
-
-        await readProvider('salesforce');
+    it('pede as manutenções a partir de três dias antes da hora do Poll, pela data marcada, no limite da API', async () => {
+        await readAll(new Date('2026-10-31T12:00:00Z'));
 
         const asked = vi.mocked(fetch).mock.calls.map(c => String(c[0])).find(u => u.startsWith(FEED_URLS.salesforceMaintenances));
         const query = new URL(asked ?? 'https://x.test').searchParams;
@@ -307,9 +321,8 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('captura real: `Outage End` encerra o incidente que ficou com o título INVESTIGATING', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
-        const { feeds, incidents } = await readProvider('ibm-cloud');
+        const { incidents } = await readProvider('ibm-cloud');
 
-        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
         expect(byId(incidents, 'INC2825083')).toMatchObject({
             status: 'resolved',
             title: 'Watson Assistant service is intermittently unavailable',
@@ -342,12 +355,24 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
         });
     });
 
-    it('captura real: manutenção cancelada não é lida, e nenhuma manutenção degrada o Provider', async () => {
+    it('um problema aberto prevalece sobre a manutenção em andamento', async () => {
+        respondWith(
+            FEED_URLS.ibm,
+            ibmRss(ibmItem({ title: 'INVESTIGATING: VPC errors' }), ibmItem({ title: 'MAINTENANCE: Workers', guid: 'CHG1', category: 'maintenance' })),
+        );
+
+        const { feeds, status } = await readProvider('ibm-cloud');
+
+        expect(feeds).toMatchObject([{ read: true, declared: 'degraded' }]);
+        expect(status).toBe('degraded');
+    });
+
+    it('captura real: manutenção cancelada não é lida, e a manutenção em andamento declara Maintenance, sem degradar o Provider', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
         const { feeds, incidents } = await readProvider('ibm-cloud');
 
-        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
+        expect(feeds).toMatchObject([{ read: true, declared: 'maintenance' }]);
         expect(incidents.map(i => i.title).join()).not.toContain('Maintenance for Internet Services');
         expect(incidents).toHaveLength(5);
     });

@@ -27,7 +27,7 @@ function route(prefix: string, handler: FetchHandler) {
     fetchMock.mockImplementation((url, init) => (String(url).startsWith(prefix) ? handler(String(url), init) : previous(url, init)));
 }
 
-const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
+const readAll = async () => readAllProviders(await readActiveCatalog(current.db), new Date());
 
 /** Um Poll que responde, como o agendador grava: lê todos os Providers ativos e grava as leituras. */
 async function poll() {

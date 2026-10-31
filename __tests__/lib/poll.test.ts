@@ -69,3 +69,34 @@ describe('falha ao gravar um Poll', () => {
         expect(heroku.rows[0].status).toBe('unreachable');
     });
 });
+
+describe('a hora do Poll', () => {
+    const POLL_AT = new Date('2026-10-31T12:00:00Z');
+
+    beforeEach(async () => {
+        current = await createMigratedDb();
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.useFakeTimers({ toFake: ['Date'], now: POLL_AT });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('é uma só, a do começo do Poll, para os leitores e para a gravação, mesmo com a rede demorando', async () => {
+        const fetchMock = vi.fn(async (url: string) => {
+            vi.setSystemTime(POLL_AT.getTime() + 5_000);
+            return healthyResponse(String(url));
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        await runPoll(current.db);
+
+        const asked = fetchMock.mock.calls.map(c => String(c[0])).find(u => u.includes('/maintenances?'));
+        expect(new URL(asked ?? 'https://x.test').searchParams.get('startTime')).toBe('2026-10-28T12:00:00.000Z');
+        const checks = await current.client.execute('SELECT DISTINCT checked_at FROM status_checks');
+        expect(checks.rows.map(r => r.checked_at)).toEqual([POLL_AT.getTime() / 1000]);
+    });
+});

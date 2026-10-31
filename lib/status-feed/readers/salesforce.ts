@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { DeclaredStatus, MaintenancePhase, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
-import { problemPhase } from "./problem-state";
+import { problemPhase, withOngoingMaintenance } from "./problem-state";
 
 /**
  * O Feed guarda cerca de 18 mil manutenções, uma por instância, entre 30 dias atrás e um ano à frente, e entrega no
@@ -110,10 +110,8 @@ function toFeedContent(incidents: Incident[], maintenances: Maintenance[]): Feed
         console.warn(`Feed da Salesforce: a lista de manutenções parou no limite de ${MAINTENANCE_LIMIT} itens; as seguintes não foram lidas.`);
     }
 
-    return {
-        declared: declaredStatus(incidents),
-        incidents: [...incidents.map(toProblem), ...maintenances.flatMap(toMaintenance)],
-    };
+    const published = [...incidents.map(toProblem), ...maintenances.flatMap(toMaintenance)];
+    return { declared: withOngoingMaintenance(declaredStatus(incidents), published), incidents: published };
 }
 
 /**
@@ -121,9 +119,9 @@ function toFeedContent(incidents: Incident[], maintenances: Maintenance[]): Feed
  * lista em que o item está. Os incidentes vêm só de `/incidents/active`: quem sai dela foi encerrado.
  */
 export const salesforceReader: FeedReader = {
-    addresses: catalogUrl => {
+    addresses: (catalogUrl, pollAt) => {
         const query = new URLSearchParams({
-            startTime: new Date(Date.now() - MAINTENANCE_LOOKBACK_MS).toISOString(),
+            startTime: new Date(pollAt.getTime() - MAINTENANCE_LOOKBACK_MS).toISOString(),
             sort: "plannedStartTime",
             order: "ASC",
             limit: String(MAINTENANCE_LIMIT),

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { DeclaredStatus, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
-import { problemPhase } from "./problem-state";
+import { problemPhase, withOngoingMaintenance } from "./problem-state";
 
 const COLOR_STATUS = {
     green: "operational",
@@ -71,10 +71,8 @@ function declaredStatus(systems: CurrentStatus["status"]): DeclaredStatus {
 }
 
 function toFeedContent(current: CurrentStatus): FeedContent {
-    return {
-        declared: declaredStatus(current.status),
-        incidents: [...current.incidents.map(toProblem), ...current.scheduled.map(toMaintenance)],
-    };
+    const incidents = [...current.incidents.map(toProblem), ...current.scheduled.map(toMaintenance)];
+    return { declared: withOngoingMaintenance(declaredStatus(current.status), incidents), incidents };
 }
 
 /**

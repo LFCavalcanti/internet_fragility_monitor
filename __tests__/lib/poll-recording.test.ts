@@ -971,7 +971,7 @@ describe("os status gravados seguem o vocabulário do domínio", () => {
         expect(await rows("SELECT id FROM incidents")).toEqual([]);
     }
 
-    it.each(["operational", "degraded", "outage"])("aceita a leitura %s", async declared => {
+    it.each(["operational", "degraded", "outage", "maintenance"])("aceita a leitura %s", async declared => {
         await recordPoll(current.db, [withDeclared(declared)], at);
 
         expect(await checksOf("aws")).toEqual([declared]);
@@ -1071,7 +1071,7 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
     it.each([["github-feed", "github-feed-2"], ["github-feed-2", "github-feed"]])(
         "a manutenção em andamento e a Upcoming Maintenance de %s, não lido, não decidem, mas o andamento continua na lista",
         async (unread, stillRead) => {
-            await recordPoll(current.db, [feedsOf("github", ...FEEDS.map(id => readFrom(id, id === unread ? [inProgress, upcoming] : [])))], earlier);
+            await recordPoll(current.db, [feedsOf("github", ...FEEDS.map(id => (id === unread ? readFrom(id, [inProgress, upcoming], "maintenance") : readFrom(id))))], earlier);
 
             await recordPoll(current.db, [feedsOf("github", ...FEEDS.map(id => (id === stillRead ? readFrom(id) : unreadFrom(id))))], at);
 
@@ -1082,14 +1082,14 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
     );
 
     it("com os dois Feeds lidos, a manutenção e a Upcoming Maintenance de qualquer um decidem", async () => {
-        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress, upcoming]))], at);
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress, upcoming], "maintenance"))], at);
 
         expect(await decisionOf("github")).toMatchObject({ status: "maintenance", upcomingMaintenance: { count: 1 }, partialReading: null });
     });
 
     it("sob Partial Reading, os Incidents do Feed lido seguem decidindo", async () => {
         await recordPoll(current.db, [
-            feedsOf("github", unreadFrom("github-feed"), readFrom("github-feed-2", [inProgress, upcoming])),
+            feedsOf("github", unreadFrom("github-feed"), readFrom("github-feed-2", [inProgress, upcoming], "maintenance")),
         ], at);
 
         expect(await decisionOf("github")).toMatchObject({ status: "maintenance", upcomingMaintenance: { count: 1 }, partialReading: { unread: 1, total: 2 } });
@@ -1105,11 +1105,45 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
         expect(decision.incidents.map(i => i.title)).toEqual(["Old window"]);
     });
 
-    it("antes do primeiro Poll depois da migration, a linha antiga continua decidindo como antes", async () => {
+    it("a linha gravada antes de Maintenance ser declarada não quebra a leitura e se corrige no primeiro Poll", async () => {
+        await recordPoll(current.db, [feedRead("github", [inProgress])], earlier);
+
+        const before = await decisionOf("github");
+        expect(before.status).toBe("operational");
+        expect(before.incidents.map(i => i.title)).toEqual(["Network upgrade"]);
+
+        await recordPoll(current.db, [feedRead("github", [inProgress], "maintenance")], at);
+
+        expect((await decisionOf("github")).status).toBe("maintenance");
+    });
+
+    it("a linha antiga, sem a lista de Feeds, também não quebra a leitura e se corrige no primeiro Poll", async () => {
         await seedOldRow({ title: "Old window", kind: "maintenance", status: "in_progress" });
         await current.client.execute(`INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('aws', 'operational', ${seconds(earlier)})`);
 
+        const before = await decisionOf("aws");
+        expect(before.status).toBe("operational");
+        expect(before.incidents.map(i => i.title)).toEqual(["Old window"]);
+
+        await recordPoll(current.db, [feedRead("aws", [maintenance("Old window", { externalId: "m", status: "in_progress" })], "maintenance")], at);
+
         expect((await decisionOf("aws")).status).toBe("maintenance");
+    });
+
+    it("Maintenance gravada volta na leitura pelo Feed que a declarou, e o pior estado do Provider fica na linha", async () => {
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress], "maintenance"))], at);
+
+        expect(await checksOf("github")).toEqual(["maintenance"]);
+        const { reading } = (await readSnapshot(current.db, at)).providers.find(e => e.provider.id === "github")!;
+        expect(reading.feeds.map(f => (f.read ? f.declared : null))).toEqual(["operational", "maintenance"]);
+    });
+
+    it("Maintenance de um Feed não esconde o Degraded de outro na linha gravada, em qualquer ordem", async () => {
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed", [inProgress], "maintenance"), readFrom("github-feed-2", [], "degraded"))], earlier);
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed", [], "degraded"), readFrom("github-feed-2", [inProgress], "maintenance"))], at);
+
+        expect(await checksOf("github")).toEqual(["degraded", "degraded"]);
+        expect((await decisionOf("github")).status).toBe("degraded");
     });
 
     it("um Incident de Feed desativado fica na lista, mesmo sem linha de leitura no Poll", async () => {
@@ -1333,7 +1367,7 @@ describe("a leitura gravada vale pelo que foi lido, mesmo que o catálogo mude a
 
     it("com um Feed a mais no catálogo, cada Incident segue no seu Feed e a contagem da Partial Reading não muda", async () => {
         const inProgress = maintenance("Network upgrade", { externalId: "m", status: "in_progress" });
-        await recordPoll(current.db, [feedRead("github", [inProgress])], earlier);
+        await recordPoll(current.db, [feedRead("github", [inProgress], "maintenance")], earlier);
 
         await addSecondGithubFeed();
 
@@ -1343,7 +1377,7 @@ describe("a leitura gravada vale pelo que foi lido, mesmo que o catálogo mude a
     it("um Feed não lido continua não lido quando outro Feed entra no catálogo: o Incident dele não decide", async () => {
         await addSecondGithubFeed();
         const inProgress = maintenance("Network upgrade", { externalId: "m", status: "in_progress" });
-        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress]))], earlier);
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress], "maintenance"))], earlier);
         await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), unreadFrom("github-feed-2"))], at);
 
         await current.client.execute(

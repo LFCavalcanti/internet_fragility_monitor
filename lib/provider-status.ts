@@ -15,9 +15,10 @@ export type ProviderStatus =
     | "unreachable";
 
 /**
- * Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida.
+ * Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida. O estado vem só do declarado:
+ * Maintenance é declarada na leitura, e nenhum Incident muda o estado aqui.
  * Um Feed não lido pode trazer os Incidents já gravados dele: entram nos Recent Incidents,
- * mas não decidem o estado nem a Upcoming Maintenance, que seriam dado velho tomado por atual.
+ * mas não contam para a Upcoming Maintenance, que seria dado velho tomado por atual.
  * `answered` diz se a fonte respondeu mesmo sem poder ser lida (conteúdo fora do formato, por exemplo), o que
  * impede Down. É obrigatório: um campo esquecido não pode virar um Down falso.
  */
@@ -67,7 +68,12 @@ export interface ProviderStatusDecision {
 }
 
 /** Precedência dos estados que vêm de Feeds lidos, do pior para o melhor. */
-const PRECEDENCE: ProviderStatus[] = ["outage", "degraded", "maintenance", "operational"];
+const PRECEDENCE: DeclaredStatus[] = ["outage", "degraded", "maintenance", "operational"];
+
+/** O pior estado declarado entre os Feeds lidos. Sem nenhum, não há estado declarado. */
+export function worstDeclared(declared: readonly DeclaredStatus[]): DeclaredStatus | undefined {
+    return PRECEDENCE.find(s => declared.includes(s));
+}
 
 /** Tamanho da lista que os resolvidos completam; os ativos nunca são cortados. */
 const RECENT_INCIDENTS_LIST_SIZE = 3;
@@ -136,15 +142,8 @@ function decideStatus({
     probes,
     previousPollUnanswered,
 }: Omit<ProviderStatusInput, "now">): ProviderStatus {
-    const readFeeds = feeds.filter(f => f.read);
-
-    if (readFeeds.length > 0) {
-        const candidates = readFeeds.map((f): ProviderStatus => {
-            const ongoing = f.incidents.some(i => i.kind === "maintenance" && i.status === "in_progress");
-            return f.declared === "operational" && ongoing ? "maintenance" : f.declared;
-        });
-        return PRECEDENCE.find(s => candidates.includes(s)) ?? "operational";
-    }
+    const declared = worstDeclared(feeds.flatMap(f => (f.read ? [f.declared] : [])));
+    if (declared) return declared;
 
     if (probes.some(Boolean)) {
         return accessOnly ? "operational" : "unreachable";

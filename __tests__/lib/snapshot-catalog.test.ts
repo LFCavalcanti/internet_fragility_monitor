@@ -339,8 +339,8 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         expect(await decisionFor("cloudflare")).toMatchObject({ status: "unreachable", accessOnly: false });
     });
 
-    it("com dois Feeds lidos e manutenção em andamento gravada, o estado sai igual ao de cada Feed com os seus Incidents", async () => {
-        await checkedTwoFeeds("cloudflare", "operational", ["operational", "operational"]);
+    it("com dois Feeds lidos e Maintenance declarada por um deles, o Provider fica em Maintenance", async () => {
+        await checkedTwoFeeds("cloudflare", "maintenance", ["operational", "maintenance"]);
         await current.client.execute(
             "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
         );
@@ -349,9 +349,9 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
     });
 
     it.each([
-        [["operational", "degraded"]],
-        [["degraded", "operational"]],
-    ])("manutenção em andamento gravada não esconde o Degraded de outro Feed lido, em qualquer ordem: %j", async declared => {
+        [["maintenance", "degraded"]],
+        [["degraded", "maintenance"]],
+    ])("Maintenance gravada não esconde o Degraded de outro Feed lido, em qualquer ordem: %j", async declared => {
         await current.client.execute(
             "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
         );

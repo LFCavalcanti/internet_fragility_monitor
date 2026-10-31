@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { decideProviderStatus, type FeedReading } from '@/lib/provider-status';
-import type { IncidentData, MaintenanceIncident, ProblemIncident } from '@/lib/status-feed/types';
+import type { DeclaredStatus, IncidentData, MaintenanceIncident, ProblemIncident } from '@/lib/status-feed/types';
 import { hoursBefore } from '../helpers/time';
 
 const now = new Date('2026-10-26T15:00:00Z');
@@ -24,7 +24,7 @@ const maintenance = (overrides: Partial<MaintenanceIncident> = {}): MaintenanceI
 });
 
 const feed = (
-    declared: 'operational' | 'degraded' | 'outage',
+    declared: DeclaredStatus,
     incidents: IncidentData[] = [],
 ): FeedReading => ({ read: true, declared, incidents });
 
@@ -68,11 +68,11 @@ describe('decideProviderStatus', () => {
         expect(decision.incidents).toEqual([]);
     });
 
-    it('manutenção em andamento vira Maintenance quando o Provider declara Operational', () => {
+    it('um Feed que declara Maintenance deixa o Provider em Maintenance, com a manutenção na lista', () => {
         const ongoing = maintenance({ status: 'in_progress', title: 'Network upgrade' });
         const decision = decideProviderStatus({
             accessOnly: false,
-            feeds: [feed('operational', [ongoing])],
+            feeds: [feed('maintenance', [ongoing])],
             probes: [],
             previousPollUnanswered: false,
             now,
@@ -83,17 +83,30 @@ describe('decideProviderStatus', () => {
         expect(decision.incidents.map(i => i.title)).toEqual(['Network upgrade']);
     });
 
-    it('manutenção em andamento nunca prevalece sobre Degraded nem Outage', () => {
+    it('o estado vem só do declarado: uma manutenção em andamento num Feed Operational fica na lista, sem mudar o estado', () => {
+        const ongoing = maintenance({ status: 'in_progress', title: 'Network upgrade' });
+        const decision = decideProviderStatus({
+            accessOnly: false,
+            feeds: [feed('operational', [ongoing])],
+            probes: [],
+            previousPollUnanswered: false,
+            now,
+        });
+
+        expect(decision.status).toBe('operational');
+        expect(decision.incidents.map(i => i.title)).toEqual(['Network upgrade']);
+    });
+
+    it('Maintenance declarada por um Feed nunca prevalece sobre Degraded nem Outage de outro', () => {
         const ongoing = maintenance({ status: 'in_progress' });
         for (const declared of ['degraded', 'outage'] as const) {
-            const decision = decideProviderStatus({
-                accessOnly: false,
-                feeds: [feed(declared, [ongoing])],
-                probes: [],
-                previousPollUnanswered: false,
-                now,
-            });
-            expect(decision.status).toBe(declared);
+            for (const feeds of [
+                [feed('maintenance', [ongoing]), feed(declared)],
+                [feed(declared), feed('maintenance', [ongoing])],
+            ]) {
+                const decision = decideProviderStatus({ accessOnly: false, feeds, probes: [], previousPollUnanswered: false, now });
+                expect(decision.status).toBe(declared);
+            }
         }
     });
 
@@ -187,8 +200,8 @@ describe('decideProviderStatus', () => {
 
             expect(decide(feed('operational'), feed('outage'), feed('degraded'))).toBe('outage');
             expect(decide(feed('operational'), feed('degraded'))).toBe('degraded');
-            expect(decide(feed('operational'), feed('operational', [ongoing]))).toBe('maintenance');
-            expect(decide(feed('degraded'), feed('operational', [ongoing]))).toBe('degraded');
+            expect(decide(feed('operational'), feed('maintenance', [ongoing]))).toBe('maintenance');
+            expect(decide(feed('degraded'), feed('maintenance', [ongoing]))).toBe('degraded');
             expect(decide(feed('operational'), feed('operational'))).toBe('operational');
         });
 
@@ -371,7 +384,7 @@ describe('decideProviderStatus', () => {
     });
 
     describe('Recent Incidents', () => {
-        const decide = (incidents: IncidentData[], declared: 'operational' | 'degraded' | 'outage' = 'operational') =>
+        const decide = (incidents: IncidentData[], declared: DeclaredStatus = 'operational') =>
             decideProviderStatus({ accessOnly: false, feeds: [feed(declared, incidents)], probes: [], previousPollUnanswered: false, now });
         const titles = (incidents: IncidentData[]) => incidents.map(i => i.title);
 
@@ -409,7 +422,7 @@ describe('decideProviderStatus', () => {
                 createdAt: hoursBefore(now, 24 * 6),
                 scheduledFor: hoursBefore(now, 3),
             });
-            const decision = decide([ongoing]);
+            const decision = decide([ongoing], 'maintenance');
             expect(decision.status).toBe('maintenance');
             expect(titles(decision.incidents)).toEqual(['Datacenter migration']);
         });
