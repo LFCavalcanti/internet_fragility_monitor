@@ -125,6 +125,27 @@ describe('decideInternetHealth', () => {
         });
     });
 
+    it('um Major Provider em Down e um comum em Outage são Critical, com o Down na lista em minúsculas', () => {
+        const health = decide([provider('aws', 'down'), provider('heroku', 'outage')]);
+
+        expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage across 2 providers. Internet stability is at risk.');
+        expect(health.highlight).toEqual({
+            type: 'down',
+            title: 'Widespread Outage',
+            providerName: 'Multiple Providers',
+            description: 'Outages detected in AWS (status page and service not responding), Heroku.',
+        });
+    });
+
+    it('um Major Provider em Outage e um comum em Degraded citam só o Major Provider, sem "Widespread Outage"', () => {
+        const health = decide([provider('aws', 'outage'), provider('heroku', 'degraded')]);
+
+        expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage at AWS. Internet stability is at risk.');
+        expect(health.highlight).toMatchObject({ title: 'Major Outage', providerName: 'AWS' });
+    });
+
     it('três Providers comuns em Outage ou Down são Critical, com o Down na lista em minúsculas', () => {
         const health = decide([
             provider('heroku', 'outage'),
