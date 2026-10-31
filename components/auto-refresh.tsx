@@ -3,16 +3,17 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export function AutoRefresh() {
+/** Pede uma nova renderização ao servidor no ritmo da cadência dos Polls, que a página entrega. */
+export function AutoRefresh({ cadenceMs }: { cadenceMs: number }) {
     const router = useRouter();
 
     useEffect(() => {
         const interval = setInterval(() => {
             router.refresh();
-        }, 5 * 60 * 1000); // 5 minutes
+        }, cadenceMs);
 
         return () => clearInterval(interval);
-    }, [router]);
+    }, [router, cadenceMs]);
 
     return null;
 }

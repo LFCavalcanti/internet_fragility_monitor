@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
 import { feedFixture, hang, healthyResponse, outcomeOf } from "../helpers/status-feed";
 
-import { runPoll } from "@/lib/cron";
+import { runPoll } from "@/lib/poll";
 import { readActiveCatalog, readSnapshot, recordPoll } from "@/lib/poll-recording";
 import { decideProviderStatus } from "@/lib/provider-status";
 import { readAllProviders } from "@/lib/status-feed";

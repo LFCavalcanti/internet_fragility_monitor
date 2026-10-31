@@ -1,57 +1,39 @@
 import cron from "node-cron";
 import type { Database } from "./db";
-import { readActiveCatalog, readSnapshot, recordPoll } from "./poll-recording";
-import { readAllProviders } from "./status-feed";
-import { noSourceAnswered } from "./status-feed/provider-reading";
+import { runPoll } from "./poll";
+import { readSnapshot } from "./poll-recording";
+import { createPollSchedule, type PollSchedule } from "./poll-schedule";
 
-let isRunning = false;
+const MINUTE_MS = 60 * 1000;
 
-export async function initCron(db: Database) {
-    if (isRunning) return;
-    isRunning = true;
-
-    console.log("Initializing Cron Job...");
-
-    // Check last update time
-    try {
-        const { lastPollAt } = await readSnapshot(db, new Date());
-
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
-        if (!lastPollAt || lastPollAt < fiveMinutesAgo) {
-            console.log("Last update was older than 5 minutes (or never). Triggering immediate update...");
-            await runPoll(db);
-        } else {
-            console.log(`Data is fresh (last updated ${lastPollAt.toISOString()}). Skipping immediate update.`);
-        }
-    } catch (error) {
-        console.error("Error checking last update time:", error);
-
-        // Fallback to running if check fails
-        await runPoll(db);
+/**
+ * A expressão do `node-cron` para uma cadência. O campo de minutos só repete por igual dentro da hora se o ciclo
+ * for um divisor de 60: com 7 minutos, dispararia aos 56 e de novo aos 0, 4 minutos depois.
+ */
+export function cronExpressionFor(cadenceMs: number): string {
+    const minutes = cadenceMs / MINUTE_MS;
+    if (!Number.isInteger(minutes) || minutes >= 60 || 60 % minutes !== 0) {
+        throw new Error(`Cadência de ${cadenceMs} ms não cabe numa expressão do node-cron: use um divisor de 60 minutos.`);
     }
-
-    // Schedule to run every 5 minutes
-    cron.schedule("*/5 * * * *", () => {
-        console.log("Running scheduled Poll...");
-        runPoll(db);
-    });
+    return `*/${minutes} * * * *`;
 }
 
 /**
- * Um Poll: lê todas as fontes e grava, a não ser que nenhuma tenha respondido, que é falha do próprio monitor.
- * Nunca rejeita: uma falha de leitura ou de gravação vai ao log, não grava nada e o agendador segue para o próximo Poll.
+ * O agendamento do processo. Fica no módulo porque só a instrumentação importa este arquivo, e o Next chama
+ * `register` uma vez por servidor: o bundle das páginas não tem uma segunda cópia que possa agendar de novo.
  */
-export async function runPoll(db: Database) {
-    try {
-        const readings = await readAllProviders(await readActiveCatalog(db));
-        if (noSourceAnswered(readings)) {
-            console.error("Poll descartado: nenhuma fonte de nenhum Provider respondeu (falha do próprio monitor). Nada foi gravado.");
-            return;
-        }
-        await recordPoll(db, readings);
-        console.log(`Updated status for ${readings.length} providers.`);
-    } catch (error) {
-        console.error("Poll não gravado:", error);
-    }
+let pollSchedule: PollSchedule | undefined;
+
+/** Adaptador da política de Poll Schedule: o `node-cron` só dispara, e a política decide. */
+export function initCron(db: Database): Promise<void> {
+    pollSchedule ??= createPollSchedule({
+        clock: () => new Date(),
+        schedule: (cadenceMs, fire) => {
+            cron.schedule(cronExpressionFor(cadenceMs), fire);
+        },
+        poll: () => runPoll(db),
+        readLastPollAt: async () => (await readSnapshot(db, new Date())).lastPollAt,
+    });
+
+    return pollSchedule.start();
 }

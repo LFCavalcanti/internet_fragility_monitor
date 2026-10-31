@@ -1,14 +1,17 @@
 // @vitest-environment node
 /**
- * Agendamento do Poll no banco real das migrations (SQLite em memória).
- * Só o relógio do agendador (`node-cron`) e a rede são simulados.
+ * O adaptador do Poll Schedule: `node-cron` dispara a política, ligada ao banco real das migrations (SQLite em memória).
+ * Só o `node-cron` e a rede são simulados. As regras da política estão em `poll-schedule.test.ts`, com tudo falso.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMigratedDb, type MigratedDb } from '../helpers/migrated-db';
 import { healthyResponse } from '../helpers/status-feed';
+import { cronExpressionFor } from '@/lib/cron';
 
 const mockSchedule = vi.hoisted(() => vi.fn());
 vi.mock('node-cron', () => ({ default: { schedule: mockSchedule } }));
+
+const MINUTE = 60 * 1000;
 
 let current: MigratedDb;
 
@@ -20,11 +23,26 @@ const pollOf = (minutesAgo: number) =>
         args: [Math.floor(Date.now() / 1000) - minutesAgo * 60],
     });
 
-// O guarda de "uma vez só" fica no módulo: cada teste recebe um módulo novo.
+// O agendamento do processo fica no módulo: cada teste recebe um módulo novo.
 const loadCron = () => import('@/lib/cron');
 
-/** Quantas linhas um Poll grava: uma por Provider do catálogo, cada um com o seu Feed ou Probes. */
+/** Quantas linhas um Poll grava: uma por Provider do catálogo. */
 const ACTIVE_PROVIDERS = 13;
+
+describe('expressão do node-cron', () => {
+    it('sai da cadência em minutos', () => {
+        expect(cronExpressionFor(5 * MINUTE)).toBe('*/5 * * * *');
+        expect(cronExpressionFor(10 * MINUTE)).toBe('*/10 * * * *');
+    });
+
+    it.each([
+        ['não fecha a hora: o último intervalo sairia mais curto', 7 * MINUTE],
+        ['não é um número inteiro de minutos', 90 * 1000],
+        ['não cabe no campo de minutos', 60 * MINUTE],
+    ])('recusa uma cadência que %s', (_, cadenceMs) => {
+        expect(() => cronExpressionFor(cadenceMs)).toThrow(/cadência/i);
+    });
+});
 
 describe('agendamento do Poll', () => {
     beforeEach(async () => {
@@ -58,7 +76,7 @@ describe('agendamento do Poll', () => {
         expect(mockSchedule).toHaveBeenCalledTimes(1);
     });
 
-    it('roda um Poll na hora quando o último tem mais de 5 minutos', async () => {
+    it('lê a hora do último Poll no banco: com o último antigo, grava um Poll na hora', async () => {
         await pollOf(10);
         const { initCron } = await loadCron();
 
@@ -67,17 +85,16 @@ describe('agendamento do Poll', () => {
         expect(await checksCount()).toBe(1 + ACTIVE_PROVIDERS);
     });
 
-    it('não roda um Poll na hora quando o último é recente', async () => {
+    it('lê a hora do último Poll no banco: com o último recente, não grava nada', async () => {
         await pollOf(1);
         const { initCron } = await loadCron();
 
         await initCron(current.db);
 
-        expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Data is fresh'));
         expect(await checksCount()).toBe(1);
     });
 
-    it('roda um Poll na hora quando nenhum foi gravado', async () => {
+    it('com o banco vazio, grava um Poll na hora', async () => {
         const { initCron } = await loadCron();
 
         await initCron(current.db);
@@ -91,7 +108,7 @@ describe('agendamento do Poll', () => {
 
         await initCron(current.db);
 
-        expect(console.error).toHaveBeenCalledWith('Error checking last update time:', expect.any(Error));
+        expect(console.error).toHaveBeenCalledWith('Error checking last Poll time:', expect.any(Error));
         expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
         expect(mockSchedule).toHaveBeenCalledTimes(1);
     });
@@ -103,83 +120,8 @@ describe('agendamento do Poll', () => {
 
         const scheduledPoll = mockSchedule.mock.calls[0][1];
         await scheduledPoll();
-        await vi.waitFor(async () => expect(await checksCount()).toBe(1 + ACTIVE_PROVIDERS));
-    });
-});
 
-describe('falha ao gravar um Poll', () => {
-    beforeEach(async () => {
-        vi.resetModules();
-        mockSchedule.mockReset();
-        current = await createMigratedDb();
-        vi.stubGlobal('fetch', vi.fn(async (url: string) => healthyResponse(String(url))));
-        vi.spyOn(console, 'log').mockImplementation(() => {});
-        vi.spyOn(console, 'error').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-        vi.unstubAllGlobals();
-        vi.restoreAllMocks();
-    });
-
-    it('vai ao log, não derruba o agendador nem deixa nada gravado, e o Poll seguinte grava', async () => {
-        await current.client.execute(`CREATE TRIGGER fail_write BEFORE INSERT ON status_checks WHEN NEW.provider_id = 'heroku'
-            BEGIN SELECT RAISE(ABORT, 'falha simulada'); END`);
-        const { runPoll } = await loadCron();
-
-        await expect(runPoll(current.db)).resolves.toBeUndefined();
-
-        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
-        expect(await checksCount()).toBe(0);
-
-        await current.client.execute('DROP TRIGGER fail_write');
-        await runPoll(current.db);
-
-        expect(await checksCount()).toBe(ACTIVE_PROVIDERS);
-    });
-
-    it('falha de leitura do catálogo também vai ao log, sem rejeitar', async () => {
-        const { runPoll } = await loadCron();
-        current.client.close();
-
-        await expect(runPoll(current.db)).resolves.toBeUndefined();
-
-        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
-    });
-
-    it('um Incident sem título deixa só aquele Feed não lido, e o Poll grava os demais Providers', async () => {
-        vi.mocked(fetch).mockImplementation(async url =>
-            String(url).endsWith('/api/v4/current-status')
-                ? Response.json({
-                      status: [{ system: 'Apps', status: 'green' }],
-                      incidents: [{ id: 1, title: '   ', state: 'investigating', created_at: '2026-10-30T10:00:00Z', updated_at: '2026-10-30T10:00:00Z' }],
-                      scheduled: [],
-                  })
-                : healthyResponse(String(url)),
-        );
-        const { runPoll } = await loadCron();
-
-        await runPoll(current.db);
-
-        expect(console.error).not.toHaveBeenCalledWith('Poll não gravado:', expect.anything());
-        expect(await checksCount()).toBe(ACTIVE_PROVIDERS);
-        const heroku = await current.client.execute("SELECT status FROM status_checks WHERE provider_id = 'heroku'");
-        expect(heroku.rows[0].status).toBe('unreachable');
-    });
-});
-
-describe('Poll descartado', () => {
-    beforeEach(async () => {
-        vi.resetModules();
-        mockSchedule.mockReset();
-        current = await createMigratedDb();
-        vi.spyOn(console, 'log').mockImplementation(() => {});
-        vi.spyOn(console, 'error').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-        vi.unstubAllGlobals();
-        vi.restoreAllMocks();
+        expect(await checksCount()).toBe(1 + ACTIVE_PROVIDERS);
     });
 
     it('no primeiro Poll da inicialização, sem nenhuma resposta, nada é gravado e o agendador sobe', async () => {

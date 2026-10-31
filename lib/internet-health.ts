@@ -6,6 +6,7 @@
 import type { ProviderStatus, ProviderStatusDecision } from "./provider-status";
 import type { SnapshotProvider } from "./poll-recording";
 import { isClosed } from "./incident-status";
+import { isStaleSnapshot } from "./poll-schedule";
 
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
 
@@ -24,6 +25,8 @@ export interface InternetHealthInput {
     lastPollAt: Date | null;
     /** Relógio: a hora em que o Snapshot é apresentado. */
     now: Date;
+    /** Cadência dos Polls; sem ela, vale a da política de Poll Schedule. */
+    cadenceMs?: number;
 }
 
 /** Destaque do hero: um Provider com o Incident principal, ou a menção a vários Providers. */
@@ -56,12 +59,6 @@ export type HeroState = InternetHealth | StaleSnapshotState;
 /** Texto do estado neutro (árvore de decisões, seção 3). */
 export const STALE_TEXT = "Sem leitura recente";
 
-/**
- * Stale Snapshot: mais de três ciclos de Poll de 5 minutos.
- * O Ticket 17 (Poll Schedule) passa a derivar o limite da cadência central.
- */
-export const STALE_SNAPSHOT_AFTER_MS = 3 * 5 * 60 * 1000;
-
 /** Texto combinado para Down (árvore de decisões, seção 10). */
 export const DOWN_TEXT = "Status page e serviço sem resposta";
 
@@ -72,9 +69,10 @@ export function decideInternetHealth({
     providers,
     lastPollAt,
     now,
+    cadenceMs,
 }: InternetHealthInput): HeroState {
     // Um Stale Snapshot não pode ser apresentado como o estado atual: vence qualquer faixa, inclusive Critical.
-    if (lastPollAt === null || now.getTime() - lastPollAt.getTime() > STALE_SNAPSHOT_AFTER_MS) {
+    if (isStaleSnapshot(lastPollAt, now, cadenceMs)) {
         return { status: "Stale", lastPollAt };
     }
 

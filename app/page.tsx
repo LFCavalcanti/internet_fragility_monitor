@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { readSnapshot } from "@/lib/poll-recording";
+import { POLL_CADENCE_MS } from "@/lib/poll-schedule";
 import { StatusCard } from "@/components/status-card";
 import { HeroSection } from "@/components/hero-section";
 import { StaleSnapshotNotice } from "@/components/stale-snapshot-notice";
@@ -27,7 +28,7 @@ export default async function Home() {
 
     return (
         <main className="min-h-screen bg-transparent flex flex-col">
-            <AutoRefresh />
+            <AutoRefresh cadenceMs={POLL_CADENCE_MS} />
             <HeroSection health={health} />
 
             <div className="max-w-7xl mx-auto space-y-8 px-8 mt-12 pb-12 w-full">
