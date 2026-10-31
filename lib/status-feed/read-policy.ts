@@ -65,6 +65,11 @@ function withinRecordLimits(incident: PublishedIncident): PublishedIncident {
     };
 }
 
+/** Incident sem título é conteúdo fora do formato: o problema fica neste Feed, em vez de recusar o Poll de todos na gravação. */
+function assertTitled({ incidents }: FeedContent) {
+    if (incidents.some(incident => incident.title.trim() === "")) throw new Error("Incident sem título");
+}
+
 /** O que conta como resposta de uma fonte, Feed ou Probe: qualquer código HTTP abaixo de 500. */
 const isAnswer = (response: Response) => response.status < 500;
 
@@ -86,7 +91,9 @@ export async function readFeed(source: ReadableSource, reader: FeedReader): Prom
 
     const content = await applyReadPolicy(source, async signal => {
         const bodies = await Promise.all(addresses.map(address => fetchBody(address, signal)));
-        return reader.read(bodies, addresses);
+        const read = reader.read(bodies, addresses);
+        assertTitled(read);
+        return read;
     });
     if (!content) return { read: false, answered };
 

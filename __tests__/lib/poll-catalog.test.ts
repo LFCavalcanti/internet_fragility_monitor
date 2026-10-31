@@ -422,9 +422,9 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         everySource(hang);
 
-        const job = runPoll(current.db);
+        const poll = runPoll(current.db);
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
-        await job;
+        await poll;
 
         expect(await totalChecks()).toBe(0);
         expect(console.error).toHaveBeenCalledWith(discarded);

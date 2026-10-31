@@ -66,7 +66,3 @@ export type Provider = typeof providers.$inferSelect;
 export type ProviderSource = typeof providerSources.$inferSelect;
 
 export type Incident = typeof incidents.$inferSelect;
-export type NewIncident = typeof incidents.$inferInsert;
-
-export type StatusCheck = typeof statusChecks.$inferSelect;
-export type NewStatusCheck = typeof statusChecks.$inferInsert;

@@ -147,7 +147,7 @@ describe('falha ao gravar um Poll', () => {
         expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
     });
 
-    it('um Incident inválido num Provider desfaz o Poll de todos', async () => {
+    it('um Incident sem título deixa só aquele Feed não lido, e o Poll grava os demais Providers', async () => {
         vi.mocked(fetch).mockImplementation(async url =>
             String(url).endsWith('/api/v4/current-status')
                 ? Response.json({
@@ -161,8 +161,10 @@ describe('falha ao gravar um Poll', () => {
 
         await runPoll(current.db);
 
-        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.objectContaining({ message: expect.stringContaining('heroku') }));
-        expect(await checksCount()).toBe(0);
+        expect(console.error).not.toHaveBeenCalledWith('Poll não gravado:', expect.anything());
+        expect(await checksCount()).toBe(ACTIVE_PROVIDERS);
+        const heroku = await current.client.execute("SELECT status FROM status_checks WHERE provider_id = 'heroku'");
+        expect(heroku.rows[0].status).toBe('unreachable');
     });
 });
 

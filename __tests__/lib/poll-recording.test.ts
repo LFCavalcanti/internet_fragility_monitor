@@ -48,7 +48,7 @@ const checksOf = async (providerId: string) =>
 
 async function seedIncident(overrides: Record<string, unknown> = {}) {
     const row = {
-        id: "inc-1", provider_id: "aws", title: "Old issue", description: null, status: "investigating", kind: "problem",
+        id: "inc-1", provider_id: "aws", title: "Old incident", description: null, status: "investigating", kind: "problem",
         scheduled_for: null, created_at: seconds(hoursBefore(at, 2)), updated_at: seconds(hoursBefore(at, 2)), resolved_at: null,
         ...overrides,
     };
@@ -154,7 +154,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
         await seedIncident({ description: "Old description" });
 
         await recordPoll(current.db, [
-            feedRead("aws", [problem("Old issue", { status: "monitoring", description: "New description" })]),
+            feedRead("aws", [problem("Old incident", { status: "monitoring", description: "New description" })]),
         ], at);
 
         expect(await incidentsOf("aws")).toEqual([
@@ -168,7 +168,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
     it("mantém a descrição gravada quando a atualização não traz outra", async () => {
         await seedIncident({ description: "Kept" });
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Old issue", { status: "identified" })])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Old incident", { status: "identified" })])], at);
 
         expect((await incidentsOf("aws"))[0]).toMatchObject({ status: "identified", description: "Kept" });
     });
@@ -176,7 +176,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
     it("não toca no Incident que veio igual", async () => {
         await seedIncident();
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Old issue")])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Old incident")])], at);
 
         expect((await incidentsOf("aws"))[0].updated_at).toBe(seconds(hoursBefore(at, 2)));
     });
@@ -185,7 +185,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
         await seedIncident({ id: "old", created_at: seconds(hoursBefore(at, 100)), status: "resolved" });
         await seedIncident({ id: "new", created_at: seconds(hoursBefore(at, 50)), status: "resolved" });
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Old issue")])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Old incident")])], at);
 
         const statusById = Object.fromEntries((await incidentsOf("aws")).map(r => [r.id, r.status]));
         expect(statusById).toEqual({ old: "resolved", new: "investigating" });
@@ -202,7 +202,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
         const moved = new Date("2026-10-30T05:00:00Z");
         await seedIncident({ kind: "maintenance", status: "scheduled", scheduled_for: seconds(new Date("2026-10-29T05:00:00Z")) });
 
-        await recordPoll(current.db, [feedRead("aws", [maintenance("Old issue", { scheduledFor: moved })])], at);
+        await recordPoll(current.db, [feedRead("aws", [maintenance("Old incident", { scheduledFor: moved })])], at);
 
         expect((await incidentsOf("aws"))[0].scheduled_for).toBe(seconds(moved));
     });
@@ -211,7 +211,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
         const scheduledFor = new Date("2026-10-29T05:00:00Z");
         await seedIncident({ kind: "maintenance", status: "scheduled", scheduled_for: seconds(scheduledFor) });
 
-        await recordPoll(current.db, [feedRead("aws", [maintenance("Old issue", { scheduledFor })])], at);
+        await recordPoll(current.db, [feedRead("aws", [maintenance("Old incident", { scheduledFor })])], at);
 
         expect((await incidentsOf("aws"))[0].updated_at).toBe(seconds(hoursBefore(at, 2)));
     });
@@ -221,7 +221,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
         const scheduledFor = new Date("2026-10-29T05:00:00Z");
         await seedIncident({ kind: "maintenance", status: "completed", resolved_at: seconds(earlier) });
 
-        await recordPoll(current.db, [feedRead("aws", [maintenance("Old issue", { scheduledFor })])], at);
+        await recordPoll(current.db, [feedRead("aws", [maintenance("Old incident", { scheduledFor })])], at);
 
         expect((await incidentsOf("aws"))[0]).toMatchObject({
             status: "scheduled", scheduled_for: seconds(scheduledFor), resolved_at: null,
@@ -231,14 +231,14 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
     it("o problema que volta de resolved para investigating perde a hora do encerramento", async () => {
         await seedIncident({ status: "resolved", resolved_at: seconds(earlier) });
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Old issue")])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Old incident")])], at);
 
         expect((await incidentsOf("aws"))[0]).toMatchObject({ status: "investigating", resolved_at: null });
     });
 
     it.each([
-        ["problem", "resolved", problem("Old issue", { status: "resolved" })],
-        ["maintenance", "completed", maintenance("Old issue", { status: "completed" })],
+        ["problem", "resolved", problem("Old incident", { status: "resolved" })],
+        ["maintenance", "completed", maintenance("Old incident", { status: "completed" })],
     ])("o %s que o Feed encerra (%s) ganha a hora do Poll", async (kind, status, incident) => {
         await seedIncident({ kind, status: kind === "problem" ? "investigating" : "in_progress" });
 
@@ -284,7 +284,7 @@ describe("gravar um Poll: reconciliação de Incidents", () => {
     it("os Incidents de um Provider não encostam nos de outro", async () => {
         await seedIncident({ provider_id: "azure" });
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Old issue")])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Old incident")])], at);
 
         expect(await incidentsOf("aws")).toHaveLength(1);
         expect((await incidentsOf("azure"))[0].status).toBe("investigating");

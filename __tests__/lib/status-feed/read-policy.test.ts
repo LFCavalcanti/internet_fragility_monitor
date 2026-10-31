@@ -210,6 +210,13 @@ describe('leitura de um Feed', () => {
         expect(reading.incidents[0].description).toHaveLength(5000);
     });
 
+    it.each([['vazio', ''], ['só com espaços', '   ']])('Incident com título %s é conteúdo fora do formato: Feed não lido', async (_, title) => {
+        stubNetwork(async () => new Response(title));
+
+        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: true });
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining(FEED.id), expect.any(Error));
+    });
+
     it('sem endereço próprio no leitor, busca a URL do catálogo', async () => {
         const fetchMock = stubNetwork(async () => new Response('x'));
 
