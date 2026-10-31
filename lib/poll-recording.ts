@@ -63,10 +63,10 @@ export interface Snapshot {
     lastPollAt: Date | null;
 }
 
-/** A transação de um Poll, que a reconciliação recebe para consultar e gravar. */
+/** A transação de um Poll, que a reconciliação e a retenção recebem para consultar e gravar. */
 type Writer = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-/** Uma leitura com mais de 90 dias é apagada; a de exatamente 90 dias fica. */
+/** Uma leitura com mais de 90 dias é apagada; a de exatamente 90 dias fica, e as duas mais novas de cada Provider também. */
 const READING_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 /**

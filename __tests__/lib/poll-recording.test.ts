@@ -927,12 +927,13 @@ describe("retenção: as leituras com mais de 90 dias são apagadas ao gravar um
     });
 
     it("Provider inativo não recebe leitura nova e segue a mesma regra: saem as antigas, ficam as duas mais novas", async () => {
-        await pollsOf(silent("heroku"), 300, 200, 120);
+        // Nenhuma vence enquanto o Provider está ativo: a de 100 dias só pode sair depois de ele ficar inativo.
+        await pollsOf(silent("heroku"), 100, 60, 30);
         await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'heroku'");
 
         await recordPoll(current.db, [feedRead("aws")], at);
 
-        expect(await ageInDays("heroku")).toEqual([200, 120]);
+        expect(await ageInDays("heroku")).toEqual([60, 30]);
     });
 
     it("Provider reativado depois de meses volta com a mesma decisão de Down", async () => {
