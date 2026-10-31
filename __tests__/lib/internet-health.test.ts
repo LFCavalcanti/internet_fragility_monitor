@@ -105,6 +105,25 @@ describe('decideInternetHealth', () => {
         });
     });
 
+    it('com vários Incidents ativos, o destaque cita o que mudou por último, e não o Dormant Incident criado depois', () => {
+        const problem = (title: string, createdAt: string, updatedAt: string): IncidentData => ({
+            kind: 'problem',
+            title,
+            status: 'investigating',
+            createdAt: new Date(createdAt),
+            updatedAt: new Date(updatedAt),
+        });
+
+        const health = decide([
+            provider('aws', 'outage', [
+                problem('Service impact: Bahrain, parado', '2026-03-02T09:00:00Z', '2026-09-15T10:00:00Z'),
+                problem('Service disruption: UAE, atualizado', '2026-03-01T12:00:00Z', '2026-10-26T14:00:00Z'),
+            ]),
+        ]);
+
+        expect(health.highlight).toMatchObject({ description: 'Service disruption: UAE, atualizado' });
+    });
+
     it('Major Provider sem Incident ativo cai no texto genérico de Outage', () => {
         expect(decide([provider('aws', 'outage')]).highlight).toMatchObject({
             title: 'Major Outage',

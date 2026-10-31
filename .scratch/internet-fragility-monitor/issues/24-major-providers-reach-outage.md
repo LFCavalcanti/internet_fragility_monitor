@@ -34,3 +34,5 @@
 **Para depois.** Ticket 25: a Cloudflare não foi tocada.
 
 **Migrations novas:** nenhuma.
+
+**Code review da onda 17.** Com a gravidade, o destaque do hero passou a importar mais, e ele citava o Incident ativo criado por último, mesmo Dormant. Agora cita o que mudou por último, pela `updatedAt` da linha, que só muda com novidade publicada: sem gravar a gravidade, como pede a spec, e um Dormant Incident nunca passa à frente de quem conta. Fica uma imprecisão aceita: com dois Incidents que contam, o citado é o de novidade mais recente, mesmo que o outro seja o mais grave. Na Azure, um título "Active - ..." agora vale sobre a palavra "resolved" no texto da descrição, que fecharia o problema e esconderia a Outage.

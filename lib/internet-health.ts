@@ -7,6 +7,7 @@ import type { ProviderStatus, ProviderStatusDecision } from "./provider-status";
 import type { SnapshotProvider } from "./poll-recording";
 import { isClosed } from "./incident-status";
 import { isStaleSnapshot } from "./poll-schedule";
+import type { IncidentData } from "./status-feed/types";
 
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
 
@@ -143,6 +144,18 @@ function outagesHighlight(severe: ProviderHealthEntry[], title: string): HeroHig
     };
 }
 
+const lastChangeMs = (incident: IncidentData) => (incident.updatedAt ?? incident.createdAt).getTime();
+
+/**
+ * O problema aberto que o destaque cita: o que mudou por último. A linha gravada só muda com novidade publicada, então um
+ * Dormant Incident, que não conta para o estado, nunca passa à frente de quem conta.
+ */
+function latestActiveProblem(incidents: IncidentData[]): IncidentData | undefined {
+    return incidents
+        .filter(i => i.kind === "problem" && !isClosed(i))
+        .sort((a, b) => lastChangeMs(b) - lastChangeMs(a))[0];
+}
+
 function singleHighlight({ provider, decision }: ProviderHealthEntry): HeroHighlight {
     const base = { providerName: provider.name, providerLogo: provider.logo };
 
@@ -151,7 +164,7 @@ function singleHighlight({ provider, decision }: ProviderHealthEntry): HeroHighl
         return { ...base, type: "down", title: "Provider Down", description: DOWN_TEXT };
     }
 
-    const active = decision.incidents.find(i => i.kind === "problem" && !isClosed(i));
+    const active = latestActiveProblem(decision.incidents);
 
     return decision.status === "outage"
         ? { ...base, type: "outage", title: "Provider Outage", description: active?.title ?? "Outage reported." }
