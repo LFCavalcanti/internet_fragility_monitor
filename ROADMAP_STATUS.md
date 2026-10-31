@@ -160,4 +160,4 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 
 Ciclo de pendências concluído: todos os tickets 18–25 integrados na `main`, com code review feito em todas as ondas. Antes, o ciclo de arquitetura (02–17) já estava fechado.
 
-Próximo passo: as duas decisões do `ISSUES_ANNOTATION.md`, seção 2.3, e depois o deploy, com as ações da seção 2.1.
+As duas decisões do `ISSUES_ANNOTATION.md`, seção 2.3, foram tomadas. Em aberto: o pedido da seção 3, ainda sem spec, e o deploy, com as ações da seção 2.1.

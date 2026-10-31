@@ -40,11 +40,11 @@ Nenhum item aberto.
 
 ## 2.3 Decisão de produto antes do próximo deploy
 
-- **Aviso de última leitura no card Down:** o card Unreachable avisa "These Incidents come from the last reading and may be out of date.", mas o card Down, que lista os mesmos Incidents antigos, não avisa, porque a spec só pediu no Unreachable. Exemplo: a Vercel para de responder com um Incident aberto; no primeiro Poll o card mostra o aviso e, no segundo, vira Down e o aviso some, com a mesma lista. Decidir se o card Down também mostra o aviso (20, code review).
-- **Destaque do topo pode citar outro Incident do Provider:** o topo cita o Incident aberto com a novidade mais recente, porque o monitor não grava qual Incident causou o estado. Exemplo: o CDN da Cloudflare cai, e o topo mostra "Major Outage: Cloudflare", com o título de um Incident menor sobre um data center em Dallas, atualizado depois. O card lista os dois, e só o título do topo engana. Decidir se fica assim, ou se o monitor passa a gravar qual Incident conta para o estado, o que mudaria a decisão da spec de não gravar a gravidade e precisaria de um ticket com migration (24 e 25, code review).
+- ~~**Aviso de última leitura no card Down:** o card Unreachable avisa "These Incidents come from the last reading and may be out of date.", mas o card Down, que lista os mesmos Incidents antigos, não avisa, porque a spec só pediu no Unreachable. Exemplo: a Vercel para de responder com um Incident aberto; no primeiro Poll o card mostra o aviso e, no segundo, vira Down e o aviso some, com a mesma lista. Decidir se o card Down também mostra o aviso (20, code review).~~ Resolvido por decisão do usuário em 31/10/2026: fica como está, só o card Unreachable mostra o aviso.
+- ~~**Destaque do topo pode citar outro Incident do Provider:** o topo cita o Incident aberto com a novidade mais recente, porque o monitor não grava qual Incident causou o estado. Exemplo: o CDN da Cloudflare cai, e o topo mostra "Major Outage: Cloudflare", com o título de um Incident menor sobre um data center em Dallas, atualizado depois. O card lista os dois, e só o título do topo engana. Decidir se fica assim, ou se o monitor passa a gravar qual Incident conta para o estado, o que mudaria a decisão da spec de não gravar a gravidade e precisaria de um ticket com migration (24 e 25, code review).~~ Resolvido por decisão do usuário em 31/10/2026: destacar o mais relevante. Virou pedido na seção 3.
 
 ---
 
 # 3 - DEVELOPER DEMANDS
 
-Nenhum pedido aberto.
+- **Destaque do topo cita o Incident mais relevante:** com um Provider só no destaque, o título vem do Incident que levou ao estado, e não do que mudou por último. No exemplo da seção 2.3, o topo cita a queda do CDN, e não o Incident menor em Dallas. Por isso, o monitor precisa guardar o que hoje só existe na leitura, e a linha da `spec-declared-severity.md` que diz "A gravidade só é usada na leitura e não é gravada." deixa de valer. Precisa de migration (24 e 25, code review).
