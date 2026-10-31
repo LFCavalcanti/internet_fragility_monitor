@@ -45,7 +45,7 @@ Um módulo de Status Feed concentra a política de leitura: timeout de 10 segund
 - **Classificação de manutenção pelo Feed.** Cada família informa se um item é problema ou manutenção e a fase dele, pela estrutura do próprio Feed: a lista de manutenções da Statuspage.io, o endpoint de manutenções da Salesforce e os equivalentes de cada família. A heurística de texto não volta.
 - **Identidade do Incident.** Cada Incident lido carrega a Provider Source de origem e o id publicado pelo Feed: `id` na Statuspage.io, no Google Cloud, na Heroku e na Salesforce; `guid` nos RSS. O título só é usado quando o Feed não publica id.
 - **Probes.** Rodam para todos os Providers ativos a cada Poll. Qualquer resposta HTTP abaixo de 500 conta como de pé; timeout, erro de rede ou 5xx contam como falha.
-- **Falha do próprio monitor.** Se nenhuma fonte de nenhum Provider ativo respondeu, o Poll é descartado: nada é gravado e o problema vai ao log. Se persistir, o Snapshot vira Stale Snapshot pelas regras da spec de Provider Status.
+- **Falha do próprio monitor.** Se nenhuma fonte de nenhum Provider ativo respondeu, o Poll é descartado: nada é gravado e o problema vai ao log. Se persistir, o Snapshot vira Stale Snapshot pelas regras da spec de Provider Status. A regra de descarte foi substituída por `spec-monitor-failure-discard.md`.
 - **Migration de catálogo.** Ativa os Feeds da Salesforce e da IBM.
 - **Remoção.** Os leitores atuais, inclusive o de ping, são substituídos e apagados.
 

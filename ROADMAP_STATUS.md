@@ -47,6 +47,21 @@ Origem: `arvore-de-decisoes-2026-10-26-arquitetura.md` e as cinco specs em `.scr
 | ~~16~~ | ~~Retenção e limpeza do esquema~~ **(esquema)** | poll-recording | T4 | 15 |
 | ~~17~~ | ~~Política de Poll Schedule~~ | poll-schedule | T5 | 06, 13 |
 
+## 2.1. Ciclo seguinte: pendências do ciclo de arquitetura (tickets 18–25)
+
+Origem: `arvore-de-decisoes-2026-10-31-pendencias.md` e as quatro specs de 31/10/2026 em `.scratch/internet-fragility-monitor/`. O deploy espera este ciclo. Tickets marcados com **(esquema)** criam migration.
+
+| # | Ticket | Spec | Trilha | Bloqueado por |
+|---|---|---|---|---|
+| [18](.scratch/internet-fragility-monitor/issues/18-reader-declares-maintenance-and-receives-poll-time.md) | Leitor declara Maintenance e recebe a hora do Poll | declared-severity | T6 | — |
+| [19](.scratch/internet-fragility-monitor/issues/19-major-outage-at-page-top.md) | Major Outage no topo da página | major-outage | T7 | — |
+| [20](.scratch/internet-fragility-monitor/issues/20-card-in-english-with-unreachable-notice.md) | Card em inglês, com aviso no card Unreachable | major-outage | T8 | — |
+| [21](.scratch/internet-fragility-monitor/issues/21-post-cycle-cleanup.md) | Faxina depois do ciclo de arquitetura **(esquema)** | post-cycle-cleanup | T9 | — |
+| [22](.scratch/internet-fragility-monitor/issues/22-dormant-incident.md) | Dormant Incident | declared-severity | T6 | 18 |
+| [23](.scratch/internet-fragility-monitor/issues/23-partial-monitor-failure-discard.md) | Descarte do Poll por falha parcial do monitor | monitor-failure-discard | T10 | 18 |
+| [24](.scratch/internet-fragility-monitor/issues/24-major-providers-reach-outage.md) | Major Providers chegam a Outage | declared-severity | T6 | 22 |
+| [25](.scratch/internet-fragility-monitor/issues/25-cloudflare-reader-with-core-services.md) | Leitor da Cloudflare com Core Services **(esquema)** | declared-severity | T6 | 24 |
+
 ## 3. Execução em Paralelo (Trilhas)
 
 Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos mesmos arquivos. Trilhas diferentes podem rodar **em paralelo**, cada uma num agente com o seu worktree. Além disso, **nunca rodam dois tickets (esquema) ao mesmo tempo**, mesmo de trilhas diferentes, para o histórico de migrations ficar linear.
@@ -58,6 +73,21 @@ Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos
 | **T3 – Catálogo e Status Feed** | ~~07~~ → ~~08~~ → ~~09~~ → ~~10~~ → ~~11~~ → ~~12~~ | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
 | **T4 – Persistência** | ~~13~~ → ~~14~~ → ~~15~~ → ~~16~~ | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
 | **T5 – Agendamento** | ~~17~~ | agendador, inicialização, atualização automática da página |
+| **T6 – Gravidade declarada** | 18 → 22 → 24 → 25 | leitores, decisão de Provider Status, catálogo de famílias |
+| **T7 – Topo da página** | 19 | módulo de Internet Health, topo da página, aviso de Stale |
+| **T8 – Card** | 20 | card do Provider |
+| **T9 – Faxina** | 21 | catálogo por migration, configuração de testes, teste da consulta da última leitura |
+| **T10 – Descarte do Poll** | 23 | política de leitura, regra de descarte, operação de Poll |
+
+### Colisões do ciclo 18–25
+
+Análise de 31/10/2026, cruzando cada ticket com as áreas de código que ele altera.
+
+- **18 bloqueia o 23:** os dois mexem na política de leitura e no tipo da leitura de um Feed. Depois do 18, o 23 não colide com o 22, que fica nos leitores.
+- **22 vem antes do 24:** com a gravidade primeiro, a `main` ficaria com a AWS em Outage pelos eventos parados do Oriente Médio até a regra de Dormant Incident entrar.
+- **19 e 20 não têm bloqueio:** o card não importa nada do módulo de Internet Health, e os textos do topo ficam todos no 19. Sem a T6, só falta o efeito real em produção, e o deploy espera o ciclo inteiro.
+- **21 e 25 são (esquema):** nunca ao mesmo tempo. As ondas já garantem isso.
+- **18 e 21 tocam a Poll Recording em pontos diferentes:** a regra do estado gravado e a consulta da última leitura. Conflito improvável; se houver, resolve no rebase.
 
 ### Por que há pouco paralelismo neste ciclo
 
@@ -72,7 +102,7 @@ Análise de colisão feita em 26/10/2026, cruzando cada ticket com as áreas de 
 
 ### Ondas
 
-Uma onda só começa quando os tickets da onda anterior de que ela depende estão integrados na `main`. No máximo 4 agentes por vez; este ciclo nunca passa de 2. Os agentes de ticket rodam como `ticket-implementer` (Opus, esforço médio), e o orquestrador acompanha os que estão rodando para pegar os travados ou sem ação há muito tempo (`docs/agents/parallel-work.md`, "Orchestrator role").
+Uma onda só começa quando os tickets da onda anterior de que ela depende estão integrados na `main`. No máximo 4 agentes por vez; o ciclo 02–17 nunca passou de 2, e a onda 15 usa os 4. Os agentes de ticket rodam como `ticket-implementer` (Opus, esforço médio), e o orquestrador acompanha os que estão rodando para pegar os travados ou sem ação há muito tempo (`docs/agents/parallel-work.md`, "Orchestrator role").
 
 | Onda | Em paralelo | Trilhas |
 |---|---|---|
@@ -90,6 +120,10 @@ Uma onda só começa quando os tickets da onda anterior de que ela depende estã
 | 12 | ~~**15**~~ (esquema) | T4 |
 | 13 | ~~**16**~~ (esquema) | T4 |
 | 14 | ~~**17**~~ | T5 |
+| 15 | **18**, **19**, **20**, **21** (esquema) | T6, T7, T8, T9 |
+| 16 | **22**, **23** | T6, T10 |
+| 17 | **24** | T6 |
+| 18 | **25** (esquema) | T6 |
 
 No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint e o code review de dois eixos na `main`, conforme `docs/agents/parallel-work.md`.
 
@@ -112,10 +146,8 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 
 ### Onde paramos (31/10/2026)
 
-Ciclo de revisão de arquitetura concluído: todos os tickets 02–17 integrados na `main`, com code review feito em todas as ondas.
+Ciclo de revisão de arquitetura concluído: todos os tickets 02–17 integrados na `main`, com code review feito em todas as ondas. As decisões pendentes foram fechadas na árvore de 31/10/2026, e viraram quatro specs e os tickets 18–25.
 
-Próximo passo: decisões do usuário em `ISSUES_ANNOTATION.md`, a principal na seção 2.3, e o deploy, com as ações da seção 2.1.
+Próximo passo: onda 15 (18, 19, 20 e 21). Depois do ciclo, o deploy, com as ações do `ISSUES_ANNOTATION.md`, seção 2.1.
 
-Decisões de produto e ações do usuário pendentes: ver `ISSUES_ANNOTATION.md` na raiz (nada bloqueado por elas).
-
-Situação visível conhecida até o Ticket 10: o card da AWS mostra uma lista longa de atualizações do RSS como Incidents ativos (decisão já tomada: agrupar por evento no Ticket 10). Salesforce e IBM aparecem com a marca de "só acesso" até o Ticket 11 ativar os Feeds reais.
+Situação visível conhecida até os tickets 24 e 25: uma queda grande da AWS, da Azure ou do Google Cloud aparece como Degraded, e a Cloudflare pode deixar a página em Critical só por data centers em falha.

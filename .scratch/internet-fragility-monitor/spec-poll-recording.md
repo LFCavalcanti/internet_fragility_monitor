@@ -44,13 +44,13 @@ Um módulo de Poll Recording passa a gravar um Poll inteiro e a ler o Snapshot, 
 ## Implementation Decisions
 
 - **Módulo de Poll Recording.** Tem duas operações no domínio: gravar um Poll e ler o Snapshot. Absorve a camada de acesso, a camada de validação e a reconciliação atuais. O banco é recebido pelo módulo; a aplicação cria a conexão uma vez na inicialização.
-- **Gravar um Poll.** Recebe, para cada Provider, a leitura vinda do Status Feed e o Provider Status decidido. Grava tudo numa transação: uma leitura por Provider, com o Provider Status e a indicação de que nenhuma fonte respondeu, e a reconciliação dos Incidents.
+- **Gravar um Poll.** Recebe, para cada Provider, a leitura vinda do Status Feed. Grava tudo numa transação: uma leitura por Provider, com o pior estado lido e a indicação de que nenhuma fonte respondeu, e a reconciliação dos Incidents. O Provider Status é decidido na leitura do Snapshot, porque depende dos Incidents e do Poll anterior.
 - **Identidade do Incident.** Provider Source mais o id publicado pelo Feed. A tabela de Incidents ganha a fonte e o id externo, com unicidade para o par.
 - **Reconciliação.** Incident novo é inserido; Incident conhecido tem status, descrição e datas atualizados. Incidents ativos de um Feed lido que não os trouxe mais são resolvidos. Incidents de um Feed não lido neste Poll ficam como estão.
 - **Passagem única para os Incidents antigos.** Quando um Incident com id chega e não existe linha com esse id, ele procura uma linha antiga, sem fonte e sem id, ainda aberta, do mesmo Provider e com o mesmo título, e a assume. As linhas antigas abertas que nenhum Incident assumir são resolvidas no fim desse Poll. Depois dessa passagem, o título não é mais chave.
 - **Regra de Down.** A leitura do Snapshot informa, por Provider, se o Poll anterior também ficou sem resposta de nenhuma fonte. O módulo de Provider Status aplica a regra com essa informação.
 - **Ler o Snapshot.** Devolve, para os Providers ativos, a leitura mais recente, a indicação do Poll anterior, os Incidents ativos, os resolvidos dentro da janela de Recent Incident, as manutenções agendadas e a hora do último Poll. Usa um número fixo de consultas.
-- **Retenção.** Ao gravar um Poll, as leituras com mais de 90 dias são apagadas. Incidents nunca são apagados.
+- **Retenção.** Ao gravar um Poll, as leituras com mais de 90 dias são apagadas, menos as duas mais novas de cada Provider. Incidents nunca são apagados.
 - **Schema.** Incidents ganham fonte e id externo. A coluna de tempo de resposta e a coluna de severidade, que nunca é gravada, são removidas.
 - **Limpeza.** Saem as funções sem uso em produção, a diretiva de server action aplicada a módulos que só rodam no servidor e o log da URL do banco.
 

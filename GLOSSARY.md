@@ -9,12 +9,16 @@ Uma empresa de infraestrutura cuja status page é acompanhada, como AWS, Cloudfl
 _Avoid_: service, vendor, serviço
 
 **Provider Catalog**:
-O conjunto de Providers que o monitor conhece, com os dados de cada um. Um Provider do catálogo pode estar ativo, e então é acompanhado, ou inativo, e então sai dos Polls e da página mas mantém o histórico.
+O conjunto de Providers que o monitor conhece, com os dados de cada um. Um Provider do catálogo pode estar ativo, e então é acompanhado, ou inativo, e então sai dos Polls e da página mas mantém seus Incidents.
 _Avoid_: provider list, registry, config
 
 **Provider Source**:
 Um endereço de onde o monitor lê algo sobre um Provider. É um Feed ou um Probe, e um Provider pode ter vários de cada.
 _Avoid_: endpoint, origin, fonte de dados
+
+**Core Service**:
+Um serviço de um Provider do qual sites de terceiros dependem para continuar no ar, como o CDN da Cloudflare. Num Provider com Core Services, o estado geral que ele publica não vale: o Provider Status vem dos Incidents, conforme atinjam ou não esses serviços. Hoje só a Cloudflare tem Core Services.
+_Avoid_: critical service, main service
 
 **Feed**:
 Um Provider Source em que o próprio Provider declara seu estado e seus Incidents, como uma status page Statuspage.io ou um RSS.
@@ -29,7 +33,7 @@ Um Provider marcado no Provider Catalog como aquele cuja falha, sozinha, afeta u
 _Avoid_: big provider, provedor principal
 
 **Poll**:
-Uma rodada de leitura dos Provider Sources de todos os Providers ativos. Um Poll em que nenhum Provider responde é descartado como falha do próprio monitor.
+Uma rodada de leitura dos Provider Sources de todos os Providers ativos. Um Poll em que mais da metade dos Provider Sources não dá resposta nenhuma é descartado como falha do próprio monitor. Uma resposta de erro é resposta: prova que a rede do monitor funciona.
 _Avoid_: job, check run, sync
 
 **Snapshot**:
@@ -58,8 +62,8 @@ O Provider declara um problema parcial: parte dos serviços está lenta ou falha
 _Avoid_: unstable, minor
 
 **Outage**:
-O Provider declara uma falha grave em parte relevante dos serviços.
-_Avoid_: critical, major
+O Provider declara uma falha grave em parte relevante dos serviços. Quem julga a relevância é o Provider: o monitor não reinterpreta a declaração. A exceção é o Provider com Core Services, em que a Outage precisa atingir um deles.
+_Avoid_: critical
 
 **Down**:
 Nenhum Provider Source responde por dois Polls seguidos: nem os Feeds, nem os Probes. Não é declarado pelo Provider, é observado pelo monitor, e é o pior caso possível.
@@ -83,6 +87,10 @@ _Avoid_: event, issue, alert
 Um Incident ainda ativo, de qualquer idade, ou um Incident resolvido há menos de 48 horas.
 _Avoid_: latest incidents
 
+**Dormant Incident**:
+Um Incident ainda ativo sobre o qual o Provider não publica nada há mais de 30 dias. Continua nos Recent Incidents, mas não conta para o Provider Status. Quando o Provider publica um estado geral próprio, vale esse estado.
+_Avoid_: stale incident, old incident
+
 **Upcoming Maintenance**:
 Uma manutenção que o Provider agendou para o futuro e que ainda não começou. Não afeta o Provider Status.
 _Avoid_: scheduled maintenance, maintenance
@@ -94,7 +102,11 @@ O estado da internet como um todo, derivado do Provider Status de todos os Provi
 _Avoid_: global status, overall status
 
 **Critical**:
-Internet Health em que um Major Provider está em Outage ou Down, ou dois ou mais Providers quaisquer estão em Outage ou Down.
+Internet Health em que há uma Major Outage.
+
+**Major Outage**:
+Um Major Provider em Outage ou Down, ou três ou mais Providers quaisquer em Outage ou Down ao mesmo tempo. Fala do efeito na internet, não é um Provider Status: um Provider sozinho, fora dos Major Providers, em Outage, não é uma Major Outage.
+_Avoid_: global outage
 
 **Unstable**:
 Internet Health em que algum Provider está em Degraded, Outage ou Down, sem chegar a Critical.
