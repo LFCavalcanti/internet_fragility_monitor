@@ -11,7 +11,7 @@ import { DOWN_TEXT, decideInternetHealth } from "@/lib/internet-health";
 import { decideProviderStatus } from "@/lib/provider-status";
 import type { ProviderReading } from "@/lib/status-feed/provider-reading";
 import type { DeclaredStatus, PublishedIncident, ReadIncident } from "@/lib/status-feed/types";
-import { feedFixture } from "../helpers/status-feed";
+import { feedFixture, probeReadings } from "../helpers/status-feed";
 import { hoursBefore } from "../helpers/time";
 
 let current: MigratedDb;
@@ -29,11 +29,12 @@ const feedOf = (providerId: string) => `${providerId}-feed`;
 const readFrom = (sourceId: string, incidents: PublishedIncident[] = [], declared: DeclaredStatus = "operational") => ({
     sourceId,
     read: true as const,
+    gotHttpResponse: true,
     declared,
     incidents: incidents.map((incident): ReadIncident => ({ ...incident, sourceId })),
 });
 
-const unreadFrom = (sourceId: string) => ({ sourceId, read: false as const, answered: false });
+const unreadFrom = (sourceId: string) => ({ sourceId, read: false as const, answered: false, gotHttpResponse: false });
 
 type Reading = ProviderReading<ReadIncident>;
 
@@ -153,8 +154,8 @@ describe("gravar um Poll: leituras", () => {
 
     it("Provider só com Probes grava uma leitura só: operational com algum Probe de pé, unreachable sem nenhum, e nenhum Feed", async () => {
         await recordPoll(current.db, [
-            { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [false, true] },
-            { providerId: "salesforce", accessOnly: true, feeds: [], probes: [false, false] },
+            { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: probeReadings(false, true) },
+            { providerId: "salesforce", accessOnly: true, feeds: [], probes: probeReadings(false, false) },
         ], at);
 
         expect(await checksOf("oracle-cloud")).toEqual(["operational"]);
@@ -163,12 +164,12 @@ describe("gravar um Poll: leituras", () => {
     });
 
     it.each<[string, Pick<Reading, "accessOnly" | "feeds" | "probes">, number]>([
-        ["Feed e Probes calados", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: [false, false] }, 1],
-        ["Feed lido", { accessOnly: false, feeds: [readFrom("aws-feed")], probes: [false, false] }, 0],
-        ["Feed não lido com um Probe de pé", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: [false, true] }, 0],
-        ["Feed que respondeu fora do formato", { accessOnly: false, feeds: [{ ...unreadFrom("aws-feed"), answered: true }], probes: [false] }, 0],
-        ["Provider só com Probes calados", { accessOnly: true, feeds: [], probes: [false, false] }, 1],
-        ["Provider só com Probes, um de pé", { accessOnly: true, feeds: [], probes: [true, false] }, 0],
+        ["Feed e Probes calados", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: probeReadings(false, false) }, 1],
+        ["Feed lido", { accessOnly: false, feeds: [readFrom("aws-feed")], probes: probeReadings(false, false) }, 0],
+        ["Feed não lido com um Probe de pé", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: probeReadings(false, true) }, 0],
+        ["Feed que respondeu fora do formato", { accessOnly: false, feeds: [{ ...unreadFrom("aws-feed"), answered: true, gotHttpResponse: true }], probes: probeReadings(false) }, 0],
+        ["Provider só com Probes calados", { accessOnly: true, feeds: [], probes: probeReadings(false, false) }, 1],
+        ["Provider só com Probes, um de pé", { accessOnly: true, feeds: [], probes: probeReadings(true, false) }, 0],
         ["Provider sem nenhuma fonte: não houve o que responder", { accessOnly: true, feeds: [], probes: [] }, 0],
     ])("guarda se nenhuma fonte respondeu: %s", async (_case, reading, expected) => {
         await recordPoll(current.db, [{ providerId: "aws", ...reading }], at);
@@ -744,7 +745,7 @@ describe("passagem única: linhas antigas, sem fonte e sem id", () => {
     it("Provider só com Probes não tem Feed e não reconcilia: a linha antiga fica como está", async () => {
         await seedOldRow({ provider_id: "oracle-cloud" });
 
-        await recordPoll(current.db, [{ providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [true] }], at);
+        await recordPoll(current.db, [{ providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: probeReadings(true) }], at);
 
         expect((await incidentsOf("oracle-cloud"))[0]).toMatchObject({ status: "investigating", resolved_at: null });
     });
@@ -809,7 +810,7 @@ describe("gravar um Poll é uma transação", () => {
 describe("retenção: as leituras com mais de 90 dias são apagadas ao gravar um Poll", () => {
     const daysBefore = (date: Date, days: number) => hoursBefore(date, days * 24);
     const silent = (providerId: string): Reading => ({
-        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: [false, false],
+        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: probeReadings(false, false),
     });
 
     /** A idade em dias, a partir de `from`, de cada leitura do Provider, da mais antiga para a mais nova. */
@@ -1042,8 +1043,8 @@ describe("ler o Snapshot: hora do último Poll", () => {
 
         // Só os Probes de um Provider com Feed responderam.
         await recordPoll(current.db, [
-            { providerId: "aws", accessOnly: false, feeds: [{ sourceId: "aws-feed", read: false, answered: false }], probes: [true] },
-            { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [false] },
+            { providerId: "aws", accessOnly: false, feeds: [{ sourceId: "aws-feed", read: false, answered: false, gotHttpResponse: false }], probes: probeReadings(true) },
+            { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: probeReadings(false) },
         ], at);
 
         expect((await readSnapshot(current.db, at)).lastPollAt).toEqual(at);
@@ -1166,9 +1167,9 @@ describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
         decideProviderStatus({ ...(await entryOf(providerId, clock)).reading, now: clock });
 
     const silent = (providerId: string): Reading => ({
-        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: [false, false],
+        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: probeReadings(false, false),
     });
-    const silentProbes = (providerId: string): Reading => ({ providerId, accessOnly: true, feeds: [], probes: [false, false] });
+    const silentProbes = (providerId: string): Reading => ({ providerId, accessOnly: true, feeds: [], probes: probeReadings(false, false) });
 
     it("o primeiro Poll sem resposta é Unreachable, e a leitura informa que o anterior respondeu", async () => {
         await recordPoll(current.db, [feedRead("aws")], earlier);
@@ -1210,8 +1211,8 @@ describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
     });
 
     it.each<[string, Pick<Reading, "feeds" | "probes">]>([
-        ["só um Probe", { feeds: [unreadFrom("aws-feed")], probes: [true, false] }],
-        ["o Feed, com conteúdo fora do formato", { feeds: [{ ...unreadFrom("aws-feed"), answered: true }], probes: [false, false] }],
+        ["só um Probe", { feeds: [unreadFrom("aws-feed")], probes: probeReadings(true, false) }],
+        ["o Feed, com conteúdo fora do formato", { feeds: [{ ...unreadFrom("aws-feed"), answered: true, gotHttpResponse: true }], probes: probeReadings(false, false) }],
     ])("responder não é ser lido: %s entre os dois Polls também zera a contagem", async (_case, answered) => {
         await recordPoll(current.db, [silent("aws")], earlier);
         await recordPoll(current.db, [{ providerId: "aws", accessOnly: false, ...answered }], at);
@@ -1224,7 +1225,7 @@ describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
     });
 
     it("num Provider com Feed, o Feed sem resposta com Probe de pé nunca é Down, por mais Polls que passem", async () => {
-        const feedSilent: Reading = { ...silent("aws"), probes: [true, true] };
+        const feedSilent: Reading = { ...silent("aws"), probes: probeReadings(true, true) };
         await recordPoll(current.db, [feedSilent], earlier);
         await recordPoll(current.db, [feedSilent], at);
         await recordPoll(current.db, [feedSilent], later);
@@ -1248,7 +1249,7 @@ describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
         await recordPoll(db, [silentProbes("oracle-cloud")], at);
         expect(await decisionOf("oracle-cloud", at)).toMatchObject({ status: "down", accessOnly: true });
 
-        await recordPoll(db, [{ ...silentProbes("oracle-cloud"), probes: [false, true] }], later);
+        await recordPoll(db, [{ ...silentProbes("oracle-cloud"), probes: probeReadings(false, true) }], later);
         expect(await decisionOf("oracle-cloud", later)).toMatchObject({ status: "operational", accessOnly: true });
     });
 
@@ -1272,7 +1273,7 @@ describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
         await addSecondGithubFeed();
         const allSilent = feedsOf("github", unreadFrom("github-feed"), unreadFrom("github-feed-2"));
         await recordPoll(current.db, [allSilent], earlier);
-        await recordPoll(current.db, [feedsOf("github", unreadFrom("github-feed"), { ...unreadFrom("github-feed-2"), answered: true })], at);
+        await recordPoll(current.db, [feedsOf("github", unreadFrom("github-feed"), { ...unreadFrom("github-feed-2"), answered: true, gotHttpResponse: true })], at);
 
         expect(await decisionOf("github", at)).toMatchObject({ status: "unreachable", partialReading: null });
 
@@ -1350,7 +1351,7 @@ describe("a leitura gravada vale pelo que foi lido, mesmo que o catálogo mude a
 
     it("um \"operational\" dos Probes não é lido como Feed quando um Feed é ativado", async () => {
         await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'salesforce-feed'");
-        await recordPoll(current.db, [{ providerId: "salesforce", accessOnly: true, feeds: [], probes: [true] }], earlier);
+        await recordPoll(current.db, [{ providerId: "salesforce", accessOnly: true, feeds: [], probes: probeReadings(true) }], earlier);
 
         await current.client.execute("UPDATE provider_sources SET active = 1 WHERE id = 'salesforce-feed'");
 

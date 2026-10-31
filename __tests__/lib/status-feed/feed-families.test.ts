@@ -412,6 +412,7 @@ describe('Heroku', () => {
 
         const decision = decideProviderStatus({
             ...reading,
+            probes: reading.probes.map(p => p.answered),
             previousPollUnanswered: false,
             now: new Date('2026-10-31T00:58:30Z'),
         });

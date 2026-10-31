@@ -140,16 +140,18 @@ function assertRecordable(reading: ProviderReading) {
 /**
  * A linha que um Poll grava de um Provider em `status_checks`. O pior estado lido basta para o vence-o-pior da leitura;
  * sem Feed lido, a leitura é "unreachable". `feeds` guarda o resto, quais Feeds foram lidos neste Poll e o que cada um
- * declarou, e diz como a leitura foi feita: lista vazia, por Probes.
+ * declarou, e diz como a leitura foi feita: lista vazia, por Probes. A resposta HTTP de cada fonte não é gravada: ela só
+ * decide o descarte, que acontece antes da gravação.
  */
 function toRecordedReading({ feeds, probes }: ProviderReading) {
     const recordedFeeds = feeds.map((f): RecordedFeed => ({ sourceId: f.sourceId, declared: f.read ? f.declared : null }));
     const declared = recordedFeeds.flatMap(f => f.declared ?? []);
-    const readByProbes = feeds.length === 0 && probes.some(Boolean);
+    const probesAnswered = probes.map(p => p.answered);
+    const readByProbes = feeds.length === 0 && probesAnswered.some(Boolean);
 
     return {
         status: readByProbes ? "operational" : worstDeclared(declared) ?? "unreachable",
-        noSourceAnswered: sourcesUnanswered(feeds, probes),
+        noSourceAnswered: sourcesUnanswered(feeds, probesAnswered),
         feeds: recordedFeeds,
     };
 }

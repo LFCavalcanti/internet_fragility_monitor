@@ -5,9 +5,9 @@
  * Uma leitura nunca rejeita: a falha de uma fonte não afeta as outras, nem as do mesmo Provider.
  * Termos conforme GLOSSARY.md.
  */
-import type { FeedReading } from "../provider-status";
 import type { ProviderSource } from "../schema";
 import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "../incident-status";
+import type { PolledFeedReading, ProbeReading } from "./provider-reading";
 import type { DeclaredStatus, PublishedIncident, ReadIncident } from "./types";
 
 /** Quanto uma leitura espera, do pedido ao fim do conteúdo, antes de contar como falha. */
@@ -70,7 +70,10 @@ function assertTitled({ incidents }: FeedContent) {
     if (incidents.some(incident => incident.title.trim() === "")) throw new Error("Incident sem título");
 }
 
-/** O que conta como resposta de uma fonte, Feed ou Probe: qualquer código HTTP abaixo de 500. */
+/**
+ * O que conta como resposta de uma fonte para a regra de Down, Feed ou Probe: qualquer código HTTP abaixo de 500.
+ * Dar resposta HTTP é outro conceito (`gotHttpResponse`): qualquer código, inclusive 5xx, e serve só para o descarte do Poll.
+ */
 const isAnswer = (response: Response) => response.status < 500;
 
 /**
@@ -78,14 +81,16 @@ const isAnswer = (response: Response) => response.status < 500;
  * Ler é mais do que responder: um Feed com 200 fora do formato ou com 404 fica não lido, mas a fonte respondeu
  * (`answered`), pela mesma regra dos Probes. Num Feed em mais de um endereço, basta um responder: por isso a falha de
  * um não cancela os outros, que correm até o timeout. Um 503 rápido não pode calar um endereço que ia responder,
- * porque "sem resposta" é a base de Down.
+ * porque "sem resposta" é a base de Down. O mesmo vale para a resposta HTTP: basta um endereço dar uma.
  */
-export async function readFeed(source: ReadableSource, reader: FeedReader, pollAt: Date): Promise<FeedReading<ReadIncident>> {
+export async function readFeed(source: ReadableSource, reader: FeedReader, pollAt: Date): Promise<PolledFeedReading<ReadIncident>> {
     const addresses = reader.addresses?.(source.url, pollAt) ?? [source.url];
     let answered = false;
+    let gotHttpResponse = false;
 
     const fetchBody = async (address: string, signal: AbortSignal): Promise<string> => {
         const response = await fetch(address, { cache: "no-store", signal });
+        gotHttpResponse = true;
         answered ||= isAnswer(response);
         if (!response.ok) throw new Error(`resposta HTTP ${response.status} em ${address}`);
         return response.text();
@@ -101,10 +106,11 @@ export async function readFeed(source: ReadableSource, reader: FeedReader, pollA
         assertTitled(read);
         return read;
     });
-    if (!content) return { read: false, answered };
+    if (!content) return { read: false, answered, gotHttpResponse };
 
     return {
         read: true,
+        gotHttpResponse,
         declared: content.declared,
         incidents: content.incidents.map(incident => ({ ...withinRecordLimits(incident), sourceId: source.id })),
     };
@@ -112,15 +118,18 @@ export async function readFeed(source: ReadableSource, reader: FeedReader, pollA
 
 /**
  * Lê um Probe: qualquer resposta HTTP abaixo de 500 conta como de pé, inclusive 302 e 403 (o redirecionamento
- * não é seguido: a resposta do próprio endereço é a que conta). Timeout, erro de rede e 5xx contam como falha.
+ * não é seguido: a resposta do próprio endereço é a que conta). Timeout, erro de rede e 5xx contam como falha,
+ * mas um 5xx é resposta HTTP.
  */
-export async function readProbe(source: ReadableSource): Promise<boolean> {
+export async function readProbe(source: ReadableSource): Promise<ProbeReading> {
+    let gotHttpResponse = false;
     const answered = await applyReadPolicy(source, async signal => {
         const response = await fetch(source.url, { redirect: "manual", cache: "no-store", signal });
+        gotHttpResponse = true;
         // Só o código importa: o corpo é descartado sem ser baixado.
         await response.body?.cancel().catch(() => {});
         if (!isAnswer(response)) throw new Error(`resposta HTTP ${response.status}`);
         return true;
     });
-    return answered ?? false;
+    return { answered: answered ?? false, gotHttpResponse };
 }

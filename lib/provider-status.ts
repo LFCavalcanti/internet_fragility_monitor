@@ -104,7 +104,6 @@ export function feedAnswered(feed: FeedReading): boolean {
 
 /**
  * Havia fontes e nenhuma respondeu, nem Feeds nem Probes: a base de Down. Sem nenhuma fonte, não houve o que responder.
- * Vale para um Provider e, com as fontes de todos, para o Poll inteiro.
  */
 export function sourcesUnanswered(feeds: readonly FeedReading[], probes: readonly boolean[]): boolean {
     const answers = [...feeds.map(feedAnswered), ...probes];

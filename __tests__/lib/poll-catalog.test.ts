@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
-import { feedFixture, hang, healthyResponse, outcomeOf } from "../helpers/status-feed";
+import { feedFixture, hang, healthyResponse, outcomeOf, probeReadings } from "../helpers/status-feed";
 
 import { runPoll } from "@/lib/poll";
 import { readActiveCatalog, readSnapshot, recordPoll } from "@/lib/poll-recording";
@@ -43,6 +43,9 @@ async function statusChecks(providerId: string): Promise<string[]> {
     });
     return rows.rows.map(r => String(r.status));
 }
+
+/** Quantas linhas um Poll grava: uma por Provider ativo do catálogo. */
+const ACTIVE_PROVIDERS = 13;
 
 const ORACLE_STATUS_PAGE = "https://ocistatus.oraclecloud.com";
 const ORACLE_LOGIN = "https://www.oracle.com/cloud/sign-in.html";
@@ -145,7 +148,7 @@ describe("Poll guiado pelo Provider Catalog", () => {
         expect(fetchedUrls()).toEqual(
             expect.arrayContaining(["https://dash.cloudflare.com", "https://github.com/login", ORACLE_LOGIN]),
         );
-        for (const reading of readings) expect(reading.probes).toEqual([true, true]);
+        for (const reading of readings) expect(reading.probes).toEqual(probeReadings(true, true));
     });
 
     it("um Probe inativo não roda, nem o de Provider inativo", async () => {
@@ -412,8 +415,8 @@ describe("Probes ao lado dos Feeds", () => {
         await vi.advanceTimersByTimeAsync(1);
         const cloudflare = (await reading).find(r => r.providerId === "cloudflare");
 
-        expect(cloudflare?.feeds).toEqual([{ sourceId: "cloudflare-feed", read: true, declared: "operational", incidents: [] }]);
-        expect(cloudflare?.probes).toEqual([false, true]);
+        expect(cloudflare?.feeds).toEqual([{ sourceId: "cloudflare-feed", read: true, gotHttpResponse: true, declared: "operational", incidents: [] }]);
+        expect(cloudflare?.probes).toEqual(probeReadings(false, true));
     });
 
     it("Probe sem resposta não muda o estado declarado pelo Feed lido", async () => {
@@ -425,12 +428,23 @@ describe("Probes ao lado dos Feeds", () => {
     });
 });
 
-describe("Poll sem resposta de nenhuma fonte é descartado", () => {
+describe("Poll com mais da metade das fontes sem resposta HTTP é descartado", () => {
     const discarded = expect.stringContaining("Poll descartado");
     const totalChecks = async () => (await current.client.execute("SELECT count(*) AS n FROM status_checks")).rows[0].n;
 
     /** A rede inteira responde com `handler`. */
     const everySource = (handler: FetchHandler) => fetchMock.mockImplementation(handler);
+
+    const probeUrls = async () => (await readActiveCatalog(current.db)).sources.filter(s => s.kind === "probe").map(s => s.url);
+
+    /** Uma falha parcial de rede: `count` Probes ficam sem resposta, e todas as outras fontes respondem. */
+    const silencingProbes = async (count: number): Promise<FetchHandler> => {
+        const silent = new Set((await probeUrls()).slice(0, count));
+        return async url => {
+            if (silent.has(url)) throw new TypeError("fetch failed");
+            return healthyResponse(url);
+        };
+    };
 
     it("sem rede: nada é gravado, o problema vai ao log e os Incidents ficam como estavam", async () => {
         await current.client.execute(
@@ -471,13 +485,48 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         expect(console.error).toHaveBeenCalledWith(discarded);
     });
 
-    it("toda fonte com 5xx é sem resposta, a mesma regra dos Probes", async () => {
+    it("o log diz quantas das 38 fontes ficaram sem resposta HTTP", async () => {
+        everySource(async () => { throw new TypeError("fetch failed"); });
+
+        await runPoll(current.db);
+
+        expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/Poll descartado: 38 de 38 fontes/));
+    });
+
+    it("toda fonte com 5xx deu resposta HTTP: o Poll é gravado, sem resposta para Down", async () => {
         everySource(async () => new Response("oops", { status: 503 }));
 
         await runPoll(current.db);
 
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await totalChecks()).toBe(ACTIVE_PROVIDERS);
+        const aws = await current.client.execute("SELECT status, no_source_answered FROM status_checks WHERE provider_id = 'aws'");
+        expect(aws.rows[0]).toMatchObject({ status: "unreachable", no_source_answered: 1 });
+    });
+
+    it("falha de rede em parte das fontes: 20 das 38 sem resposta HTTP descartam, e nada é gravado", async () => {
+        everySource(await silencingProbes(20));
+
+        await runPoll(current.db);
+
         expect(await totalChecks()).toBe(0);
-        expect(console.error).toHaveBeenCalledWith(discarded);
+        expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/Poll descartado: 20 de 38 fontes/));
+    });
+
+    it("com 19 das 38 fontes sem resposta HTTP, exatamente a metade, o Poll é gravado", async () => {
+        everySource(await silencingProbes(19));
+
+        await runPoll(current.db);
+
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await totalChecks()).toBe(ACTIVE_PROVIDERS);
+    });
+
+    it("a resposta HTTP não é gravada: cada Feed guarda só a fonte e o que declarou", async () => {
+        await runPoll(current.db);
+
+        const row = await current.client.execute("SELECT feeds FROM status_checks WHERE provider_id = 'aws'");
+        expect(JSON.parse(String(row.rows[0].feeds))).toEqual([{ sourceId: "aws-feed", declared: "operational" }]);
     });
 
     it("o Snapshot do último Poll respondido continua o mesmo", async () => {
@@ -492,10 +541,11 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         expect((await readSnapshot(current.db, new Date())).lastPollAt).toEqual(lastPollAt);
     });
 
-    it("o Poll gravado só com os Probes de Providers com Feed respondendo renova a hora do último Poll", async () => {
+    it("o Poll gravado só com os Probes respondendo renova a hora do último Poll", async () => {
         const before = Date.now();
+        const probes = await probeUrls();
         everySource(async url => {
-            if (String(url) === "https://dash.cloudflare.com") return new Response(null, { status: 302 });
+            if (probes.includes(url)) return new Response(null, { status: 302 });
             throw new TypeError("fetch failed");
         });
 
@@ -506,7 +556,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         expect(lastPollAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
     });
 
-    it("basta um Probe de um Provider responder: o Poll é gravado", async () => {
+    it("um Probe respondendo não basta mais: com as outras 37 fontes sem resposta HTTP, o Poll é descartado", async () => {
         everySource(async url => {
             if (String(url) === ORACLE_LOGIN) return new Response(null, { status: 302 });
             throw new TypeError("fetch failed");
@@ -514,16 +564,12 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
 
         await runPoll(current.db);
 
-        expect(console.error).not.toHaveBeenCalledWith(discarded);
-        expect(await statusChecks("oracle-cloud")).toEqual(["operational"]);
-        expect(await statusChecks("aws")).toEqual(["unreachable"]);
+        expect(await totalChecks()).toBe(0);
+        expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/Poll descartado: 37 de 38 fontes/));
     });
 
-    it("um Feed com HTTP 200 fora do formato respondeu: o Poll é gravado, com o Feed não lido", async () => {
-        everySource(async url => {
-            if (String(url).startsWith(CLOUDFLARE_FEED)) return new Response("<html>não é JSON</html>");
-            throw new TypeError("fetch failed");
-        });
+    it("um Feed com HTTP 200 fora do formato deu resposta HTTP: o Poll é gravado, com o Feed não lido", async () => {
+        everySource(async () => new Response("<html>não é JSON</html>"));
 
         await runPoll(current.db);
 
@@ -618,6 +664,27 @@ describe("Down: da rede ao Snapshot", () => {
         await runPoll(current.db);
 
         expect((await decisionOf("aws")).status).toBe("unreachable");
+    });
+
+    it("todas as fontes com 5xx por dois Polls: Unreachable no primeiro e Down no segundo", async () => {
+        const allErrors = async () => new Response("oops", { status: 500 });
+        fetchMock.mockImplementation(allErrors);
+
+        await runPoll(current.db);
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+
+        await runPoll(current.db);
+        expect((await decisionOf("aws")).status).toBe("down");
+    });
+
+    it("um Provider com 5xx em todas as fontes ainda é Down: a regra de Down não muda", async () => {
+        const allErrors = async () => new Response("oops", { status: 500 });
+        AWS_SOURCES.forEach(url => route(url, allErrors));
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("down");
     });
 
     it("Provider só com Probes calados por dois Polls é Down, com a marca de \"só acesso\"", async () => {

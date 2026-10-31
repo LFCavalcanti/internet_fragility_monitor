@@ -72,7 +72,7 @@ describe("migration da identidade do Incident", () => {
         await recordPoll(current.db, [{
             providerId: "cloudflare", accessOnly: false, probes: [],
             feeds: [{
-                sourceId: "cloudflare-feed", read: true, declared: "degraded",
+                sourceId: "cloudflare-feed", read: true, gotHttpResponse: true, declared: "degraded",
                 incidents: [{
                     sourceId: "cloudflare-feed", externalId: "abc", kind: "problem", status: "identified",
                     title: "Network issue", createdAt: at,

@@ -28,6 +28,12 @@ const hangBody = async (_url: unknown, init?: RequestInit) =>
         }),
     );
 
+/** Falhas em que nenhum código HTTP chegou. O timeout tem casos próprios, com o relógio simulado. */
+const NETWORK_FAILURES: [string, Error][] = [
+    ['erro de DNS', new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND status.acme.test') })],
+    ['erro de conexão', new TypeError('fetch failed', { cause: new Error('connect ECONNREFUSED') })],
+];
+
 const stubNetwork = (handler: (url: unknown, init?: RequestInit) => Promise<Response>) => {
     const fetchMock = vi.fn(handler);
     vi.stubGlobal('fetch', fetchMock);
@@ -54,7 +60,7 @@ describe('o tempo de uma leitura é de 10 segundos por Provider Source', () => {
         ['sem resposta', hang, false],
         // O código HTTP chegou: a fonte respondeu, ainda que o conteúdo não tenha chegado até o fim.
         ['com o corpo travado', hangBody, true],
-    ])('um Feed %s fica não lido ao fim do tempo, nem um instante antes', async (_case, network, answered) => {
+    ])('um Feed %s fica não lido ao fim do tempo, nem um instante antes', async (_case, network, responded) => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         stubNetwork(network);
         let reading: unknown;
@@ -66,22 +72,22 @@ describe('o tempo de uma leitura é de 10 segundos por Provider Source', () => {
 
         await vi.advanceTimersByTimeAsync(1);
         await pending;
-        expect(reading).toEqual({ read: false, answered });
+        expect(reading).toEqual({ read: false, answered: responded, gotHttpResponse: responded });
     });
 
     it('um Probe sem resposta conta como falha ao fim do mesmo tempo', async () => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         stubNetwork(hang);
-        let answered: unknown;
+        let reading: unknown;
 
-        const pending = readProbe(PROBE).then(r => (answered = r));
+        const pending = readProbe(PROBE).then(r => (reading = r));
 
         await vi.advanceTimersByTimeAsync(9_999);
-        expect(answered).toBeUndefined();
+        expect(reading).toBeUndefined();
 
         await vi.advanceTimersByTimeAsync(1);
         await pending;
-        expect(answered).toBe(false);
+        expect(reading).toEqual({ answered: false, gotHttpResponse: false });
     });
 });
 
@@ -91,29 +97,30 @@ describe('leitura de um Feed', () => {
 
         expect(await readFeed(FEED, reader, POLL_AT)).toEqual({
             read: true,
+            gotHttpResponse: true,
             declared: 'degraded',
             incidents: [expect.objectContaining({ title: 'conteúdo', sourceId: 'acme-feed', externalId: 'x1' })],
         });
     });
 
-    it.each([500, 503])('resposta %i: Feed não lido e sem resposta, como um Probe com 5xx', async code => {
+    it.each([500, 503])('resposta %i: Feed não lido e sem resposta para Down, como um Probe com 5xx, mas houve resposta HTTP', async code => {
         stubNetwork(async () => new Response('erro', { status: code }));
 
-        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false, gotHttpResponse: true });
     });
 
     it.each([404, 403])('resposta %i: Feed não lido, mas a fonte respondeu, como um Probe abaixo de 500', async code => {
         stubNetwork(async () => new Response('erro', { status: code }));
 
-        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true, gotHttpResponse: true });
     });
 
-    it('erro de rede: Feed não lido e sem resposta', async () => {
+    it.each(NETWORK_FAILURES)('%s: Feed não lido, sem resposta e sem resposta HTTP', async (_case, failure) => {
         stubNetwork(async () => {
-            throw new TypeError('fetch failed');
+            throw failure;
         });
 
-        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: false, gotHttpResponse: false });
     });
 
     it('um leitor que rejeita o conteúdo resulta em Feed não lido, mas a fonte respondeu', async () => {
@@ -124,7 +131,7 @@ describe('leitura de um Feed', () => {
             },
         };
 
-        expect(await readFeed(FEED, refuses, POLL_AT)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, refuses, POLL_AT)).toEqual({ read: false, answered: true, gotHttpResponse: true });
     });
 
     it('o leitor recebe o endereço de onde o conteúdo veio', async () => {
@@ -182,7 +189,7 @@ describe('leitura de um Feed', () => {
 
             await vi.advanceTimersByTimeAsync(1);
             await pending;
-            expect(reading).toEqual({ read: false, answered: false });
+            expect(reading).toEqual({ read: false, answered: false, gotHttpResponse: true });
         });
 
         it('um 503 rápido num endereço não impede o outro de responder depois: a fonte respondeu', async () => {
@@ -196,7 +203,7 @@ describe('leitura de um Feed', () => {
             const reading = readFeed(FEED, twoAddresses, POLL_AT);
             await vi.advanceTimersByTimeAsync(1_000);
 
-            expect(await reading).toEqual({ read: false, answered: true });
+            expect(await reading).toEqual({ read: false, answered: true, gotHttpResponse: true });
         });
 
         it('um endereço respondeu e o outro falhou: o Feed fica não lido, mas a fonte respondeu', async () => {
@@ -204,7 +211,7 @@ describe('leitura de um Feed', () => {
                 String(url).endsWith('/a') ? new Response('ok') : new Response('erro', { status: 503 }),
             );
 
-            expect(await readFeed(FEED, twoAddresses, POLL_AT)).toEqual({ read: false, answered: true });
+            expect(await readFeed(FEED, twoAddresses, POLL_AT)).toEqual({ read: false, answered: true, gotHttpResponse: true });
         });
 
         it('o timeout vale para os dois endereços juntos', async () => {
@@ -214,7 +221,7 @@ describe('leitura de um Feed', () => {
             const reading = readFeed(FEED, twoAddresses, POLL_AT);
             await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
 
-            expect(await reading).toEqual({ read: false, answered: false });
+            expect(await reading).toEqual({ read: false, answered: false, gotHttpResponse: false });
         });
     });
 
@@ -246,7 +253,7 @@ describe('leitura de um Feed', () => {
     it.each([['vazio', ''], ['só com espaços', '   ']])('Incident com título %s é conteúdo fora do formato: Feed não lido', async (_, title) => {
         stubNetwork(async () => new Response(title));
 
-        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true });
+        expect(await readFeed(FEED, reader, POLL_AT)).toEqual({ read: false, answered: true, gotHttpResponse: true });
         expect(console.error).toHaveBeenCalledWith(expect.stringContaining(FEED.id), expect.any(Error));
     });
 
@@ -263,13 +270,21 @@ describe('leitura de um Probe', () => {
     it.each([200, 302, 403, 404, 499])('resposta %i conta como de pé', async code => {
         stubNetwork(async () => new Response(null, { status: code }));
 
-        expect(await readProbe(PROBE)).toBe(true);
+        expect(await readProbe(PROBE)).toEqual({ answered: true, gotHttpResponse: true });
     });
 
-    it.each([500, 503])('resposta %i conta como falha', async code => {
+    it.each([500, 503])('resposta %i conta como falha, mas é resposta HTTP', async code => {
         stubNetwork(async () => new Response(null, { status: code }));
 
-        expect(await readProbe(PROBE)).toBe(false);
+        expect(await readProbe(PROBE)).toEqual({ answered: false, gotHttpResponse: true });
+    });
+
+    it.each(NETWORK_FAILURES)('%s conta como falha, e não é resposta HTTP', async (_case, failure) => {
+        stubNetwork(async () => {
+            throw failure;
+        });
+
+        expect(await readProbe(PROBE)).toEqual({ answered: false, gotHttpResponse: false });
     });
 
     it('o redirecionamento não é seguido: vale a resposta do próprio endereço', async () => {
@@ -320,6 +335,6 @@ describe('a duração e o resultado de cada leitura vão para o log', () => {
 
         const reading = await readFeed(FEED, reader, POLL_AT);
 
-        expect(Object.keys(reading).sort()).toEqual(['declared', 'incidents', 'read']);
+        expect(Object.keys(reading).sort()).toEqual(['declared', 'gotHttpResponse', 'incidents', 'read']);
     });
 });

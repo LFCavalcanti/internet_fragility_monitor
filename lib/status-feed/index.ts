@@ -33,7 +33,7 @@ async function readFeedSource(feed: ProviderSource, pollAt: Date): Promise<Sourc
     if (!reader) {
         // Feed não lido, sem ir à rede: o Poll segue com os demais.
         console.error(`Feed ${feed.id} de ${feed.providerId} não lido: a família "${feed.family}" não tem leitor no código`);
-        return { sourceId: feed.id, read: false, answered: false };
+        return { sourceId: feed.id, read: false, answered: false, gotHttpResponse: false };
     }
     return { sourceId: feed.id, ...(await readFeed(feed, reader, pollAt)) };
 }

@@ -5,17 +5,22 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { decideProviderStatus, readIncidentsOf } from '@/lib/provider-status';
 import type { SnapshotEntry } from '@/lib/poll-recording';
-import type { ProviderReading } from '@/lib/status-feed/provider-reading';
+import type { ProbeReading, ProviderReading } from '@/lib/status-feed/provider-reading';
 import type { IncidentData } from '@/lib/status-feed/types';
 
 /** A leitura de um Provider com o que os testes conferem: o estado que o módulo decide e os Incidents dos Feeds lidos. */
 export function outcomeOf<I extends IncidentData>(reading: ProviderReading<I>) {
+    const probes = reading.probes.map(p => p.answered);
     return {
         ...reading,
-        status: decideProviderStatus({ ...reading, previousPollUnanswered: false, now: new Date() }).status,
+        status: decideProviderStatus({ ...reading, probes, previousPollUnanswered: false, now: new Date() }).status,
         incidents: readIncidentsOf(reading.feeds),
     };
 }
+
+/** Leituras de Probe prontas, por quem respondeu: sem código de erro no meio, responder e dar resposta HTTP coincidem. */
+export const probeReadings = (...answered: boolean[]): ProbeReading[] =>
+    answered.map(a => ({ answered: a, gotHttpResponse: a }));
 
 /** Tudo o que a leitura do Snapshot trouxe de Incidents de um Provider, antes do corte da lista do card. */
 export const snapshotIncidentsOf = (entry: SnapshotEntry) => entry.reading.feeds.flatMap(f => f.incidents ?? []);

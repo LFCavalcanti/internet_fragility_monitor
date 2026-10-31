@@ -6,15 +6,24 @@
 
 **Blocked by:** 18.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A leitura de Feeds e Probes informa se houve resposta HTTP, de forma obrigatória e sem gravar nada
-- [ ] Timeout, erro de DNS e erro de conexão não são resposta HTTP; 404 e 503 são
-- [ ] Num Feed em mais de um endereço, basta um dar resposta HTTP
-- [ ] Com 38 fontes, 20 sem resposta HTTP descartam o Poll e 19 não; exatamente a metade não descarta
-- [ ] Sem nenhuma fonte ativa, o Poll não é descartado
-- [ ] Todas as fontes com 5xx: o Poll é gravado, e dois Polls assim levam a Down
-- [ ] A regra de Down não muda: 5xx continua sem resposta para Down
-- [ ] Um Poll descartado não grava nada, e a sequência de Down continua pelos Polls vizinhos
-- [ ] O log do Poll descartado traz quantas fontes ficaram sem resposta e o total
-- [ ] A regra de descarte continua num lugar só, sem nada de rede
+- [x] A leitura de Feeds e Probes informa se houve resposta HTTP, de forma obrigatória e sem gravar nada
+- [x] Timeout, erro de DNS e erro de conexão não são resposta HTTP; 404 e 503 são
+- [x] Num Feed em mais de um endereço, basta um dar resposta HTTP
+- [x] Com 38 fontes, 20 sem resposta HTTP descartam o Poll e 19 não; exatamente a metade não descarta
+- [x] Sem nenhuma fonte ativa, o Poll não é descartado
+- [x] Todas as fontes com 5xx: o Poll é gravado, e dois Polls assim levam a Down
+- [x] A regra de Down não muda: 5xx continua sem resposta para Down
+- [x] Um Poll descartado não grava nada, e a sequência de Down continua pelos Polls vizinhos
+- [x] O log do Poll descartado traz quantas fontes ficaram sem resposta e o total
+- [x] A regra de descarte continua num lugar só, sem nada de rede
+
+## Comments
+
+- `gotHttpResponse` é obrigatório nas leituras de um Poll (`ProbeReading`, `PolledFeedReading` e `SourcedFeedReading`, em `lib/status-feed/provider-reading.ts`), e `readProbe` passa a devolver `{ answered, gotHttpResponse }`. `FeedReading` e `ProviderStatusInput` não mudam: o Snapshot e a regra de Down seguem sem conhecer a resposta HTTP, e `recordPoll` grava só `answered` e o que já gravava.
+- `noSourceAnswered` saiu de `provider-reading.ts`. A regra agora é `monitorFailure`, que devolve as contagens do log, ou null quando o Poll deve ser gravado. `sourcesUnanswered` segue sendo a base de Down.
+- Com 38 fontes, 19 é exatamente a metade: os casos "19 grava" e "metade grava" da spec coincidem nesse catálogo. A regra também é testada com 4 fontes.
+- Feed de família sem leitor não vai à rede e conta como fonte sem resposta HTTP, pela letra da regra (fonte ativa sem resposta). Em `poll-catalog.test.ts`, os casos em que uma fonte só salvava o Poll mudaram: agora ele é descartado, ou o caso passou a ter a maioria das fontes respondendo.
+- Sem migration.
+

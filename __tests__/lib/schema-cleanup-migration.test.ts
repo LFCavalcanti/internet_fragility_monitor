@@ -134,7 +134,7 @@ describe("migration que remove o tempo de resposta e a severidade", () => {
         await seedOldRows();
         await current.migrateRest();
 
-        await recordPoll(current.db, [{ providerId: "aws", accessOnly: false, probes: [], feeds: [{ sourceId: "aws-feed", read: true, declared: "operational", incidents: [] }] }], at);
+        await recordPoll(current.db, [{ providerId: "aws", accessOnly: false, probes: [], feeds: [{ sourceId: "aws-feed", read: true, gotHttpResponse: true, declared: "operational", incidents: [] }] }], at);
 
         expect((await rows("SELECT max(id) AS id FROM status_checks"))[0].id).toBe(9);
     });

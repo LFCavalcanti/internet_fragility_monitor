@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
+import { probeReadings } from "../helpers/status-feed";
 import { readSnapshot, recordPoll } from "@/lib/poll-recording";
 import { decideProviderStatus } from "@/lib/provider-status";
 import type { ProviderReading } from "@/lib/status-feed/provider-reading";
@@ -26,7 +27,7 @@ const insertOldCheck = (providerId: string, status: string, checkedAt: Date) =>
     });
 
 const silent = (providerId: string): ProviderReading<ReadIncident> => ({
-    providerId, accessOnly: false, feeds: [{ sourceId: `${providerId}-feed`, read: false, answered: false }], probes: [false, false],
+    providerId, accessOnly: false, feeds: [{ sourceId: `${providerId}-feed`, read: false, answered: false, gotHttpResponse: false }], probes: probeReadings(false, false),
 });
 
 async function decisionOf(providerId: string, now: Date) {
@@ -106,8 +107,8 @@ describe("migration da leitura por Provider", () => {
         await current.migrateRest();
 
         await recordPoll(current.db, [{
-            providerId: "aws", accessOnly: false, probes: [true],
-            feeds: [{ sourceId: "aws-feed", read: true, declared: "operational", incidents: [] }],
+            providerId: "aws", accessOnly: false, probes: probeReadings(true),
+            feeds: [{ sourceId: "aws-feed", read: true, gotHttpResponse: true, declared: "operational", incidents: [] }],
         }], at);
 
         expect((await decisionOf("aws", at)).status).toBe("operational");
