@@ -182,10 +182,11 @@ describe("gravar um Poll: leituras", () => {
         expect(await rows("SELECT id FROM status_checks")).toEqual([]);
     });
 
-    it("não grava tempo de resposta: a duração da leitura vai só para o log", async () => {
+    it("a leitura gravada não tem tempo de resposta: a duração da leitura vai só para o log", async () => {
         await recordPoll(current.db, [feedRead("aws")], at);
 
-        expect((await rows("SELECT response_time FROM status_checks"))[0].response_time).toBeNull();
+        const { columns } = await current.client.execute("SELECT * FROM status_checks");
+        expect(columns).toEqual(["id", "provider_id", "status", "checked_at", "no_source_answered", "feeds"]);
     });
 });
 
@@ -802,6 +803,157 @@ describe("gravar um Poll é uma transação", () => {
 
         expect(await checksOf("aws")).toEqual(["operational"]);
         expect((await incidentsOf("aws")).map(r => r.title)).toEqual(["Fine"]);
+    });
+});
+
+describe("retenção: as leituras com mais de 90 dias são apagadas ao gravar um Poll", () => {
+    const daysBefore = (date: Date, days: number) => hoursBefore(date, days * 24);
+    const silent = (providerId: string): Reading => ({
+        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: [false, false],
+    });
+
+    /** A idade em dias, a partir de `from`, de cada leitura do Provider, da mais antiga para a mais nova. */
+    const ageInDays = async (providerId: string, from = at) =>
+        (await rows(`SELECT checked_at FROM status_checks WHERE provider_id = '${providerId}' ORDER BY checked_at, id`))
+            .map(r => (seconds(from) - Number(r.checked_at)) / 86_400);
+
+    const pollsOf = async (reading: Reading, ...daysAgo: number[]) => {
+        for (const days of daysAgo) await recordPoll(current.db, [reading], daysBefore(at, days));
+    };
+
+    const decisionOf = async (providerId: string, clock = at) => {
+        const { reading } = (await readSnapshot(current.db, clock)).providers.find(e => e.provider.id === providerId)!;
+        return decideProviderStatus({ ...reading, now: clock });
+    };
+
+    const failOn = (trigger: string) =>
+        current.client.execute(`CREATE TRIGGER fail_write ${trigger} BEGIN SELECT RAISE(ABORT, 'falha simulada'); END`);
+
+    it("apaga a leitura de 91 dias e mantém a de 89", async () => {
+        await pollsOf(feedRead("aws"), 91, 89);
+
+        await recordPoll(current.db, [feedRead("aws")], at);
+
+        expect(await ageInDays("aws")).toEqual([89, 0]);
+    });
+
+    it("a leitura de exatamente 90 dias fica: só sai a que tem mais de 90", async () => {
+        await pollsOf(feedRead("aws"), 90, 89);
+
+        await recordPoll(current.db, [feedRead("aws")], at);
+
+        expect(await ageInDays("aws")).toEqual([90, 89, 0]);
+    });
+
+    it("um segundo além dos 90 dias já é mais de 90", async () => {
+        await recordPoll(current.db, [feedRead("aws")], new Date(daysBefore(at, 90).getTime() - 1000));
+        await pollsOf(feedRead("aws"), 89);
+
+        await recordPoll(current.db, [feedRead("aws")], at);
+
+        expect(await ageInDays("aws")).toEqual([89, 0]);
+    });
+
+    it("mede a idade pela hora do Poll, não pelo relógio do sistema", async () => {
+        const longAgo = new Date("2020-01-01T00:00:00Z");
+        await recordPoll(current.db, [feedRead("aws")], daysBefore(longAgo, 91));
+        await recordPoll(current.db, [feedRead("aws")], daysBefore(longAgo, 89));
+
+        await recordPoll(current.db, [feedRead("aws")], longAgo);
+
+        expect(await ageInDays("aws", longAgo)).toEqual([89, 0]);
+    });
+
+    it("apaga as leituras antigas de todos os Providers, não só de um", async () => {
+        await pollsOf(feedRead("aws"), 91, 89);
+        await pollsOf(feedRead("azure"), 200, 91, 89);
+
+        await recordPoll(current.db, [feedRead("aws"), feedRead("azure")], at);
+
+        expect(await ageInDays("aws")).toEqual([89, 0]);
+        expect(await ageInDays("azure")).toEqual([89, 0]);
+    });
+
+    it("nunca apaga um Incident, aberto ou encerrado, por mais antigo que seja", async () => {
+        const tenYears = seconds(daysBefore(at, 3650));
+        await seedIncident({ id: "closed", title: "Closed long ago", status: "resolved", created_at: tenYears, resolved_at: tenYears });
+        await seedIncident({ id: "open", title: "Open for years", created_at: tenYears + 1, updated_at: tenYears });
+        await pollsOf(feedUnread("aws"), 91, 89);
+
+        await recordPoll(current.db, [feedUnread("aws")], at);
+
+        expect((await incidentsOf("aws")).map(r => [r.id, r.status])).toEqual([["closed", "resolved"], ["open", "investigating"]]);
+    });
+
+    it("um Poll que falha não apaga nada", async () => {
+        await pollsOf(feedRead("aws"), 91, 89, 1);
+        await failOn("BEFORE INSERT ON incidents WHEN NEW.title = 'Breaks the write'");
+
+        await expect(recordPoll(current.db, [feedRead("aws", [problem("Breaks the write")])], at)).rejects.toThrow();
+
+        expect(await ageInDays("aws")).toEqual([91, 89, 1]);
+    });
+
+    it("uma falha ao apagar desfaz o Poll inteiro", async () => {
+        await pollsOf(feedRead("aws"), 91, 89);
+        await failOn("BEFORE DELETE ON status_checks");
+
+        await expect(recordPoll(current.db, [feedRead("aws", [problem("New issue")])], at)).rejects.toThrow();
+
+        expect(await ageInDays("aws")).toEqual([91, 89]);
+        expect(await incidentsOf("aws")).toEqual([]);
+    });
+
+    it("o Poll anterior fica, por mais antigo que seja: um intervalo longo não muda a regra de Down", async () => {
+        await pollsOf(silent("aws"), 200, 120);
+        await pollsOf(feedRead("azure"), 200, 120);
+
+        await recordPoll(current.db, [silent("aws"), silent("azure")], at);
+
+        expect(await ageInDays("aws")).toEqual([120, 0]);
+        expect((await decisionOf("aws")).status).toBe("down");
+        expect((await decisionOf("azure")).status).toBe("unreachable");
+    });
+
+    it("no Poll seguinte ao intervalo, a leitura antiga deixa de ser o Poll anterior e sai", async () => {
+        await pollsOf(silent("aws"), 200);
+        await recordPoll(current.db, [silent("aws")], at);
+        const next = new Date(at.getTime() + 300_000);
+
+        await recordPoll(current.db, [silent("aws")], next);
+
+        expect(await ageInDays("aws", next)).toHaveLength(2);
+        expect((await decisionOf("aws", next)).status).toBe("down");
+    });
+
+    it("Provider inativo não recebe leitura nova e segue a mesma regra: saem as antigas, ficam as duas mais novas", async () => {
+        await pollsOf(silent("heroku"), 300, 200, 120);
+        await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'heroku'");
+
+        await recordPoll(current.db, [feedRead("aws")], at);
+
+        expect(await ageInDays("heroku")).toEqual([200, 120]);
+    });
+
+    it("Provider reativado depois de meses volta com a mesma decisão de Down", async () => {
+        await pollsOf(silent("heroku"), 300);
+        await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'heroku'");
+        await pollsOf(feedRead("aws"), 100, 50);
+        await current.client.execute("UPDATE providers SET active = 1 WHERE id = 'heroku'");
+
+        await recordPoll(current.db, [silent("heroku"), feedRead("aws")], at);
+
+        expect((await decisionOf("heroku")).status).toBe("down");
+    });
+
+    it("o Snapshot depois da retenção segue o Poll gravado: leitura, hora do último Poll e Incidents", async () => {
+        const open = feedRead("aws", [problem("Long running", { createdAt: daysBefore(at, 100) })], "degraded");
+        await pollsOf(open, 95, 94);
+
+        await recordPoll(current.db, [open], at);
+
+        expect((await readSnapshot(current.db, at)).lastPollAt).toEqual(at);
+        expect(await decisionOf("aws")).toMatchObject({ status: "degraded", incidents: [expect.objectContaining({ title: "Long running" })] });
     });
 });
 

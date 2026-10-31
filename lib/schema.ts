@@ -52,7 +52,6 @@ export const incidents = sqliteTable("incidents", {
     // maintenance: 'scheduled', 'in_progress', 'completed'
     status: text("status").notNull(),
     kind: text("kind").notNull().default("problem"), // 'problem', 'maintenance'
-    severity: text("severity"), // 'minor', 'major', 'critical'
     url: text("url"),
     scheduledFor: integer("scheduled_for", { mode: "timestamp" }), // data marcada para a manutenção começar
     createdAt: integer("created_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
@@ -77,7 +76,6 @@ export const statusChecks = sqliteTable("status_checks", {
     // Pior estado entre os Feeds lidos ('operational', 'degraded', 'outage') ou 'unreachable' sem Feed lido.
     // Provider só com Probes: 'operational' com algum Probe de pé. Down não é gravado: depende do Poll anterior.
     status: text("status").notNull(),
-    responseTime: integer("response_time"),
     checkedAt: integer("checked_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
     noSourceAnswered: integer("no_source_answered", { mode: "boolean" }).notNull().default(false), // nem Feeds, nem Probes
     // Os Feeds ativos no Poll, na ordem do catálogo. Lista vazia: o Provider foi lido só por Probes.

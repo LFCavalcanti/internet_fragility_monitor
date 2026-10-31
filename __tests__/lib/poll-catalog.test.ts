@@ -231,11 +231,12 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
         expect(row.rows[0].status).toBe("investigating");
     });
 
-    it("o tempo de resposta não é gravado com a leitura", async () => {
+    it("a leitura gravada por um Poll não tem tempo de resposta", async () => {
         await poll();
 
-        const rows = await current.client.execute("SELECT DISTINCT response_time FROM status_checks");
-        expect(rows.rows.map(r => r.response_time)).toEqual([null]);
+        const { columns, rows } = await current.client.execute("SELECT * FROM status_checks");
+        expect(rows.length).toBeGreaterThan(0);
+        expect(columns).toEqual(["id", "provider_id", "status", "checked_at", "no_source_answered", "feeds"]);
     });
 
     it("os payloads reais gravados atravessam o Poll até o banco, com estado e Incidents", async () => {
@@ -443,6 +444,19 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         expect(console.error).toHaveBeenCalledWith(discarded);
         const row = await current.client.execute("SELECT status FROM incidents WHERE id = 'inc-1'");
         expect(row.rows[0].status).toBe("investigating");
+    });
+
+    it("um Poll descartado não apaga leituras: a retenção só roda com o Poll gravado", async () => {
+        const insertOldReading = (checkedAt: number) => current.client.execute({
+            sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('aws', 'operational', ?)",
+            args: [checkedAt],
+        });
+        for (const checkedAt of [1, 2, 3]) await insertOldReading(checkedAt);
+        everySource(async () => { throw new TypeError("fetch failed"); });
+
+        await runPoll(current.db);
+
+        expect(await totalChecks()).toBe(3);
     });
 
     it("toda fonte em timeout é sem resposta", async () => {

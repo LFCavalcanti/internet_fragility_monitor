@@ -4,8 +4,8 @@
  * leitura mora nas tabelas não sai deste módulo.
  * Termos conforme GLOSSARY.md.
  */
-import { and, asc, desc, eq, gte, inArray, notInArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
+import { and, asc, desc, eq, gte, inArray, lt, notInArray, or, sql } from "drizzle-orm";
+import { alias, type SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import type { Database } from "./db";
 import {
@@ -65,6 +65,21 @@ export interface Snapshot {
 
 /** A transação de um Poll, que a reconciliação recebe para consultar e gravar. */
 type Writer = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/** Uma leitura com mais de 90 dias é apagada; a de exatamente 90 dias fica. */
+const READING_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Os ids das duas leituras mais novas de um Provider: o último Poll gravado e o anterior. Dois Polls no mesmo segundo
+ * contam como dois. É uma subconsulta presa à linha de fora, que dá o Provider em `providerId`.
+ */
+function twoNewestOf(db: Database | Writer, providerId: SQLiteColumn) {
+    const recent = alias(statusChecks, "recent");
+    return db.select({ id: recent.id }).from(recent)
+        .where(eq(recent.providerId, providerId))
+        .orderBy(desc(recent.checkedAt), desc(recent.id))
+        .limit(2);
+}
 
 // ============================================================================
 // O Provider Catalog só é lido aqui: ele muda por migrations de dados (ADR 0001), nunca pelo código.
@@ -255,8 +270,26 @@ async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderRea
 }
 
 /**
+ * Apaga as leituras com mais de 90 dias, contados de `at`, de todos os Providers, ativos ou não. Incidents nunca saem.
+ * As duas leituras mais novas de cada Provider ficam, qualquer que seja a idade: são o último Poll e o anterior, que a
+ * regra de Down compara sem olhar a hora, e um intervalo longo sem Polls não pode mudar essa decisão.
+ * A lista de Providers faz o `DELETE` usar o índice por Provider e hora, em vez de varrer `status_checks` a cada Poll.
+ */
+async function deleteExpiredReadings(tx: Writer, at: Date) {
+    const kept = alias(statusChecks, "kept");
+    const newestOfEachProvider = tx.select({ id: kept.id }).from(providers).crossJoin(kept)
+        .where(inArray(kept.id, twoNewestOf(tx, providers.id)));
+
+    await tx.delete(statusChecks).where(and(
+        inArray(statusChecks.providerId, tx.select({ id: providers.id }).from(providers)),
+        lt(statusChecks.checkedAt, new Date(at.getTime() - READING_RETENTION_MS)),
+        notInArray(statusChecks.id, newestOfEachProvider),
+    ));
+}
+
+/**
  * Grava um Poll numa transação: as leituras de todos os Providers, com a mesma hora, que é o que as liga a este Poll,
- * e a reconciliação dos Incidents. Qualquer erro rejeita a promessa e não deixa nada gravado.
+ * a reconciliação dos Incidents e a retenção das leituras. Qualquer erro rejeita a promessa e não deixa nada gravado.
  */
 export async function recordPoll(db: Database, readings: readonly ProviderReading<ReadIncident>[], at: Date = new Date()): Promise<void> {
     readings.forEach(assertRecordable);
@@ -266,6 +299,7 @@ export async function recordPoll(db: Database, readings: readonly ProviderReadin
     await db.transaction(async tx => {
         if (checks.length > 0) await tx.insert(statusChecks).values(checks);
         for (const reading of readings) await reconcileIncidents(tx, reading, at);
+        await deleteExpiredReadings(tx, at);
     });
 }
 
@@ -280,12 +314,6 @@ export async function recordPoll(db: Database, readings: readonly ProviderReadin
  * o CROSS JOIN, que no SQLite fixa `providers` por fora. Com um JOIN comum, o planejador varre `status_checks` inteira.
  */
 function latestChecks(db: Database) {
-    const recent = alias(statusChecks, "recent");
-    const twoNewest = db.select({ id: recent.id }).from(recent)
-        .where(eq(recent.providerId, providers.id))
-        .orderBy(desc(recent.checkedAt), desc(recent.id))
-        .limit(2);
-
     return db
         .select({
             providerId: statusChecks.providerId,
@@ -296,7 +324,7 @@ function latestChecks(db: Database) {
         })
         .from(providers)
         .crossJoin(statusChecks)
-        .where(and(eq(providers.active, true), inArray(statusChecks.id, twoNewest)))
+        .where(and(eq(providers.active, true), inArray(statusChecks.id, twoNewestOf(db, providers.id))))
         .orderBy(desc(statusChecks.checkedAt), desc(statusChecks.id));
 }
 
