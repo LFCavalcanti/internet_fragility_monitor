@@ -24,6 +24,8 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Heroku vermelha só em Tools:** o estado da Heroku passou a ser o pior entre Apps, Data e Tools. Um vermelho só em Tools (painel e CLI, com os apps no ar) mostra a Heroku como Outage, e isso conta para o hero, embora sozinha ela não o deixe Critical, por não ser Major Provider. O glossário ampara Degraded para "parte dos serviços", mas não diz se Outage vale para uma parte secundária. Decidir se Tools sozinho chega a Outage (10, code review).
 - **Outage da Salesforce por uma instância:** um impacto `major` aberto vira Outage, mesmo em uma só instância entre centenas: é o que a Salesforce declara (a própria API marca essa instância `MAJOR_INCIDENT_CORE`). O campo `isCore` não serve de filtro, porque veio falso nos 21 incidentes da coleta, inclusive nos três `major`. O glossário pede "parte relevante dos serviços"; se uma instância não basta, a regra muda para olhar quantas instâncias (11).
 - **Site do GitHub no catálogo:** o link do site do GitHub é `https://githubstatus.com`, a status page, e não `https://github.com`. A carga do catálogo copiou o valor que já existia, como a spec mandava. Trocar exige uma migration de dados (07, code review).
+- **Recorrência na AWS e na Azure apaga a anterior:** o id da AWS é serviço e região, e o da Azure é o título em forma de endereço. Um problema que volta no mesmo serviço e região reaproveita a linha do anterior, que some do registro, embora a história 7 peça manter os Incidents como registro do que aconteceu. A data e a descrição passam a ser as da nova ocorrência, então o card fica certo; só o histórico perde a anterior. Decidir se cada ocorrência vira uma linha própria, o que pediria um id que inclua a ocorrência (14, code review).
+- **Azure edita o título:** como o id da Azure sai do título (`active-storage-latency-...`), se a Azure editar o título o id provavelmente muda: o Incident antigo aparece resolvido e um novo aparece ao lado por 48 h. Acontece uma vez por edição, e nunca vimos um item real editado. Nada a fazer enquanto não aparecer um caso real (14, code review).
 
 ## 1.2 Escolhas dos agentes ainda não confirmadas
 
@@ -39,6 +41,7 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 
 ## 1.3 Faxina técnica
 
+- **Histórico inteiro lido a cada Poll:** a reconciliação lê todos os Incidents do Provider, porque um id encerrado pode reabrir, e Incidents nunca são apagados. A Salesforce publica cerca de mil manutenções por Poll, e cada manutenção nova vira uma linha que fica para sempre, então essa leitura só cresce. Sem efeito hoje; se pesar, a leitura pode se limitar às linhas abertas e aos ids publicados naquele Poll (14, code review).
 - **Testes e lint pegam os worktrees:** `vitest run` e `eslint .` na checkout principal também varrem `.claude/worktrees/`, e os testes em andamento de um agente aparecem como falhas na `main`. Hoje o orquestrador roda com `--exclude ".claude/**"` e `--ignore-pattern ".claude/**"`. Proposta: acrescentar a exclusão em `vitest.config.mts` e `eslint.config.mjs` (orquestração, 28/10/2026).
 
 ---

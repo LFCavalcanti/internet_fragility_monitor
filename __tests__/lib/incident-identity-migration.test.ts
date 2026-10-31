@@ -59,11 +59,11 @@ describe("migration da identidade do Incident", () => {
         await expect(setIdentity("old-2", "cloudflare-feed", "abc")).rejects.toThrow(/UNIQUE/);
     });
 
-    it("o mesmo id em outra fonte é outro Incident", async () => {
+    it("o mesmo id em outro Feed é outro Incident", async () => {
         await current.migrateRest();
         await setIdentity("old-1", "cloudflare-feed", "abc");
 
-        await expect(setIdentity("old-2", "cloudflare-status-page", "abc")).resolves.toBeDefined();
+        await expect(setIdentity("old-2", "aws-feed", "abc")).resolves.toBeDefined();
     });
 
     it("o primeiro Poll depois do deploy dá identidade à linha aberta e resolve a duplicata", async () => {

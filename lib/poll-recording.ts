@@ -228,7 +228,7 @@ async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderRea
     const unclaimed = readSources.size === feeds.length ? [...openOldRowsByTitle.values()].flat() : [];
 
     for (const row of [...leftTheFeed, ...unclaimed]) {
-        console.log(`Closing incident that left the Feed: ${row.title} for ${providerId}`);
+        console.log(`Closing incident: ${row.title} for ${providerId}`);
         await tx.update(incidents).set({
             status: closedStatusFor(row.kind === "maintenance" ? "maintenance" : "problem"),
             updatedAt: at,

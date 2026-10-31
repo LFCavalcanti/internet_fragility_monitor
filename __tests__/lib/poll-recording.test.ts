@@ -425,14 +425,14 @@ describe("identidade do Incident: Provider Source e id publicado", () => {
     });
 
     it("o id volta a abrir depois de encerrado: a mesma linha, sem hora de encerramento, com a data da nova ocorrência", async () => {
-        // O evento da AWS é serviço e região: uma nova ocorrência repete o id.
-        const event = { externalId: "ec2-us-east-1" };
-        await recordPoll(current.db, [feedRead("aws", [problem("Elevated errors", { ...event, createdAt: hoursBefore(at, 700) })])], hoursBefore(at, 700));
+        // O id da AWS é serviço e região: uma nova ocorrência repete o id.
+        const sameId = { externalId: "ec2-us-east-1" };
+        await recordPoll(current.db, [feedRead("aws", [problem("Elevated errors", { ...sameId, createdAt: hoursBefore(at, 700) })])], hoursBefore(at, 700));
         await recordPoll(current.db, [feedRead("aws")], hoursBefore(at, 600));
         const [closed] = await incidentsOf("aws");
         expect(closed).toMatchObject({ status: "resolved", resolved_at: seconds(hoursBefore(at, 600)) });
 
-        await recordPoll(current.db, [feedRead("aws", [problem("Elevated errors", { ...event, createdAt: hoursBefore(at, 1) })])], at);
+        await recordPoll(current.db, [feedRead("aws", [problem("Elevated errors", { ...sameId, createdAt: hoursBefore(at, 1) })])], at);
 
         expect(await incidentsOf("aws")).toEqual([
             expect.objectContaining({ id: closed.id, status: "investigating", resolved_at: null, created_at: seconds(hoursBefore(at, 1)) }),
@@ -874,7 +874,7 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
     beforeEach(addSecondGithubFeed);
 
     it.each([["github-feed", "github-feed-2"], ["github-feed-2", "github-feed"]])(
-        "a manutenção em andamento e a agendada de %s, não lido, não decidem, mas o andamento continua na lista",
+        "a manutenção em andamento e a Upcoming Maintenance de %s, não lido, não decidem, mas o andamento continua na lista",
         async (unread, stillRead) => {
             await recordPoll(current.db, [feedsOf("github", ...FEEDS.map(id => readFrom(id, id === unread ? [inProgress, upcoming] : [])))], earlier);
 
@@ -886,7 +886,7 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
         },
     );
 
-    it("com os dois Feeds lidos, a manutenção e a agendada de qualquer um decidem", async () => {
+    it("com os dois Feeds lidos, a manutenção e a Upcoming Maintenance de qualquer um decidem", async () => {
         await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress, upcoming]))], at);
 
         expect(await decisionOf("github")).toMatchObject({ status: "maintenance", upcomingMaintenance: { count: 1 }, partialReading: null });
