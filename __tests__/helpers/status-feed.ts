@@ -3,6 +3,18 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { decideProviderStatus } from '@/lib/provider-status';
+import type { ProviderReading } from '@/lib/status-feed/provider-reading';
+import type { IncidentData } from '@/lib/status-feed/types';
+
+/** A leitura de um Provider com o que os testes conferem: o estado que o módulo decide e os Incidents dos Feeds lidos. */
+export function outcomeOf<I extends IncidentData>(reading: ProviderReading<I>) {
+    return {
+        ...reading,
+        status: decideProviderStatus({ ...reading, previousPollUnanswered: false, now: new Date() }).status,
+        incidents: reading.feeds.flatMap(f => (f.read ? f.incidents : [])),
+    };
+}
 
 /** Payload real gravado de uma família (`__tests__/fixtures/status-feed/<família>/<arquivo>`). */
 export const feedFixture = (family: string, name: string): string =>

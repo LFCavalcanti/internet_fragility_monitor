@@ -2,7 +2,7 @@
  * Tests for lib/db-service.ts - Database service layer
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { StatusResult } from '@/lib/status-feed/types';
+import type { DeclaredStatus, IncidentData } from '@/lib/status-feed/types';
 
 // Mock the DAO functions
 vi.mock('@/lib/dao', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/lib/dao', () => ({
     closeIncident: vi.fn().mockResolvedValue(undefined),
     getActiveProviders: vi.fn().mockResolvedValue([]),
     getActiveSources: vi.fn().mockResolvedValue([]),
-    getLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
+    getLatestStatusChecks: vi.fn().mockResolvedValue([]),
 }));
 
 import { saveStatusResult } from '@/lib/db-service';
@@ -28,21 +28,30 @@ import {
     closeIncident,
 } from '@/lib/dao';
 
+/** Um Provider com um Feed só, lido: o que a maior parte destes casos grava. */
+interface FeedResult {
+    providerId: string;
+    status: DeclaredStatus;
+    incidents: IncidentData[];
+}
+
+const saveFeedResult = ({ providerId, status, incidents }: FeedResult) =>
+    saveStatusResult({ providerId, accessOnly: false, feeds: [{ read: true, declared: status, incidents }], probes: [] });
+
 describe('db-service.ts', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
     describe('saveStatusResult', () => {
-        const baseResult: StatusResult = {
+        const baseResult: FeedResult = {
             providerId: 'aws',
             status: 'operational',
             incidents: [],
-            lastUpdated: new Date(),
         };
 
         it('should save status check for the provider', async () => {
-            await saveStatusResult(baseResult);
+            await saveFeedResult(baseResult);
 
             expect(saveStatusCheck).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -53,13 +62,13 @@ describe('db-service.ts', () => {
         });
 
         it('não grava tempo de resposta: a duração da leitura vai só para o log', async () => {
-            await saveStatusResult(baseResult);
+            await saveFeedResult(baseResult);
 
             expect(vi.mocked(saveStatusCheck).mock.calls[0][0].responseTime).toBeUndefined();
         });
 
         it('should create new incident when not in database', async () => {
-            const resultWithIncident: StatusResult = {
+            const resultWithIncident: FeedResult = {
                 ...baseResult,
                 incidents: [{
                     kind: 'problem',
@@ -73,7 +82,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
-            await saveStatusResult(resultWithIncident);
+            await saveFeedResult(resultWithIncident);
 
             expect(createIncident).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -86,7 +95,7 @@ describe('db-service.ts', () => {
 
         it('grava a hora de resolução que o Feed publica num Incident novo já resolvido', async () => {
             const resolvedAt = new Date('2026-10-27T08:00:00Z');
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 incidents: [{
                     kind: 'problem',
@@ -118,7 +127,7 @@ describe('db-service.ts', () => {
                 resolvedAt: null,
             };
 
-            const resultWithUpdatedIncident: StatusResult = {
+            const resultWithUpdatedIncident: FeedResult = {
                 ...baseResult,
                 incidents: [{
                     kind: 'problem',
@@ -132,7 +141,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([existingIncident]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([existingIncident]);
 
-            await saveStatusResult(resultWithUpdatedIncident);
+            await saveFeedResult(resultWithUpdatedIncident);
 
             expect(updateIncidentStatus).toHaveBeenCalledWith(
                 'inc-1',
@@ -158,7 +167,7 @@ describe('db-service.ts', () => {
                 resolvedAt: null,
             };
 
-            const resultWithSameIncident: StatusResult = {
+            const resultWithSameIncident: FeedResult = {
                 ...baseResult,
                 incidents: [{
                     kind: 'problem',
@@ -171,7 +180,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([existingIncident]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([existingIncident]);
 
-            await saveStatusResult(resultWithSameIncident);
+            await saveFeedResult(resultWithSameIncident);
 
             expect(updateIncidentStatus).not.toHaveBeenCalled();
         });
@@ -199,7 +208,7 @@ describe('db-service.ts', () => {
             // Suppress console.log for this test
             vi.spyOn(console, 'log').mockImplementation(() => {});
 
-            await saveStatusResult(baseResult);
+            await saveFeedResult(baseResult);
 
             expect(closeIncident).toHaveBeenCalledWith('inc-stale', 'problem');
         });
@@ -224,7 +233,7 @@ describe('db-service.ts', () => {
             vi.mocked(getOpenIncidents).mockResolvedValue([openProblem, openMaintenance]);
 
             try {
-                await saveStatusResult({ providerId: 'aws', status: 'unreachable', incidents: [] });
+                await saveStatusResult({ providerId: 'aws', accessOnly: false, feeds: [{ read: false }], probes: [] });
             } finally {
                 vi.mocked(getAllIncidentsForProvider).mockResolvedValue([]);
                 vi.mocked(getOpenIncidents).mockResolvedValue([]);
@@ -258,7 +267,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 providerId: 'cloudflare',
                 incidents: [{
@@ -282,7 +291,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 incidents: [{ kind: 'problem', title: 'API errors', status: 'investigating', createdAt: new Date() }],
             });
@@ -299,7 +308,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([migrated]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([]);
 
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 providerId: 'cloudflare',
                 incidents: [{
@@ -323,7 +332,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow()]);
 
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 providerId: 'cloudflare',
                 incidents: [{
@@ -347,7 +356,7 @@ describe('db-service.ts', () => {
             vi.mocked(getAllIncidentsForProvider).mockResolvedValueOnce([maintenanceRow()]);
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow()]);
 
-            await saveStatusResult({
+            await saveFeedResult({
                 ...baseResult,
                 providerId: 'cloudflare',
                 incidents: [{
@@ -367,7 +376,7 @@ describe('db-service.ts', () => {
             vi.mocked(getOpenIncidents).mockResolvedValueOnce([maintenanceRow({ status: 'in_progress' })]);
             vi.spyOn(console, 'log').mockImplementation(() => {});
 
-            await saveStatusResult({ ...baseResult, providerId: 'cloudflare' });
+            await saveFeedResult({ ...baseResult, providerId: 'cloudflare' });
 
             expect(closeIncident).toHaveBeenCalledWith('mnt-1', 'maintenance');
             expect(closeIncident).toHaveBeenCalledTimes(1);

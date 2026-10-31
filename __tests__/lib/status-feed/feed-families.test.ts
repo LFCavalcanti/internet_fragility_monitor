@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMigratedDb, type MigratedDb } from '../../helpers/migrated-db';
 import { FEED_URLS } from '../../helpers/feed-urls';
-import { feedFixture, hang, healthyResponse } from '../../helpers/status-feed';
+import { feedFixture, hang, outcomeOf, healthyResponse } from '../../helpers/status-feed';
 import { hoursBefore } from '../../helpers/time';
 
 let current: MigratedDb;
@@ -27,7 +27,7 @@ async function readProvider(providerId: string) {
     const results = await fetchAllStatuses();
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
-    return result;
+    return outcomeOf(result);
 }
 
 /** RSS mínimo no formato da AWS, com atualizações na ordem dada. */
@@ -398,13 +398,10 @@ describe('Heroku', () => {
 
     it('payload real: manutenção antiga que o Feed ainda chama de upcoming não vira Maintenance nem Upcoming Maintenance', async () => {
         respondWith(FEED_URLS.heroku, feedFixture('heroku', 'current-status.json'));
-        const result = await readProvider('heroku');
-        if (result.status === 'unreachable') throw new Error('Feed não lido');
+        const reading = await readProvider('heroku');
 
         const decision = decideProviderStatus({
-            accessOnly: false,
-            feeds: [{ read: true, declared: result.status, incidents: result.incidents }],
-            probes: [],
+            ...reading,
             previousPollUnanswered: false,
             now: new Date('2026-10-31T00:58:30Z'),
         });
@@ -480,9 +477,9 @@ describe.each([
     it('em timeout, fica Unreachable ao fim dos 10 segundos, sem atrasar os outros, com a duração no log', async () => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         answers.set(feedUrl, hang);
-        let result: Awaited<ReturnType<typeof fetchAllStatuses>> | undefined;
+        let result: ReturnType<typeof outcomeOf>[] | undefined;
 
-        const reading = fetchAllStatuses().then(r => (result = r));
+        const reading = fetchAllStatuses().then(r => (result = r.map(outcomeOf)));
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
         expect(result).toBeUndefined();
         expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/github-feed lida em \d+ ms/));

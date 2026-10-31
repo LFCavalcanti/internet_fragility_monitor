@@ -18,10 +18,12 @@ export type ProviderStatus =
  * Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida.
  * Um Feed não lido pode trazer os Incidents já gravados dele: entram nos Recent Incidents,
  * mas não decidem o estado nem a Upcoming Maintenance, que seriam dado velho tomado por atual.
+ * `answered` diz se a fonte respondeu mesmo sem poder ser lida (conteúdo fora do formato, por exemplo), o que
+ * impede Down; quem veio de uma leitura gravada não sabe, e sem o campo conta como sem resposta.
  */
-export type FeedReading =
-    | { read: true; declared: DeclaredStatus; incidents: IncidentData[] }
-    | { read: false; incidents?: IncidentData[] };
+export type FeedReading<I extends IncidentData = IncidentData> =
+    | { read: true; declared: DeclaredStatus; incidents: I[] }
+    | { read: false; answered?: boolean; incidents?: I[] };
 
 export interface ProviderStatusInput {
     /**
@@ -44,6 +46,12 @@ export interface UpcomingMaintenanceSummary {
     next: Date | null;
 }
 
+/** Marca de Partial Reading: quantos Feeds do Provider ficaram sem leitura, entre todos. */
+export interface PartialReadingMark {
+    unread: number;
+    total: number;
+}
+
 export interface ProviderStatusDecision {
     status: ProviderStatus;
     /** Recent Incidents em ordem de exibição: ativos primeiro, resolvidos completando até 3. */
@@ -54,6 +62,8 @@ export interface ProviderStatusDecision {
      * e nunca é Degraded, Outage ou Maintenance, que só um Feed pode declarar.
      */
     accessOnly: boolean;
+    /** Partial Reading: só parte dos Feeds foi lida. Null com todos lidos, e também com nenhum lido (Unreachable). */
+    partialReading: PartialReadingMark | null;
 }
 
 /** Precedência dos estados que vêm de Feeds lidos, do pior para o melhor. */
@@ -73,7 +83,18 @@ export function decideProviderStatus(input: ProviderStatusInput): ProviderStatus
         incidents: recentIncidents(allIncidents, now),
         upcomingMaintenance: summarizeUpcoming(readIncidents, now),
         accessOnly,
+        partialReading: partialReadingOf(feeds),
     };
+}
+
+/** Uma fonte de Feed respondeu quando foi lida ou quando respondeu com algo que não pôde ser lido. */
+export function feedAnswered(feed: FeedReading): boolean {
+    return feed.read || feed.answered === true;
+}
+
+function partialReadingOf(feeds: FeedReading[]): PartialReadingMark | null {
+    const unread = feeds.filter(f => !f.read).length;
+    return unread > 0 && unread < feeds.length ? { unread, total: feeds.length } : null;
 }
 
 /** Incident ativo exibido: problema aberto ou manutenção em andamento (a agendada é Upcoming Maintenance). */
@@ -112,11 +133,10 @@ function decideStatus({
         return PRECEDENCE.find(s => candidates.includes(s)) ?? "operational";
     }
 
-    const probeAnswered = probes.some(Boolean);
-    if (probeAnswered) {
+    if (probes.some(Boolean)) {
         return accessOnly ? "operational" : "unreachable";
     }
-    return previousPollUnanswered ? "down" : "unreachable";
+    return previousPollUnanswered && !feeds.some(feedAnswered) ? "down" : "unreachable";
 }
 
 /**

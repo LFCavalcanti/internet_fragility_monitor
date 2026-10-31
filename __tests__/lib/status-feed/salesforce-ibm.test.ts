@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMigratedDb, type MigratedDb } from '../../helpers/migrated-db';
 import { FEED_URLS } from '../../helpers/feed-urls';
-import { feedFixture, healthyResponse } from '../../helpers/status-feed';
+import { feedFixture, healthyResponse, outcomeOf } from '../../helpers/status-feed';
 
 let current: MigratedDb;
 vi.mock('@/lib/db', () => ({ getDb: () => current.db }));
@@ -28,7 +28,7 @@ async function readProvider(providerId: string) {
     const results = await fetchAllStatuses();
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
-    return result;
+    return outcomeOf(result);
 }
 
 const byId = (incidents: ReadIncident[], externalId: string) => incidents.find(i => i.externalId === externalId);
@@ -117,12 +117,12 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
         expect((await readProvider('salesforce')).status).toBe('degraded');
     });
 
-    it('sem incidentes ativos: Operational, mesmo com manutenção em andamento', async () => {
+    it('sem incidentes ativos: declara Operational, mesmo com manutenção em andamento', async () => {
         respondWith(FEED_URLS.salesforceIncidents, '[]');
 
-        const { status, incidents } = await readProvider('salesforce');
+        const { feeds, incidents } = await readProvider('salesforce');
 
-        expect(status).toBe('operational');
+        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
         expect(incidents.some(i => i.status === 'in_progress')).toBe(true);
     });
 
@@ -219,7 +219,7 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
         const snapshot = await getLatestStatus(new Date());
         const entry = snapshot.find(e => e.provider.id === 'salesforce');
 
-        expect(entry?.result.status).toBe('outage');
+        expect(entry?.result.readings).toEqual(['outage']);
         expect(entry?.result.accessOnly).toBe(false);
         expect(entry?.result.incidents.map(i => i.title)).toContain('Disruption #20004549');
     });
@@ -283,9 +283,9 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('o prefixo RESOLVED encerra mesmo sem `Outage End`, sem inventar a hora', async () => {
         respondWith(FEED_URLS.ibm, ibmRss(ibmItem({ title: 'RESOLVED: VPC errors' })));
 
-        const { status, incidents } = await readProvider('ibm-cloud');
+        const { feeds, incidents } = await readProvider('ibm-cloud');
 
-        expect(status).toBe('operational');
+        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
         expect(incidents[0]).toMatchObject({ status: 'resolved' });
         expect(incidents[0].resolvedAt).toBeUndefined();
     });
@@ -302,9 +302,9 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('captura real: `Outage End` encerra o incidente que ficou com o título INVESTIGATING', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
-        const { status, incidents } = await readProvider('ibm-cloud');
+        const { feeds, incidents } = await readProvider('ibm-cloud');
 
-        expect(status).toBe('operational');
+        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
         expect(byId(incidents, 'INC2825083')).toMatchObject({
             status: 'resolved',
             title: 'Watson Assistant service is intermittently unavailable',
@@ -340,9 +340,9 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('captura real: manutenção cancelada não é lida, e nenhuma manutenção degrada o Provider', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
-        const { status, incidents } = await readProvider('ibm-cloud');
+        const { feeds, incidents } = await readProvider('ibm-cloud');
 
-        expect(status).toBe('operational');
+        expect(feeds).toMatchObject([{ read: true, declared: 'operational' }]);
         expect(incidents.map(i => i.title).join()).not.toContain('Maintenance for Internet Services');
         expect(incidents).toHaveLength(5);
     });

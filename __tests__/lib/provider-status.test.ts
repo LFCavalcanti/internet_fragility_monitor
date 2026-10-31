@@ -261,7 +261,7 @@ describe('decideProviderStatus', () => {
                 now,
             });
 
-            expect(decision).toEqual({ status: 'operational', incidents: [], upcomingMaintenance: null, accessOnly: true });
+            expect(decision).toEqual({ status: 'operational', incidents: [], upcomingMaintenance: null, accessOnly: true, partialReading: null });
         });
 
         it('Feed não lido ao lado de Feed lido: o estado vem do lido', () => {
@@ -273,6 +273,75 @@ describe('decideProviderStatus', () => {
                 now,
             });
             expect(decision.status).toBe('degraded');
+        });
+
+        it('um Feed que respondeu sem poder ser lido impede Down: alguma fonte respondeu neste Poll', () => {
+            const decision = decideProviderStatus({
+                accessOnly: false,
+                feeds: [{ read: false, answered: true }, { read: false, answered: false }],
+                probes: [false],
+                previousPollUnanswered: true,
+                now,
+            });
+            expect(decision.status).toBe('unreachable');
+        });
+
+        it('Feeds e Probes sem resposta por dois Polls seguidos são Down', () => {
+            const decision = decideProviderStatus({
+                accessOnly: false,
+                feeds: [{ read: false, answered: false }, { read: false, answered: false }],
+                probes: [false],
+                previousPollUnanswered: true,
+                now,
+            });
+            expect(decision.status).toBe('down');
+        });
+    });
+
+    describe('vários Feeds e Partial Reading', () => {
+        const decide = (...feeds: FeedReading[]) =>
+            decideProviderStatus({ accessOnly: false, feeds, probes: [], previousPollUnanswered: false, now });
+
+        it('dois Feeds lidos com estados diferentes: vence o pior, os Incidents se somam e não há marca', () => {
+            const decision = decide(
+                feed('operational', [problem({ title: 'Do Feed saudável', status: 'monitoring' })]),
+                feed('outage', [problem({ title: 'Do Feed em Outage' })]),
+            );
+
+            expect(decision.status).toBe('outage');
+            expect(decision.incidents.map(i => i.title).sort()).toEqual(['Do Feed em Outage', 'Do Feed saudável']);
+            expect(decision.partialReading).toBeNull();
+        });
+
+        it('as manutenções agendadas de todos os Feeds lidos entram na Upcoming Maintenance', () => {
+            const decision = decide(
+                feed('operational', [maintenance({ scheduledFor: new Date('2026-10-29T00:00:00Z') })]),
+                feed('operational', [maintenance({ scheduledFor: new Date('2026-10-28T00:00:00Z') })]),
+            );
+
+            expect(decision.upcomingMaintenance).toEqual({ count: 2, next: new Date('2026-10-28T00:00:00Z') });
+        });
+
+        it('um Feed lido e outro não: o estado vem do lido, com a marca de quantos ficaram sem leitura', () => {
+            const decision = decide(feed('degraded'), { read: false });
+
+            expect(decision.status).toBe('degraded');
+            expect(decision.partialReading).toEqual({ unread: 1, total: 2 });
+        });
+
+        it('a marca conta os Feeds não lidos entre todos', () => {
+            expect(decide(feed('operational'), { read: false }, { read: false }).partialReading).toEqual({ unread: 2, total: 3 });
+        });
+
+        it('todos os Feeds lidos não têm marca', () => {
+            expect(decide(feed('operational'), feed('operational')).partialReading).toBeNull();
+        });
+
+        it('nenhum Feed lido é Unreachable, não Partial Reading', () => {
+            const decision = decide({ read: false }, { read: false });
+
+            expect(decision.status).toBe('unreachable');
+            expect(decision.partialReading).toBeNull();
         });
     });
 

@@ -5,6 +5,7 @@
  * Uma leitura nunca rejeita: a falha de uma fonte não afeta as outras, nem as do mesmo Provider.
  * Termos conforme GLOSSARY.md.
  */
+import type { FeedReading } from "../provider-status";
 import type { ProviderSource } from "../schema";
 import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "../validation";
 import type { DeclaredStatus, PublishedIncident, ReadIncident } from "./types";
@@ -18,9 +19,6 @@ export interface FeedContent {
     declared: DeclaredStatus;
     incidents: PublishedIncident[];
 }
-
-/** Resultado de ler um Feed: os Incidents lidos sempre trazem a fonte e o id. */
-export type FeedResult = { read: true; declared: DeclaredStatus; incidents: ReadIncident[] } | { read: false };
 
 /**
  * Leitor de uma família de Feed: só interpreta o conteúdo que a política já obteve, sem nada de rede.
@@ -67,20 +65,30 @@ function withinRecordLimits(incident: PublishedIncident): PublishedIncident {
     };
 }
 
-async function fetchBody(address: string, signal: AbortSignal): Promise<string> {
-    const response = await fetch(address, { cache: "no-store", signal });
-    if (!response.ok) throw new Error(`resposta HTTP ${response.status} em ${address}`);
-    return response.text();
-}
+/** O que conta como resposta de uma fonte, Feed ou Probe: qualquer código HTTP abaixo de 500. */
+const isAnswer = (response: Response) => response.status < 500;
 
-/** Lê um Feed: resposta fora de 2xx, timeout, erro de rede e conteúdo fora do formato resultam em Feed não lido. */
-export async function readFeed(source: ReadableSource, reader: FeedReader): Promise<FeedResult> {
+/**
+ * Lê um Feed: resposta fora de 2xx, timeout, erro de rede e conteúdo fora do formato resultam em Feed não lido.
+ * Ler é mais do que responder: um Feed com 200 fora do formato ou com 404 fica não lido, mas a fonte respondeu
+ * (`answered`), pela mesma regra dos Probes. Num Feed em mais de um endereço, basta um responder.
+ */
+export async function readFeed(source: ReadableSource, reader: FeedReader): Promise<FeedReading<ReadIncident>> {
     const addresses = reader.addresses?.(source.url) ?? [source.url];
+    let answered = false;
+
+    const fetchBody = async (address: string, signal: AbortSignal): Promise<string> => {
+        const response = await fetch(address, { cache: "no-store", signal });
+        answered ||= isAnswer(response);
+        if (!response.ok) throw new Error(`resposta HTTP ${response.status} em ${address}`);
+        return response.text();
+    };
+
     const content = await applyReadPolicy(source, async signal => {
         const bodies = await Promise.all(addresses.map(address => fetchBody(address, signal)));
         return reader.read(bodies, addresses);
     });
-    if (!content) return { read: false };
+    if (!content) return { read: false, answered };
 
     return {
         read: true,
@@ -98,7 +106,7 @@ export async function readProbe(source: ReadableSource): Promise<boolean> {
         const response = await fetch(source.url, { redirect: "manual", cache: "no-store", signal });
         // Só o código importa: o corpo é descartado sem ser baixado.
         await response.body?.cancel().catch(() => {});
-        if (response.status >= 500) throw new Error(`resposta HTTP ${response.status}`);
+        if (!isAnswer(response)) throw new Error(`resposta HTTP ${response.status}`);
         return true;
     });
     return answered ?? false;

@@ -14,7 +14,7 @@ vi.mock('node-cron', () => ({
 // Mock do módulo de Status Feed
 vi.mock('@/lib/status-feed', () => ({
     fetchAllStatuses: vi.fn().mockResolvedValue([
-        { providerId: 'aws', status: 'operational', incidents: [], lastUpdated: new Date() },
+        { providerId: 'aws', accessOnly: false, feeds: [{ read: true, declared: 'operational', incidents: [] }], probes: [] },
     ]),
 }));
 
@@ -147,12 +147,46 @@ describe('cron.ts', () => {
         it('should save status results for all fetched providers', async () => {
             vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
             vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
-                { providerId: 'aws', status: 'operational', incidents: [], lastUpdated: new Date() },
-                { providerId: 'azure', status: 'degraded', incidents: [], lastUpdated: new Date() },
+                { providerId: 'aws', accessOnly: false, feeds: [{ read: true, declared: 'operational', incidents: [] }], probes: [] },
+                { providerId: 'azure', accessOnly: false, feeds: [{ read: true, declared: 'degraded', incidents: [] }], probes: [] },
             ]);
 
             const { initCron } = await import('@/lib/cron');
             
+            vi.spyOn(console, 'log').mockImplementation(() => {});
+
+            await initCron();
+
+            expect(saveStatusResult).toHaveBeenCalledTimes(2);
+        });
+
+        it('descarta o Poll em que nenhuma fonte respondeu, com registro no log', async () => {
+            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
+            vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
+                { providerId: 'aws', accessOnly: false, feeds: [{ read: false, answered: false }], probes: [false, false] },
+                { providerId: 'oracle-cloud', accessOnly: true, feeds: [], probes: [false] },
+            ]);
+
+            const { initCron } = await import('@/lib/cron');
+
+            vi.spyOn(console, 'log').mockImplementation(() => {});
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await initCron();
+
+            expect(saveStatusResult).not.toHaveBeenCalled();
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Poll descartado'));
+        });
+
+        it('grava o Poll em que só um Feed fora do formato respondeu', async () => {
+            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
+            vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
+                { providerId: 'aws', accessOnly: false, feeds: [{ read: false, answered: true }], probes: [false] },
+                { providerId: 'azure', accessOnly: false, feeds: [{ read: false, answered: false }], probes: [false] },
+            ]);
+
+            const { initCron } = await import('@/lib/cron');
+
             vi.spyOn(console, 'log').mockImplementation(() => {});
 
             await initCron();

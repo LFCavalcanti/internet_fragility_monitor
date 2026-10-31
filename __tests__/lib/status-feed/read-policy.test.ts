@@ -50,9 +50,10 @@ describe('o tempo de uma leitura é de 10 segundos por Provider Source', () => {
     });
 
     it.each([
-        ['sem resposta', hang],
-        ['com o corpo travado', hangBody],
-    ])('um Feed %s fica não lido ao fim do tempo, nem um instante antes', async (_case, network) => {
+        ['sem resposta', hang, false],
+        // O código HTTP chegou: a fonte respondeu, ainda que o conteúdo não tenha chegado até o fim.
+        ['com o corpo travado', hangBody, true],
+    ])('um Feed %s fica não lido ao fim do tempo, nem um instante antes', async (_case, network, answered) => {
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
         stubNetwork(network);
         let reading: unknown;
@@ -64,7 +65,7 @@ describe('o tempo de uma leitura é de 10 segundos por Provider Source', () => {
 
         await vi.advanceTimersByTimeAsync(1);
         await pending;
-        expect(reading).toEqual({ read: false });
+        expect(reading).toEqual({ read: false, answered });
     });
 
     it('um Probe sem resposta conta como falha ao fim do mesmo tempo', async () => {
@@ -94,21 +95,27 @@ describe('leitura de um Feed', () => {
         });
     });
 
-    it.each([500, 503, 404, 403])('resposta %i: Feed não lido', async code => {
+    it.each([500, 503])('resposta %i: Feed não lido e sem resposta, como um Probe com 5xx', async code => {
         stubNetwork(async () => new Response('erro', { status: code }));
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false });
+        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: false });
     });
 
-    it('erro de rede: Feed não lido', async () => {
+    it.each([404, 403])('resposta %i: Feed não lido, mas a fonte respondeu, como um Probe abaixo de 500', async code => {
+        stubNetwork(async () => new Response('erro', { status: code }));
+
+        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: true });
+    });
+
+    it('erro de rede: Feed não lido e sem resposta', async () => {
         stubNetwork(async () => {
             throw new TypeError('fetch failed');
         });
 
-        expect(await readFeed(FEED, reader)).toEqual({ read: false });
+        expect(await readFeed(FEED, reader)).toEqual({ read: false, answered: false });
     });
 
-    it('um leitor que rejeita o conteúdo resulta em Feed não lido', async () => {
+    it('um leitor que rejeita o conteúdo resulta em Feed não lido, mas a fonte respondeu', async () => {
         stubNetwork(async () => new Response('qualquer'));
         const refuses: FeedReader = {
             read: () => {
@@ -116,7 +123,7 @@ describe('leitura de um Feed', () => {
             },
         };
 
-        expect(await readFeed(FEED, refuses)).toEqual({ read: false });
+        expect(await readFeed(FEED, refuses)).toEqual({ read: false, answered: true });
     });
 
     it('o leitor recebe o endereço de onde o conteúdo veio', async () => {
@@ -156,7 +163,15 @@ describe('leitura de um Feed', () => {
                 String(url).endsWith('/a') ? new Response('erro', { status: 503 }) : hang(url, init),
             );
 
-            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false });
+            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false, answered: false });
+        });
+
+        it('um endereço respondeu e o outro falhou: o Feed fica não lido, mas a fonte respondeu', async () => {
+            stubNetwork(async url =>
+                String(url).endsWith('/a') ? new Response('ok') : new Response('erro', { status: 503 }),
+            );
+
+            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false, answered: true });
         });
 
         it('o timeout vale para os dois endereços juntos', async () => {
@@ -166,7 +181,7 @@ describe('leitura de um Feed', () => {
             const reading = readFeed(FEED, twoAddresses);
             await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
 
-            expect(await reading).toEqual({ read: false });
+            expect(await reading).toEqual({ read: false, answered: false });
         });
     });
 

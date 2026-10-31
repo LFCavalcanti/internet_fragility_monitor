@@ -5,14 +5,18 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
-import { feedFixture, hang, healthyResponse } from "../helpers/status-feed";
+import { feedFixture, hang, healthyResponse, outcomeOf } from "../helpers/status-feed";
 
 let current: MigratedDb;
 vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
 
 import { fetchAllStatuses } from "@/lib/status-feed";
-import { saveStatusResult } from "@/lib/db-service";
+import { runJob } from "@/lib/cron";
+import { getLatestStatus, saveStatusResult } from "@/lib/db-service";
+import { decideProviderStatus } from "@/lib/provider-status";
+import { toProviderStatusInput } from "@/lib/snapshot-reading";
 import { READ_TIMEOUT_MS } from "@/lib/status-feed/read-policy";
+import { FEED_URLS } from "../helpers/feed-urls";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -25,11 +29,11 @@ function route(prefix: string, handler: FetchHandler) {
     fetchMock.mockImplementation((url, init) => (String(url).startsWith(prefix) ? handler(String(url), init) : previous(url, init)));
 }
 
-/** Um Poll como o cron roda: lê todos os Providers ativos e grava cada resultado. */
+/** Um Poll que responde, como o cron grava: lê todos os Providers ativos e grava cada leitura. */
 async function poll() {
-    const results = await fetchAllStatuses();
-    for (const result of results) await saveStatusResult(result);
-    return results;
+    const readings = await fetchAllStatuses();
+    for (const reading of readings) await saveStatusResult(reading);
+    return readings.map(outcomeOf);
 }
 
 async function statusChecks(providerId: string): Promise<string[]> {
@@ -53,6 +57,7 @@ const statuspageFixture = (name: string) => feedFixture("statuspage", name);
 
 const CLOUDFLARE_FEED = "https://www.cloudflarestatus.com";
 const HOSTINGER_FEED = "https://statuspage.hostinger.com";
+const GITHUB_FEED = "https://www.githubstatus.com";
 
 beforeEach(async () => {
     current = await createMigratedDb();
@@ -129,13 +134,25 @@ describe("Poll guiado pelo Provider Catalog", () => {
 
         expect(results.find(r => r.providerId === "heroku")?.status).toBe("unreachable");
         expect(await statusChecks("heroku")).toEqual(["unreachable"]);
-        expect(fetchedUrls().filter(u => u.includes("heroku"))).toEqual([]);
+        expect(fetchedUrls()).not.toContain(FEED_URLS.heroku);
         expect(console.error).toHaveBeenCalledWith(expect.stringMatching(/heroku-feed.*atom-v9/));
         expect(await statusChecks("aws")).toEqual(["operational"]);
     });
 
-    it("os Probes de Providers com Feed ativo ainda não rodam", async () => {
-        await poll();
+    it("os Probes rodam para todos os Providers ativos, com ou sem Feed, e os resultados vêm com a leitura", async () => {
+        const readings = await fetchAllStatuses();
+
+        expect(fetchedUrls()).toEqual(
+            expect.arrayContaining(["https://dash.cloudflare.com", "https://github.com/login", ORACLE_LOGIN]),
+        );
+        for (const reading of readings) expect(reading.probes).toEqual([true, true]);
+    });
+
+    it("um Probe inativo não roda, nem o de Provider inativo", async () => {
+        await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'cloudflare-login'");
+        await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'github'");
+
+        await fetchAllStatuses();
 
         expect(fetchedUrls()).not.toContain("https://dash.cloudflare.com");
         expect(fetchedUrls()).not.toContain("https://github.com/login");
@@ -146,9 +163,9 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
     it("uma status page em timeout vira Unreachable, e os outros Providers saem com a leitura deles no mesmo Poll", async () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         route(CLOUDFLARE_FEED, hang);
-        let results: Awaited<ReturnType<typeof fetchAllStatuses>> | undefined;
+        let results: ReturnType<typeof outcomeOf>[] | undefined;
 
-        const reading = fetchAllStatuses().then(r => (results = r));
+        const reading = fetchAllStatuses().then(r => (results = r.map(outcomeOf)));
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
         expect(results).toBeUndefined();
         await vi.advanceTimersByTimeAsync(1);
@@ -223,6 +240,266 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
             "SELECT kind, status FROM incidents WHERE provider_id = 'hostinger' AND title LIKE 'PHP Security Update%'",
         );
         expect(rows.rows[0]).toMatchObject({ kind: "problem", status: "monitoring" });
+    });
+});
+
+describe("Provider com vários Feeds (catálogo montado no teste)", () => {
+    const SECOND_FEED = "https://second-feed.example.test";
+    const statuspage = (indicator: string, incidents: { id: string; name: string }[] = []) =>
+        Response.json({
+            status: { indicator },
+            incidents: incidents.map(i => ({
+                ...i,
+                status: "investigating",
+                shortlink: "https://stspg.io/x",
+                created_at: "2026-10-30T10:00:00Z",
+                updated_at: "2026-10-30T10:00:00Z",
+                resolved_at: null,
+                incident_updates: [],
+            })),
+            scheduled_maintenances: [],
+        });
+
+    beforeEach(async () => {
+        await current.client.execute(`INSERT INTO provider_sources (id, provider_id, kind, family, url, label, active)
+            VALUES ('github-feed-2', 'github', 'feed', 'statuspage', '${SECOND_FEED}', 'feed', 1)`);
+    });
+
+    async function githubDecision() {
+        const snapshot = await getLatestStatus(new Date());
+        const entry = snapshot.find(e => e.provider.id === "github")!;
+        return decideProviderStatus(toProviderStatusInput(entry.result, new Date()));
+    }
+
+    it("os dois Feeds são lidos, e cada um chega ao módulo de Provider Status", async () => {
+        await poll();
+
+        expect(fetchedUrls()).toContain(`${SECOND_FEED}/api/v2/summary.json`);
+        expect(await statusChecks("github")).toEqual(["operational", "operational"]);
+        expect(await githubDecision()).toMatchObject({ status: "operational", partialReading: null });
+    });
+
+    it("dois Feeds com estados diferentes: da leitura gravada até a decisão vence o pior, e os Incidents se somam", async () => {
+        route(GITHUB_FEED, async () => statuspage("minor", [{ id: "a", name: "Do primeiro Feed" }]));
+        route(SECOND_FEED, async () => statuspage("critical", [{ id: "b", name: "Do segundo Feed" }]));
+
+        const [github] = (await poll()).filter(r => r.providerId === "github");
+
+        expect(github.status).toBe("outage");
+        expect(github.incidents.map(i => i.sourceId).sort()).toEqual(["github-feed", "github-feed-2"]);
+        const decision = await githubDecision();
+        expect(decision).toMatchObject({ status: "outage", partialReading: null });
+        expect(decision.incidents.map(i => i.title).sort()).toEqual(["Do primeiro Feed", "Do segundo Feed"]);
+    });
+
+    it("um Feed lido e outro não: a Partial Reading chega à decisão da página, com o estado do lido", async () => {
+        route(GITHUB_FEED, async () => statuspage("minor"));
+        route(SECOND_FEED, async () => new Response("oops", { status: 503 }));
+
+        await poll();
+
+        expect(await statusChecks("github")).toEqual(["degraded", "unreachable"]);
+        expect(await githubDecision()).toMatchObject({ status: "degraded", partialReading: { unread: 1, total: 2 } });
+    });
+
+    it("com o Feed lido em segundo lugar, a Partial Reading vem igual", async () => {
+        route(GITHUB_FEED, async () => { throw new TypeError("fetch failed"); });
+        route(SECOND_FEED, async () => statuspage("critical", [{ id: "b", name: "Do Feed lido" }]));
+
+        await poll();
+
+        const decision = await githubDecision();
+        expect(decision).toMatchObject({ status: "outage", partialReading: { unread: 1, total: 2 } });
+        expect(decision.incidents.map(i => i.title)).toEqual(["Do Feed lido"]);
+    });
+
+    it("nenhum Feed lido é Unreachable, sem a marca, mesmo com os Probes respondendo", async () => {
+        route(GITHUB_FEED, async () => new Response("oops", { status: 503 }));
+        route(SECOND_FEED, async () => new Response("oops", { status: 503 }));
+
+        await poll();
+
+        expect(await githubDecision()).toMatchObject({ status: "unreachable", partialReading: null });
+    });
+
+    it("o Poll seguinte, com os dois Feeds lidos, tira a marca", async () => {
+        route(SECOND_FEED, async () => new Response("oops", { status: 503 }));
+        await poll();
+        await current.client.execute({
+            sql: "UPDATE status_checks SET checked_at = ?",
+            args: [Math.floor(Date.now() / 1000) - 300],
+        });
+
+        route(SECOND_FEED, async () => statuspage("none"));
+        await poll();
+
+        expect(await githubDecision()).toMatchObject({ status: "operational", partialReading: null });
+    });
+
+    it("sob Partial Reading, o Incident gravado do Feed não lido não é encerrado, e o do Feed lido é gravado", async () => {
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('inc-1', 'github', 'Do Feed não lido', 'investigating', 'problem')",
+        );
+        route(GITHUB_FEED, async () => statuspage("minor", [{ id: "a", name: "Do Feed lido" }]));
+        route(SECOND_FEED, async () => new Response("oops", { status: 503 }));
+
+        await poll();
+
+        const rows = await current.client.execute("SELECT title, status FROM incidents WHERE provider_id = 'github' ORDER BY title");
+        expect(rows.rows.map(r => [r.title, r.status])).toEqual([
+            ["Do Feed lido", "investigating"],
+            ["Do Feed não lido", "investigating"],
+        ]);
+    });
+
+    it("com os dois Feeds lidos, o Incident que saiu de ambos é encerrado", async () => {
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('inc-1', 'github', 'Saiu do Feed', 'investigating', 'problem')",
+        );
+
+        await poll();
+
+        const row = await current.client.execute("SELECT status FROM incidents WHERE id = 'inc-1'");
+        expect(row.rows[0].status).toBe("resolved");
+    });
+});
+
+describe("Probes ao lado dos Feeds", () => {
+    const CLOUDFLARE_LOGIN = "https://dash.cloudflare.com";
+
+    it("um Probe que trava não atrasa o Feed do mesmo Provider, e o Poll termina no timeout", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        route(CLOUDFLARE_LOGIN, hang);
+        let finished = false;
+
+        const reading = fetchAllStatuses().then(r => {
+            finished = true;
+            return r;
+        });
+        await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
+        expect(finished).toBe(false);
+        expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/cloudflare-feed lida em \d+ ms/));
+
+        await vi.advanceTimersByTimeAsync(1);
+        const cloudflare = (await reading).find(r => r.providerId === "cloudflare");
+
+        expect(cloudflare?.feeds).toEqual([{ read: true, declared: "operational", incidents: [] }]);
+        expect(cloudflare?.probes).toEqual([false, true]);
+    });
+
+    it("Probe sem resposta não muda o estado declarado pelo Feed lido", async () => {
+        route(CLOUDFLARE_LOGIN, async () => { throw new TypeError("fetch failed"); });
+
+        await poll();
+
+        expect(await statusChecks("cloudflare")).toEqual(["operational"]);
+    });
+});
+
+describe("Poll sem resposta de nenhuma fonte é descartado", () => {
+    const discarded = expect.stringContaining("Poll descartado");
+    const totalChecks = async () => (await current.client.execute("SELECT count(*) AS n FROM status_checks")).rows[0].n;
+
+    /** A rede inteira responde com `handler`. */
+    const everySource = (handler: FetchHandler) => fetchMock.mockImplementation(handler);
+
+    it("sem rede: nada é gravado, o problema vai ao log e os Incidents ficam como estavam", async () => {
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('inc-1', 'aws', 'Open issue', 'investigating', 'problem')",
+        );
+        everySource(async () => { throw new TypeError("fetch failed"); });
+
+        await runJob();
+
+        expect(await totalChecks()).toBe(0);
+        expect(console.error).toHaveBeenCalledWith(discarded);
+        const row = await current.client.execute("SELECT status FROM incidents WHERE id = 'inc-1'");
+        expect(row.rows[0].status).toBe("investigating");
+    });
+
+    it("toda fonte em timeout é sem resposta", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        everySource(hang);
+
+        const job = runJob();
+        await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+        await job;
+
+        expect(await totalChecks()).toBe(0);
+        expect(console.error).toHaveBeenCalledWith(discarded);
+    });
+
+    it("toda fonte com 5xx é sem resposta, a mesma regra dos Probes", async () => {
+        everySource(async () => new Response("oops", { status: 503 }));
+
+        await runJob();
+
+        expect(await totalChecks()).toBe(0);
+        expect(console.error).toHaveBeenCalledWith(discarded);
+    });
+
+    it("o Snapshot do último Poll respondido continua o mesmo", async () => {
+        await poll();
+        const before = await totalChecks();
+        everySource(async () => { throw new TypeError("fetch failed"); });
+
+        await runJob();
+
+        expect(await totalChecks()).toBe(before);
+    });
+
+    it("basta um Probe de um Provider responder: o Poll é gravado", async () => {
+        everySource(async url => {
+            if (String(url) === ORACLE_LOGIN) return new Response(null, { status: 302 });
+            throw new TypeError("fetch failed");
+        });
+
+        await runJob();
+
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await statusChecks("oracle-cloud")).toEqual(["operational"]);
+        expect(await statusChecks("aws")).toEqual(["unreachable"]);
+    });
+
+    it("um Feed com HTTP 200 fora do formato respondeu: o Poll é gravado, com o Feed não lido", async () => {
+        everySource(async url => {
+            if (String(url).startsWith(CLOUDFLARE_FEED)) return new Response("<html>não é JSON</html>");
+            throw new TypeError("fetch failed");
+        });
+
+        await runJob();
+
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await statusChecks("cloudflare")).toEqual(["unreachable"]);
+    });
+
+    it("toda fonte com 404 respondeu: o Poll é gravado, com os Feeds não lidos e os Probes de pé", async () => {
+        everySource(async () => new Response("não encontrado", { status: 404 }));
+
+        await runJob();
+
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await statusChecks("aws")).toEqual(["unreachable"]);
+        expect(await statusChecks("oracle-cloud")).toEqual(["operational"]);
+    });
+
+    it("sem nenhuma fonte ativa não é falha do monitor", async () => {
+        await current.client.execute("UPDATE provider_sources SET active = 0");
+
+        await runJob();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await statusChecks("aws")).toEqual(["unreachable"]);
+    });
+
+    it("com o catálogo vazio não é falha do monitor", async () => {
+        await current.client.execute("UPDATE providers SET active = 0");
+
+        await runJob();
+
+        expect(console.error).not.toHaveBeenCalledWith(discarded);
+        expect(await totalChecks()).toBe(0);
     });
 });
 

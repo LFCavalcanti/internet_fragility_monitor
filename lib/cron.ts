@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { fetchAllStatuses } from "./status-feed";
+import { noSourceAnswered } from "./status-feed/provider-reading";
 import { saveStatusResult } from "./db-service";
 import { getGlobalLatestStatusCheck } from "./dao";
 
@@ -37,9 +38,14 @@ export async function initCron() {
     });
 }
 
-async function runJob() {
+/** Um Poll: lê todas as fontes e grava, a não ser que nenhuma tenha respondido, que é falha do próprio monitor. */
+export async function runJob() {
     try {
         const results = await fetchAllStatuses();
+        if (noSourceAnswered(results)) {
+            console.error("Poll descartado: nenhuma fonte de nenhum Provider respondeu (falha do próprio monitor). Nada foi gravado.");
+            return;
+        }
         for (const result of results) {
             await saveStatusResult(result);
         }

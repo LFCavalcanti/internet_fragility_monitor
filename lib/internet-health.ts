@@ -68,10 +68,12 @@ export const STALE_SNAPSHOT_AFTER_MS = 3 * 5 * 60 * 1000;
  * Um Poll em que nenhum Provider responde é falha do próprio monitor e não renova o Snapshot.
  * Interino: o Ticket 13 troca pela hora real do Poll, gravada pela leitura do Snapshot.
  */
-export function lastAnsweredPollAt(results: Pick<StatusResult, "status" | "lastUpdated">[]): Date | null {
+export function lastAnsweredPollAt(results: Pick<StatusResult, "readings" | "lastUpdated">[]): Date | null {
     return results.reduce<Date | null>(
         (latest, r) =>
-            r.status !== "unreachable" && r.lastUpdated && (!latest || r.lastUpdated > latest) ? r.lastUpdated : latest,
+            r.readings.some(reading => reading !== "unreachable") && r.lastUpdated && (!latest || r.lastUpdated > latest)
+                ? r.lastUpdated
+                : latest,
         null,
     );
 }

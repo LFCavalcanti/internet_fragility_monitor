@@ -2,15 +2,20 @@
 export type DeclaredStatus = 'operational' | 'degraded' | 'outage';
 
 /**
- * Resultado de uma leitura: o estado declarado pelo Feed, ou "unreachable" quando
- * a status page não pôde ser lida. Falha de leitura nunca é Outage.
+ * Resultado gravado de uma leitura: o estado declarado pelo Feed, ou "unreachable" quando
+ * ele não pôde ser lido. Falha de leitura nunca é Outage.
  */
 export type ReadingStatus = DeclaredStatus | 'unreachable';
 
-export interface StatusResult<I extends IncidentData = IncidentData> {
+/** A leitura gravada de um Provider no último Poll, como a leitura do Snapshot a devolve. */
+export interface StatusResult {
     providerId: string;
-    status: ReadingStatus;
-    incidents: I[];
+    /**
+     * O que o último Poll gravou (`toRecordedReadings` em lib/snapshot-reading.ts): uma leitura por Feed ou,
+     * em Provider só com Probes, uma só. O estado do Provider é decidido a partir delas pelo módulo de Provider Status.
+     */
+    readings: ReadingStatus[];
+    incidents: IncidentData[];
     lastUpdated?: Date;
     /**
      * Marca de "só acesso" (`isAccessOnly` em lib/provider-catalog.ts): o Provider não tem Feed ativo e a leitura

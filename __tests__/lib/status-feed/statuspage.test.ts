@@ -220,7 +220,7 @@ describe('conteúdo fora do formato vira Feed não lido, com registro no log', (
 
         const reading = await readFeed(CLOUDFLARE, statuspageReader);
 
-        expect(reading).toEqual({ read: false });
+        expect(reading).toEqual({ read: false, answered: true });
         expect(console.error).toHaveBeenCalledWith(expect.stringContaining('cloudflare-feed'), expect.anything());
     });
 });

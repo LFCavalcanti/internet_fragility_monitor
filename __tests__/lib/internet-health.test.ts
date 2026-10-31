@@ -247,9 +247,9 @@ describe('decideInternetHealth: Stale Snapshot', () => {
 describe('lastAnsweredPollAt: hora do último Poll a partir do Snapshot', () => {
     const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
     const reading = (
-        status: StatusResult['status'],
+        status: StatusResult['readings'][number],
         lastUpdated?: Date,
-    ): Pick<StatusResult, 'status' | 'lastUpdated'> => ({ status, lastUpdated });
+    ): Pick<StatusResult, 'readings' | 'lastUpdated'> => ({ readings: [status], lastUpdated });
 
     it('é a leitura respondida mais recente', () => {
         expect(lastAnsweredPollAt([reading('operational', minutesAgo(9)), reading('outage', minutesAgo(4))])).toEqual(

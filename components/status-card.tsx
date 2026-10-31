@@ -116,6 +116,12 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision, now }:
                             // Provider só com Probes: o estado vem só da verificação de acesso.
                             <p className="text-xs text-muted-foreground mt-1">verificação de acesso, sem feed de status</p>
                         )}
+                        {decision.partialReading && (
+                            // Partial Reading: o estado vem só dos Feeds lidos, e a lacuna fica visível.
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {decision.partialReading.unread} de {decision.partialReading.total} feeds sem leitura
+                            </p>
+                        )}
                         {result.lastUpdated && (
                             <p className="text-[10px] text-muted-foreground/70">
                                 Updated {formatDistance(result.lastUpdated, now, { addSuffix: true })}

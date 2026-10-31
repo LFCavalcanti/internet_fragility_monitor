@@ -9,18 +9,19 @@ import {
     closeIncident,
     getActiveProviders,
     getActiveSources,
-    getLatestStatusCheck,
+    getLatestStatusChecks,
 } from "./dao";
 import type { Incident, Provider } from "./schema";
+import type { ProviderReading } from "./status-feed/provider-reading";
 import type {
     IncidentData,
     MaintenancePhase,
     ProblemStatus,
-    StatusResult,
+    ReadingStatus,
 } from "./status-feed/types";
 import { isClosed, isRecentlyResolved } from "./incident-status";
 import { isAccessOnly, sourcesByProvider } from "./provider-catalog";
-import type { SnapshotEntry, SnapshotProvider } from "./snapshot-reading";
+import { toRecordedReadings, type SnapshotEntry, type SnapshotProvider } from "./snapshot-reading";
 
 function scheduledForOf(inc: IncidentData): Date | null {
     return inc.kind === "maintenance" ? inc.scheduledFor ?? null : null;
@@ -30,17 +31,20 @@ function sameInstant(a: Date | null, b: Date | null): boolean {
     return (a?.getTime() ?? null) === (b?.getTime() ?? null);
 }
 
-export async function saveStatusResult(result: StatusResult) {
-    // 1. Save Status Check
-    await saveStatusCheck({
-        providerId: result.providerId,
-        status: result.status,
-        checkedAt: new Date(),
-    });
+export async function saveStatusResult(reading: ProviderReading) {
+    const { providerId, feeds } = reading;
+
+    // 1. Save Status Checks: the same hour on every row is what ties them to this Poll
+    const checkedAt = new Date();
+    for (const status of toRecordedReadings(reading)) {
+        await saveStatusCheck({ providerId, status, checkedAt });
+    }
 
     // A read failure says nothing about the Provider's Incidents: the recorded ones stay as they are,
     // and the card keeps showing them as Recent Incidents. Probes never declare Incidents either.
-    if (result.status === "unreachable" || result.accessOnly) return;
+    const incidentsRead = feeds.flatMap(f => (f.read ? f.incidents : []));
+    const readFeeds = feeds.filter(f => f.read).length;
+    if (readFeeds === 0 || reading.accessOnly) return;
 
     // 2. Sync Incidents
     // We need to handle:
@@ -49,13 +53,13 @@ export async function saveStatusResult(result: StatusResult) {
     // c) Incidents that left the Feed (close them)
 
     // Get all currently open incidents for this provider from DB (scheduled maintenances included)
-    const openDbIncidents = await getOpenIncidents(result.providerId);
-    const allDbIncidents = await getAllIncidentsForProvider(result.providerId);
+    const openDbIncidents = await getOpenIncidents(providerId);
+    const allDbIncidents = await getAllIncidentsForProvider(providerId);
 
-    const currentIncidentTitles = new Set(result.incidents.map(i => i.title));
+    const currentIncidentTitles = new Set(incidentsRead.map(i => i.title));
 
     // A. Handle Incoming Incidents (Insert or Update)
-    for (const inc of result.incidents) {
+    for (const inc of incidentsRead) {
         const existing = allDbIncidents.find(i => i.title === inc.title);
         const scheduledFor = scheduledForOf(inc);
 
@@ -75,7 +79,7 @@ export async function saveStatusResult(result: StatusResult) {
         } else {
             // Insert new incident
             await createIncident({
-                providerId: result.providerId,
+                providerId,
                 title: inc.title,
                 description: inc.description,
                 status: inc.status,
@@ -89,12 +93,16 @@ export async function saveStatusResult(result: StatusResult) {
         }
     }
 
+    // Partial Reading: a recorded Incident may belong to the unread Feed, and the row does not say which Feed it came
+    // from until Ticket 14. A Feed that was not read never closes its Incidents, so nothing is closed in this Poll.
+    if (readFeeds < feeds.length) return;
+
     // B. Handle Incidents that left the Feed
     // If an incident is open in DB but NOT in the current result list, the provider closed or removed it:
     // a problem becomes resolved and a maintenance becomes completed.
     for (const dbInc of openDbIncidents) {
         if (!currentIncidentTitles.has(dbInc.title)) {
-            console.log(`Closing incident that left the Feed: ${dbInc.title} for ${result.providerId}`);
+            console.log(`Closing incident that left the Feed: ${dbInc.title} for ${providerId}`);
             await closeIncident(dbInc.id, dbInc.kind === "maintenance" ? "maintenance" : "problem");
         }
     }
@@ -144,7 +152,7 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
     const entries: SnapshotEntry[] = [];
 
     for (const provider of activeProviders) {
-        const latestCheck = await getLatestStatusCheck(provider.id);
+        const latestChecks = await getLatestStatusChecks(provider.id);
 
         // All recorded incidents for this provider (newest first)
         const providerIncidents = await getAllIncidentsForProvider(provider.id);
@@ -156,9 +164,9 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
             provider: toSnapshotProvider(provider),
             result: {
                 providerId: provider.id,
-                status: (latestCheck?.status as StatusResult['status']) || "operational",
+                readings: latestChecks.length > 0 ? latestChecks.map(c => c.status as ReadingStatus) : ["operational"],
                 incidents,
-                lastUpdated: latestCheck?.checkedAt || undefined,
+                lastUpdated: latestChecks[0]?.checkedAt || undefined,
                 accessOnly: isAccessOnly(sources.get(provider.id) ?? []),
             },
         });

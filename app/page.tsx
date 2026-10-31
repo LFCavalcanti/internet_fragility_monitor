@@ -19,7 +19,7 @@ export default async function Home() {
     const lastPollAt = lastAnsweredPollAt(snapshot.map(e => e.result));
 
     // O módulo de Provider Status decide o estado de cada Provider; a página só exibe.
-    // Provider com Feed vai com o Feed, lido ou não; Provider só com Probes vai sem Feed, com a resposta dos Probes.
+    // Provider com Feed vai com cada Feed, lido ou não; Provider só com Probes vai sem Feed, com a resposta dos Probes.
     const statuses = snapshot.map(entry => ({
         ...entry,
         decision: decideProviderStatus(toProviderStatusInput(entry.result, now)),

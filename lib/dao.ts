@@ -72,6 +72,18 @@ export async function getLatestStatusCheck(providerId: string): Promise<StatusCh
     });
 }
 
+/** As leituras do último Poll do Provider: uma por Feed, todas gravadas com a mesma hora, na ordem de gravação. */
+export async function getLatestStatusChecks(providerId: string): Promise<StatusCheck[]> {
+    const latest = await getLatestStatusCheck(providerId);
+    if (!latest?.checkedAt) return latest ? [latest] : [];
+
+    const db = getDb();
+    return await db.query.statusChecks.findMany({
+        where: and(eq(statusChecks.providerId, latest.providerId), eq(statusChecks.checkedAt, latest.checkedAt)),
+        orderBy: [asc(statusChecks.id)],
+    });
+}
+
 export async function getGlobalLatestStatusCheck(): Promise<StatusCheck | undefined> {
     const db = getDb();
     return await db.query.statusChecks.findFirst({

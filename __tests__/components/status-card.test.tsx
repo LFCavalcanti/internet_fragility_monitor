@@ -43,7 +43,7 @@ describe('StatusCard', () => {
 
     const createResult = (overrides: Partial<StatusResult> = {}): StatusResult => ({
         providerId: 'aws',
-        status: 'operational',
+        readings: ['operational'],
         incidents: [],
         lastUpdated: hoursBefore(now, 0.1),
         ...overrides,
@@ -54,6 +54,7 @@ describe('StatusCard', () => {
         incidents: [],
         upcomingMaintenance: null,
         accessOnly: false,
+        partialReading: null,
         ...overrides,
     });
 
@@ -82,7 +83,7 @@ describe('StatusCard', () => {
         render(
             <StatusCard
                 {...baseProps}
-                result={createResult({ status: 'operational' })}
+                result={createResult({ readings: ['operational'] })}
                 decision={createDecision({ status: 'maintenance' })}
             />
         );
@@ -123,6 +124,17 @@ describe('StatusCard', () => {
     it('Provider com Feed não mostra a marca de "só acesso"', () => {
         renderCard({ status: 'operational' });
         expect(screen.queryByText(/verificação de acesso/)).not.toBeInTheDocument();
+    });
+
+    it('Partial Reading mostra a marca "1 de 2 feeds sem leitura" junto do estado', () => {
+        renderCard({ status: 'degraded', partialReading: { unread: 1, total: 2 } });
+        expect(screen.getByText('degraded')).toBeInTheDocument();
+        expect(screen.getByText('1 de 2 feeds sem leitura')).toBeInTheDocument();
+    });
+
+    it('sem Partial Reading não há marca', () => {
+        renderCard({ status: 'operational' });
+        expect(screen.queryByText(/sem leitura/)).not.toBeInTheDocument();
     });
 
     it('sem Upcoming Maintenance não há linha', () => {
@@ -178,7 +190,7 @@ describe('StatusCard', () => {
             render(
                 <StatusCard
                     {...baseProps}
-                    result={createResult({ status: 'unreachable' })}
+                    result={createResult({ readings: ['unreachable'] })}
                     decision={createDecision({ status: 'unreachable' })}
                 />
             );

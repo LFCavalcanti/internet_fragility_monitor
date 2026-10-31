@@ -96,11 +96,29 @@ describe("getLatestStatus lê o Provider Catalog", () => {
         const snapshot = await getLatestStatus(now);
 
         const cloudflare = snapshot.find(e => e.provider.id === "cloudflare");
-        expect(cloudflare?.result).toMatchObject({ providerId: "cloudflare", status: "degraded" });
+        expect(cloudflare?.result).toMatchObject({ providerId: "cloudflare", readings: ["degraded"] });
+    });
+
+    it("traz as leituras de cada Feed do último Poll, na ordem gravada, e nenhuma de um Poll anterior", async () => {
+        const checkedAt = Math.floor(now.getTime() / 1000) - 60;
+        const check = (status: string, at: number) =>
+            current.client.execute({
+                sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('github', ?, ?)",
+                args: [status, at],
+            });
+        await check("outage", checkedAt - 300);
+        await check("outage", checkedAt - 300);
+        await check("degraded", checkedAt);
+        await check("unreachable", checkedAt);
+
+        expect((await snapshotOf("github")).result).toMatchObject({
+            readings: ["degraded", "unreachable"],
+            lastUpdated: new Date(checkedAt * 1000),
+        });
     });
 
     it("um Provider sem leitura gravada vem Operational", async () => {
-        expect((await snapshotOf("aws")).result).toMatchObject({ providerId: "aws", status: "operational", incidents: [] });
+        expect((await snapshotOf("aws")).result).toMatchObject({ providerId: "aws", readings: ["operational"], incidents: [] });
     });
 
     it("um Provider sem logo nem status page no catálogo vem com os campos ausentes, não nulos", async () => {
@@ -127,7 +145,7 @@ describe("Incidents do Snapshot", () => {
 
         const { result } = await snapshotOf("aws");
 
-        expect(result.status).toBe("unreachable");
+        expect(result.readings).toEqual(["unreachable"]);
         expect(result.incidents).toEqual([
             expect.objectContaining({ kind: "problem", title: "Elevated errors", status: "identified" }),
         ]);
@@ -248,6 +266,37 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         await checkedAgo("cloudflare", "unreachable");
 
         expect(await decisionFor("cloudflare")).toMatchObject({ status: "unreachable", accessOnly: false });
+    });
+
+    it("com dois Feeds lidos e manutenção em andamento gravada, o estado sai igual ao de cada Feed com os seus Incidents", async () => {
+        await checkedAgo("cloudflare", "operational");
+        await checkedAgo("cloudflare", "operational");
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
+        );
+
+        expect((await decisionFor("cloudflare")).status).toBe("maintenance");
+    });
+
+    it("manutenção em andamento gravada não esconde o Degraded de outro Feed lido, em qualquer ordem", async () => {
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
+        );
+        await checkedAgo("cloudflare", "operational");
+        await checkedAgo("cloudflare", "degraded");
+
+        expect((await decisionFor("cloudflare")).status).toBe("degraded");
+    });
+
+    it("quando nenhum Feed foi lido, os Incidents gravados continuam no card", async () => {
+        await checkedAgo("cloudflare", "unreachable");
+        await checkedAgo("cloudflare", "unreachable");
+        await insertIncident({ providerId: "cloudflare", title: "Open issue", status: "identified", createdAt: hoursBefore(now, 1) });
+
+        const decision = await decisionFor("cloudflare");
+
+        expect(decision).toMatchObject({ status: "unreachable", partialReading: null });
+        expect(decision.incidents.map(i => i.title)).toEqual(["Open issue"]);
     });
 
     it("quando o Feed de um Provider é desativado, ele passa a ser um Provider só com Probes", async () => {
