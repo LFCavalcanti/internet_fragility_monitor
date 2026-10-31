@@ -5,12 +5,13 @@ import { feedDate } from "./feed-date";
 import { problemPhase } from "./problem-state";
 
 /**
- * A API guarda cerca de 18 mil manutenções, uma por instância, entre 30 dias atrás e um ano à frente, e entrega no
+ * O Feed guarda cerca de 18 mil manutenções, uma por instância, entre 30 dias atrás e um ano à frente, e entrega no
  * máximo 1000 por pedido, fora de ordem: sem filtro, a manutenção em andamento fica de fora. O pedido começa três
  * dias atrás, porque quase toda manutenção dura até 55 h (coleta de 31/10/2026) e o filtro só olha a data de início.
+ * Num fim de semana de release a lista passa do limite, e o que vem depois dele não é lido: isso vai ao log.
  */
 const MAINTENANCE_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
-const MAINTENANCE_LIMIT = "1000";
+const MAINTENANCE_LIMIT = 1000;
 
 /** Os dois valores que `/incidents/impactTypes` publica. */
 const severity = z.enum(["minor", "major"]);
@@ -105,6 +106,10 @@ function declaredStatus(incidents: Incident[]): DeclaredStatus {
 }
 
 function toFeedContent(incidents: Incident[], maintenances: Maintenance[]): FeedContent {
+    if (maintenances.length >= MAINTENANCE_LIMIT) {
+        console.warn(`Feed da Salesforce: a lista de manutenções parou no limite de ${MAINTENANCE_LIMIT} itens; as seguintes não foram lidas.`);
+    }
+
     return {
         declared: declaredStatus(incidents),
         incidents: [...incidents.map(toProblem), ...maintenances.flatMap(toMaintenance)],
@@ -112,7 +117,7 @@ function toFeedContent(incidents: Incident[], maintenances: Maintenance[]): Feed
 }
 
 /**
- * Leitor da família Salesforce. A URL do catálogo é a raiz da API, e o Feed são duas listas: a classificação vem da
+ * Leitor da família Salesforce. A URL do catálogo é a raiz do Feed, que são duas listas: a classificação vem da
  * lista em que o item está. Os incidentes vêm só de `/incidents/active`: quem sai dela foi encerrado.
  */
 export const salesforceReader: FeedReader = {
@@ -121,7 +126,7 @@ export const salesforceReader: FeedReader = {
             startTime: new Date(Date.now() - MAINTENANCE_LOOKBACK_MS).toISOString(),
             sort: "plannedStartTime",
             order: "ASC",
-            limit: MAINTENANCE_LIMIT,
+            limit: String(MAINTENANCE_LIMIT),
         });
         return [`${catalogUrl}/incidents/active`, `${catalogUrl}/maintenances?${query}`];
     },

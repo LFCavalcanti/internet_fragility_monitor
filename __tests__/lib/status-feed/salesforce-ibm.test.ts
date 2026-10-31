@@ -225,6 +225,21 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
     });
 });
 
+describe('Salesforce: limite da lista de manutenções', () => {
+    it('registra no log quando a lista bate no limite do pedido', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const [maintenance] = salesforceMaintenances();
+        respondWith(
+            FEED_URLS.salesforceMaintenances,
+            JSON.stringify(Array.from({ length: 1000 }, (_, id) => ({ ...maintenance, id }))),
+        );
+
+        await readProvider('salesforce');
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('1000'));
+    });
+});
+
 describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('payload real: avisos, notas de versão e boletins de segurança não são lidos', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'feed.rss'));
@@ -332,10 +347,20 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
         expect(incidents).toHaveLength(5);
     });
 
-    it('um incidente sem guid é conteúdo fora do formato', async () => {
+    it('um incidente sem guid usa o título sem a fase como id, porque o Feed não publicou um', async () => {
         respondWith(FEED_URLS.ibm, ibmRss(ibmItem({ title: 'INVESTIGATING: VPC errors', guid: null })));
 
+        const { status, incidents } = await readProvider('ibm-cloud');
+
+        expect(status).toBe('degraded');
+        expect(incidents[0].externalId).toBe('VPC errors');
+    });
+
+    it('uma categoria que a família não conhece é conteúdo fora do formato: pode ser um Incident', async () => {
+        respondWith(FEED_URLS.ibm, ibmRss(ibmItem({ title: 'INVESTIGATING: VPC errors', category: 'outage' })));
+
         expect(await readProvider('ibm-cloud')).toMatchObject({ status: 'unreachable', incidents: [] });
+        expect(console.error).toHaveBeenCalled();
     });
 
     it('um item sem categoria é conteúdo fora do formato: não dá para saber se é um Incident', async () => {

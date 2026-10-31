@@ -6,9 +6,12 @@ import { parseRssItems, type RssItem } from "./rss";
 
 /**
  * O RSS não tem campo de fase: a IBM põe a fase no começo do título ("RESOLVED: ..."). Só as marcas conhecidas contam,
- * e só nessa posição; a palavra no meio do título ou do texto não diz nada. Lista e amostra nos Comments do Ticket 11.
+ * e só nessa posição; a palavra no meio do título ou do texto não diz nada. Lista e amostra em `ISSUES_ANNOTATION.md`, 1.2.
  */
 const PHASE_MARK = /^(INVESTIGATING|IDENTIFIED|MITIGATING|MONITORING|RESOLVED|PLANNED|MAINTENANCE|COMPLETED|CANCELLED):\s*/;
+
+/** Categorias que o Feed publica e que não são Incident. Uma categoria fora desta lista pode ser, então não é ignorada. */
+const OTHER_CATEGORIES = ["announcement", "release_note", "security"];
 
 function phaseOf(item: RssItem): string | undefined {
     return item.title.match(PHASE_MARK)?.[1];
@@ -23,11 +26,11 @@ function footerDate(item: RssItem, field: "Outage Start" | "Outage End" | "Updat
 }
 
 function commonFields(item: RssItem) {
-    if (!item.guid) throw new Error(`item da IBM sem guid: ${item.title}`);
+    // Sem a fase: o título do mesmo Incident não muda entre as fases.
+    const title = item.title.replace(PHASE_MARK, "");
     return {
-        externalId: item.guid,
-        // Sem a fase: o título do mesmo Incident não muda entre as fases.
-        title: item.title.replace(PHASE_MARK, ""),
+        externalId: item.guid || title,
+        title,
         description: item.description,
         url: item.link,
         createdAt: item.pubDate,
@@ -68,7 +71,8 @@ function toIncidents(item: RssItem): PublishedIncident[] {
     if (item.category.length === 0) throw new Error(`item da IBM sem categoria: ${item.title}`);
     if (item.category.includes("incident")) return [toProblem(item)];
     if (item.category.includes("maintenance")) return toMaintenance(item);
-    return [];
+    if (item.category.every(category => OTHER_CATEGORIES.includes(category))) return [];
+    throw new Error(`categoria desconhecida no Feed da IBM: ${item.category.join(", ")}`);
 }
 
 function toFeedContent(items: RssItem[]): FeedContent {
@@ -78,7 +82,7 @@ function toFeedContent(items: RssItem[]): FeedContent {
 
 /**
  * Leitor do RSS da IBM. A classificação vem do Feed, em `category`: `incident` traz problemas e `maintenance` traz
- * manutenções. O resto (`announcement`, `release_note`, `security`) não é Incident. O `guid` é o id.
+ * manutenções. O `guid` é o id; sem ele, o título sem a fase.
  */
 export const ibmRssReader: FeedReader = {
     read: ([body]) => toFeedContent(parseRssItems(body)),

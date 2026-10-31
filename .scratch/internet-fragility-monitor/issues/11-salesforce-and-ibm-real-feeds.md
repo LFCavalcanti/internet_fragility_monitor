@@ -62,3 +62,5 @@
 - O card da Salesforce ganha uma linha de Upcoming Maintenance com centenas de itens, um por instância (cerca de 900 na coleta). Até o Ticket 14 vale o item de título em `ISSUES_ANNOTATION.md` 2.2.
 
 **Para o Ticket 14:** ao trocar a identidade, a Salesforce passa a ter cerca de 1000 Incidents lidos por Poll; a busca `allDbIncidents.find` por item vale a pena rever. **Para o Ticket 16:** essas linhas contam na retenção.
+
+- **31/10/2026, code review do Ticket 11 (orquestrador):** corrigidos com teste: categoria desconhecida da IBM era ignorada em silêncio e agora é conteúdo fora do formato (história 12); item da IBM sem `guid` derrubava o Feed e agora usa o título sem a fase, como manda a spec; lista de manutenções da Salesforce no limite agora vai ao log. A fixture `feed.rss` tem 6 itens, não 7. Para o Ticket 14: `db-service` encerra como `completed` a manutenção que sai da lista, inclusive a que só ficou além do limite. Pendentes em `ISSUES_ANNOTATION.md`: 1.1, Outage da Salesforce por uma instância; 1.2, limite do `Outage End` da IBM. `read(bodies, addresses)` casa as listas por posição e ficou como está: só a Salesforce usa mais de um endereço.
