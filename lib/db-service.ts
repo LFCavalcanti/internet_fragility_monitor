@@ -35,7 +35,6 @@ export async function saveStatusResult(result: StatusResult) {
     await saveStatusCheck({
         providerId: result.providerId,
         status: result.status,
-        responseTime: result.responseTime,
         checkedAt: new Date(),
     });
 
@@ -158,7 +157,6 @@ export async function getLatestStatus(now: Date): Promise<SnapshotEntry[]> {
             result: {
                 providerId: provider.id,
                 status: (latestCheck?.status as StatusResult['status']) || "operational",
-                responseTime: latestCheck?.responseTime || 0,
                 incidents,
                 lastUpdated: latestCheck?.checkedAt || undefined,
                 accessOnly: isAccessOnly(sources.get(provider.id) ?? []),

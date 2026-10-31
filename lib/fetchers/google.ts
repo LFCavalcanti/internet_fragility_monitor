@@ -11,14 +11,12 @@ export class GoogleCloudFetcher implements Fetcher {
     }
 
     async fetchStatus(): Promise<StatusResult> {
-        const start = Date.now();
         try {
             const response = await fetch(this.apiUrl, { next: { revalidate: 60 } });
             if (!response.ok) {
                 throw new Error(`Failed to fetch GCP status: ${response.statusText}`);
             }
             const data = await response.json();
-            const responseTime = Date.now() - start;
 
             // GCP JSON returns a list of incidents.
             // We need to check if any are active.
@@ -35,7 +33,6 @@ export class GoogleCloudFetcher implements Fetcher {
                 providerId: this.providerId,
                 status,
                 incidents,
-                responseTime,
             };
         } catch (error) {
             console.error("Error fetching GCP status:", error);
@@ -43,7 +40,6 @@ export class GoogleCloudFetcher implements Fetcher {
                 providerId: this.providerId,
                 status: "unreachable",
                 incidents: [],
-                responseTime: 0,
             };
         }
     }

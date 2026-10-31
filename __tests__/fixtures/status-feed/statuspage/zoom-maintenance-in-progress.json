@@ -1,0 +1,611 @@
+{
+  "page": {
+    "id": "14qjgk812kgk",
+    "name": "Zoom",
+    "url": "https://www.zoomstatus.com",
+    "time_zone": "America/Los_Angeles",
+    "updated_at": "2026-10-30T16:09:45.452-07:00"
+  },
+  "incidents": [],
+  "scheduled_maintenances": [
+    {
+      "id": "rzyh3q1mjy28",
+      "name": "Zoom Phone maintenance - AMS5 Data Center: November 3, 2026",
+      "status": "scheduled",
+      "created_at": "2026-10-01T17:57:54.973-07:00",
+      "updated_at": "2026-10-08T10:31:40.358-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/xkw54fw1hfl0",
+      "started_at": "2026-10-01T17:57:54.964-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "5wz7vdzbxkfd",
+          "status": "scheduled",
+          "body": "Zoom will perform service maintenance at our AMS5 Data Center starting at 9:00 AM Pacific on November 03, 2026. Zoom Phone users registered to the those sip zones will be automatically registered in the FRA3 sip zone sequentially. During the maintenance window, a brief disconnection may be experienced and notifications may be missed. If you get disconnected, the system will attempt to reconnect you automatically.",
+          "incident_id": "rzyh3q1mjy28",
+          "created_at": "2026-10-01T17:57:55.121-07:00",
+          "updated_at": "2026-10-08T10:29:38.908-07:00",
+          "display_at": "2026-10-01T17:57:55.121-07:00",
+          "affected_components": [
+            {
+              "code": "773zkp1jzkgl",
+              "name": "Zoom Phone - EMEA - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-03T09:00:00.000-08:00",
+      "scheduled_until": "2026-11-05T21:30:00.000-08:00"
+    },
+    {
+      "id": "lc7zlsp6zcq0",
+      "name": "Zoom FileServer Release: November 03, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-29T22:21:43.385-07:00",
+      "updated_at": "2026-10-29T22:21:43.498-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/v3hb21gp6pj9",
+      "started_at": "2026-10-29T22:21:43.366-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "ty8yp7z10l5l",
+          "status": "scheduled",
+          "body": "We will be performing a scheduled maintenance for a upgrade related to our file services. This update covers multiple file-related components and is aimed at improving overall stability, scalability, and feature support.\n\nNo operational impact is expected.",
+          "incident_id": "lc7zlsp6zcq0",
+          "created_at": "2026-10-29T22:21:43.495-07:00",
+          "updated_at": "2026-10-29T22:21:43.495-07:00",
+          "display_at": "2026-10-29T22:21:43.495-07:00",
+          "affected_components": [
+            {
+              "code": "3z7b6jks10hm",
+              "name": "Zoom Meetings - Zoom Meetings",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "0842bncf5q9f",
+              "name": "Zoom Phone - Global - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "t2jk6yrqbp4j",
+              "name": "Zoom Chat - Zoom Chat",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "s5s5m6flk56z",
+              "name": "Zoom CX - Global - Zoom Contact Center",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-03T21:00:00.000-08:00",
+      "scheduled_until": "2026-11-14T02:00:00.000-08:00"
+    },
+    {
+      "id": "3lvcldqrmzvc",
+      "name": "Common Platform Voice Network Maintenance (Sydney, AU - SYD) November 6, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-12T18:18:35.328-07:00",
+      "updated_at": "2026-10-12T18:18:35.455-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/62n7zlgty31m",
+      "started_at": "2026-10-12T18:18:35.301-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "rd4jr31h1cfd",
+          "status": "scheduled",
+          "body": "We will perform scheduled maintenance to our voice infrastructure, including Bring Your Own Carrier (BYOC), Provider Exchange (PEX), and native PSTN carriers during this time. We do not anticipate any service impact. Customers and partners with redundant trunks to both the SYD and MEL datacenter will notice the SYD peer temporarily offline, however all traffic will be automatically rerouted to MEL peer for the duration of the maintenance period.   \n\nThis maintenance is on CPL and its PSTN service supporting backend ZP and ZCC in SYD and MEL regions.",
+          "incident_id": "3lvcldqrmzvc",
+          "created_at": "2026-10-12T18:18:35.451-07:00",
+          "updated_at": "2026-10-12T18:18:35.451-07:00",
+          "display_at": "2026-10-12T18:18:35.451-07:00",
+          "affected_components": [
+            {
+              "code": "ntdt65v1f9rv",
+              "name": "Zoom Meetings - Meeting Dial-in/Telephony",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "cwqgbrdl34rr",
+              "name": "Zoom Phone - AUSTRALIA - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "ntzqw8qm1006",
+              "name": "Zoom Phone - AUSTRALIA - BYOC - Premises",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "c4q3qqhkvvts",
+              "name": "Zoom Phone - AUSTRALIA - Provider Exchange",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "vg16ry1q1p8f",
+              "name": "Zoom Phone - AUSTRALIA - Native PSTN",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "fk725gggt4j9",
+              "name": "Zoom CX - AUSTRALIA - Zoom Contact Center",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "x6470q0w8mbw",
+              "name": "Zoom CX - AUSTRALIA - BYOC - Premises",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-06T03:00:00.000-08:00",
+      "scheduled_until": "2026-11-06T11:00:00.000-08:00"
+    },
+    {
+      "id": "k58w17tzq96z",
+      "name": "Decommissioning Numbers for Zoom Audio Conferencing: November 6, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-08T16:44:41.329-07:00",
+      "updated_at": "2026-10-08T16:46:34.371-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/nxmrnqj5ldwm",
+      "started_at": "2026-10-08T16:44:41.318-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "vchdn31n7cl6",
+          "status": "scheduled",
+          "body": "We will be undergoing scheduled maintenance during this time.",
+          "incident_id": "k58w17tzq96z",
+          "created_at": "2026-10-08T16:46:34.368-07:00",
+          "updated_at": "2026-10-08T16:46:34.368-07:00",
+          "display_at": "2026-10-08T16:46:34.368-07:00",
+          "affected_components": [
+            {
+              "code": "ntdt65v1f9rv",
+              "name": "Zoom Meetings - Meeting Dial-in/Telephony",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "5j7d27vs2jz1",
+          "status": "scheduled",
+          "body": "Due to a change with our phone carrier(s), the following Toll-Free or Toll numbers are being decommissioned from Audio Conferencing on 11/6/2026.\n\n \n\nAngola +244 XXXX255009\n\nBahrain +973 XXXX6238\n\nBrunei +673 XXXX309\n\nCosta Rica +506 XXXX425510\n\nEcuador +593 XXXX000785\n\nEgypt +20 XXXX0009608\n\nGhana +233 XXXX84860\n\nKazakhstan +7 XXXX0808315\n\nMacau +853 XXXX1604\n\nQatar +974 XXXX00059\n\nSouth Africa +27 XXXX64584\n\nTaiwan +886 XXXX17473, +886 XXXX99864\n\nUAE +971 XXXX4910899\n\n \n\nAccounts will still have other Toll-Free or Toll numbers available for use.\n\n \n\nPlease make sure to make any necessary updates in your Admin Portal (https://zoom.us/account/setting?tab=telephony) to ensure availability for use of the remaining Toll-Free or Toll numbers on your account. If you are not already using the remaining numbers, meetings currently scheduled for 11/6/2026 and onward may need to be rescheduled to ensure the updated Toll-Free or Toll numbers are reflected in the newly scheduled meetings. If meeting invites are not updated to reflect the additional Toll-Free or Toll numbers, participants dialing in will not be able to join using the decommissioned numbers after 11/6/2026. Any newly created meetings scheduled after you’ve updated the numbers in your portal will be automatically updated with the remaining Toll-Free or Toll numbers for future invites.\n\nTo view your current and new numbers in order to make the above changes, please visit your Admin Portal. There you will be able to find all Toll-Free or Toll numbers that will remain supported.",
+          "incident_id": "k58w17tzq96z",
+          "created_at": "2026-10-08T16:44:41.436-07:00",
+          "updated_at": "2026-10-08T16:44:41.436-07:00",
+          "display_at": "2026-10-08T16:44:41.436-07:00",
+          "affected_components": [
+            {
+              "code": "3z7b6jks10hm",
+              "name": "Zoom Meetings - Zoom Meetings",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "ntdt65v1f9rv",
+              "name": "Zoom Meetings - Meeting Dial-in/Telephony",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-06T17:00:00.000-08:00",
+      "scheduled_until": "2026-11-06T20:00:00.000-08:00"
+    },
+    {
+      "id": "sbpj2ncfcfhc",
+      "name": "Announcing IP Address Changes: November 6, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-07T12:18:59.874-07:00",
+      "updated_at": "2026-10-07T12:18:59.986-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/llf9hp31zx1l",
+      "started_at": "2026-10-07T12:18:59.856-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "6817wjms17r0",
+          "status": "scheduled",
+          "body": "The published IP ranges for Zoom Meetings and Webinars, Contact Center, and Phone services have been updated, including the removal of decommissioned entries and mask changes. We recommend that network administrators with Zoom-specific firewall or network rules update their systems as soon as possible.\n\nRemoved IPv4 addresses for Zoom Meetings and Webinars:\n3.235.96.0/23\n69.174.108.0/22\n\nNew IPv4 addresses for Zoom Meetings and Webinars:\n3.235.96.26/31\n3.235.96.158/31\n69.174.110.0/23\n\nRemoved IPv4 addresses for Zoom Phone:\n8.5.128.0/24\n69.174.108.0/22\n\nNew IPv4 addresses for Zoom Phone:\n69.174.110.0/23\n\nRemoved IPv4 addresses for Zoom Contact Center:\n3.235.96.0/23\n\nNew IPv4 addresses for Zoom Contact Center:\n3.235.96.26/31\n3.235.96.158/31\n\nFor a complete list, please see: \nhttps://assets.zoom.us/docs/ipranges/Zoom.txt\nhttps://assets.zoom.us/docs/ipranges/ZoomMeetings.txt\nhttps://assets.zoom.us/docs/ipranges/ZoomPhone.txt\nhttps://assets.zoom.us/docs/ipranges/ZoomPhone-TCP443.txt\nhttps://assets.zoom.us/docs/ipranges/ZoomPhone-TCP5091.txt\nhttps://assets.zoom.us/docs/ipranges/ZoomCC.txt\nhttps://assets.zoom.us/docs/ipranges/ZCCFlowScriptCallWidget.txt\n\nA complete list of network firewall IP ranges and domains for Zoom can be found on the Zoom Support site at:\n\nhttps://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0060548",
+          "incident_id": "sbpj2ncfcfhc",
+          "created_at": "2026-10-07T12:18:59.983-07:00",
+          "updated_at": "2026-10-07T12:18:59.983-07:00",
+          "display_at": "2026-10-07T12:18:59.983-07:00",
+          "affected_components": [
+            {
+              "code": "3z7b6jks10hm",
+              "name": "Zoom Meetings - Zoom Meetings",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "q4msk5dl4bhm",
+              "name": "Zoom Meetings - Zoom Webinars",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "0842bncf5q9f",
+              "name": "Zoom Phone - Global - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "s5s5m6flk56z",
+              "name": "Zoom CX - Global - Zoom Contact Center",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-06T23:59:00.000-08:00",
+      "scheduled_until": "2026-11-07T00:00:00.000-08:00"
+    },
+    {
+      "id": "kpydr3mnd191",
+      "name": "Scheduled Zoom Software Quarterly Lifecycle Update (11/7/2026)",
+      "status": "scheduled",
+      "created_at": "2026-08-07T10:41:03.413-07:00",
+      "updated_at": "2026-10-08T08:19:48.835-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/n2wrbp9sg8yc",
+      "started_at": "2026-10-07T17:15:29.408-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "g2fhhhym1l7y",
+          "status": "scheduled",
+          "body": "As a reminder approximately 30 days ahead of the upcoming enforcement, Zoom will be enforcing a new global minimum version this November 7. This affects the following products:\n\n\t◦\tVDI plugin\n\t◦\tZoom Phone Local Survivability (ZPLS) module\n\t◦\tMeeting SDK (Web)\n\nFor more information, such as specific versions we are enforcing, refer to the Zoom Software Quarterly Lifecycle Policy support article: https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061130\n\nTo assist with checking the client versions on your account, refer to the Dashboard support article: https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0062208#h_13ce9a73-91e5-4df6-9cb5-c815b1605cf5",
+          "incident_id": "kpydr3mnd191",
+          "created_at": "2026-10-07T17:15:29.408-07:00",
+          "updated_at": "2026-10-08T08:19:48.715-07:00",
+          "display_at": "2026-10-07T17:15:29.408-07:00",
+          "affected_components": [
+            {
+              "code": "9skbqhkvk721",
+              "name": "Zoom Website - Download Center & Clients",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "yk3twrpblpgw",
+          "status": "scheduled",
+          "body": "Zoom will be enforcing a new minimum version for the following areas, approximately 90 days from now, on November 7, 2026:\n\nVDI plugin\n\nZoom Phone Local Survivability (ZPLS) module\n\nMeeting SDK (Web)\n\nAll other clients and plugins not listed here will maintain the same version requirements as the August 2026 enforcement.\n\nFor more information, such as specific versions we are enforcing, refer to the Zoom Software Quarterly Lifecycle Policy support article: https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061130\n\nTo assist with checking the client versions on your account, refer to the Dashboard support article:\nhttps://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0062208#h_13ce9a73-91e5-4df6-9cb5-c815b1605cf5",
+          "incident_id": "kpydr3mnd191",
+          "created_at": "2026-08-07T10:41:03.507-07:00",
+          "updated_at": "2026-08-07T10:41:03.507-07:00",
+          "display_at": "2026-08-07T10:41:03.507-07:00",
+          "affected_components": [
+            {
+              "code": "9skbqhkvk721",
+              "name": "Zoom Website - Download Center & Clients",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-07T16:00:00.000-08:00",
+      "scheduled_until": "2026-11-07T17:00:00.000-08:00"
+    },
+    {
+      "id": "7c48nb5502q9",
+      "name": "Zoom Phone Maintenance - EU01 - FRA2 Data Center: November 09, 2026",
+      "status": "scheduled",
+      "created_at": "2026-10-05T02:35:43.883-07:00",
+      "updated_at": "2026-10-05T02:35:43.990-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/ds910km2fgnb",
+      "started_at": "2026-10-05T02:35:43.872-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "mc2z5m1mpyw1",
+          "status": "scheduled",
+          "body": "Zoom will perform service maintenance at our EU01-FRA2 Data Center starting at 9:00 AM Pacific on November 09, 2026. Zoom Phone users registered to the those sip zones will be automatically registered in the AMS2 sip zone sequentially. During the maintenance window, a brief disconnection may be experienced and notifications may be missed. If you get disconnected, the system will attempt to reconnect you automatically.",
+          "incident_id": "7c48nb5502q9",
+          "created_at": "2026-10-05T02:35:43.987-07:00",
+          "updated_at": "2026-10-05T02:35:43.987-07:00",
+          "display_at": "2026-10-05T02:35:43.987-07:00",
+          "affected_components": [
+            {
+              "code": "773zkp1jzkgl",
+              "name": "Zoom Phone - EMEA - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-09T09:00:00.000-08:00",
+      "scheduled_until": "2026-11-11T23:30:00.000-08:00"
+    },
+    {
+      "id": "ymm174sxzcsm",
+      "name": "Zoom Conference Room Connector DNS Changes in Saudi Arabia Region: November 13, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-16T11:15:46.364-07:00",
+      "updated_at": "2026-10-16T11:18:35.142-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/p0n0zr9sfdb6",
+      "started_at": "2026-10-16T11:15:46.353-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "hwqxvn9g1jh9",
+          "status": "scheduled",
+          "body": "As part of ongoing service enhancements for the Cloud Room Connector (CRC) service, Zoom will be updating DNS records for SIP/H.323  and IP endpoints in Saudi Arabia region  .\n\nEffective Date: November 14, 2026\n\nAction Required\n\nTo avoid service disruption, we recommend reviewing your CRC endpoint configurations as soon as possible, updating your DNS records and Destination ip with the new entries, and removing the older legacy records before November 14, 2026. \n\nIf you have any questions or issues, please contact Zoom Support.\n\nDNS Record Updates\n\nSaudi Arabia Region\n\nWe will update the data-center (DC) domains , along with their respective SRV-Records. An example of the change is as follows:\n\njed.zmvc.us >> sau.zoomcrc.com\n\nRecords to be replaced (A-Record and SRV-Record):\n\njed.zmvc.us:\n\n_h323cs._tcp.jed.zmvc.us\n\n_sip._tcp.jed.zmvc.us\n\n_sips._tcp.jed.zmvc.us\n\n_sip._udp.jed.zmvc.us\n\nNew records (A-Record and SRV-Record):\n\nsau.zoomcrc.com:\n\n_h323cs._tcp.sau.zoomcrc.com\n\n_sip._tcp.sau.zoomcrc.com\n\n_sips._tcp.sau.zoomcrc.com\n\n_sip._udp.sau.zoomcrc.com\n\n \n\n \n\nIP address to be updated Saudi Arabia Region\n\nWe will update the cloud room connector IP address for Jeddah .\n\n170.114.55.1 >> 159.124.226.235",
+          "incident_id": "ymm174sxzcsm",
+          "created_at": "2026-10-16T11:15:46.477-07:00",
+          "updated_at": "2026-10-16T11:18:35.138-07:00",
+          "display_at": "2026-10-16T11:15:46.477-07:00",
+          "affected_components": [
+            {
+              "code": "3ml2fn8g0psv",
+              "name": "Zoom Meetings - Zoom Conference Room Connector",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-13T19:30:00.000-08:00",
+      "scheduled_until": "2026-11-14T11:30:00.000-08:00"
+    },
+    {
+      "id": "ld4htx4mtmc2",
+      "name": "Zoom Conference Room Connector DNS Changes: November 14, 2026 (No Operational Impact)",
+      "status": "scheduled",
+      "created_at": "2026-10-09T10:27:26.042-07:00",
+      "updated_at": "2026-10-23T01:43:44.480-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/5kb0mvm451bs",
+      "started_at": "2026-10-09T10:27:26.172-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "xj788hq3s2h9",
+          "status": "scheduled",
+          "body": "We will be undergoing scheduled maintenance during this time.",
+          "incident_id": "ld4htx4mtmc2",
+          "created_at": "2026-10-23T01:37:39.182-07:00",
+          "updated_at": "2026-10-23T01:37:39.182-07:00",
+          "display_at": "2026-10-23T01:37:39.182-07:00",
+          "affected_components": [
+            {
+              "code": "3ml2fn8g0psv",
+              "name": "Zoom Meetings - Zoom Conference Room Connector",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "79wkk0sns8p9",
+          "status": "scheduled",
+          "body": "As part of ongoing service enhancements for the Cloud Room Connector (CRC) service, Zoom will be updating DNS records for SIP/H.323 endpoints in the Japan (Osaka and Tokyo), EU (France and Amsterdam), Australia (Melbourne and Sydney), Hong Kong, China, Canada (Toronto and Vancouver), and India (Mumbai and Hyderabad) regions.\n\nIn addition to the DNS record update, we will be decommissioning legacy DNS records in other regions that are no longer in use.\n\n<b>Effective Date</b>: November 14, 2026\n\n<b>Action Required</b>\nTo avoid service disruption, we recommend reviewing your CRC endpoint configurations as soon as possible, updating your DNS records with the new entries, and removing the older legacy records before November 14, 2026. \n\nIf you have any questions or issues, please contact Zoom Support.\n\n<b>DNS Record Updates</b>\n\n<b>Japan Region</b>\nWe will update the country-level domain and data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nzmjp.us >> jp.zoomcrc.com\nos.zmjp.us >> kix.zoomcrc.com\nty.zmjp.us >> nrt.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>zmjp.us:</b>\n\n_h323cs._tcp.zmjp.us\n_sip._tcp.zmjp.us\n_sips._tcp.zmjp.us\n_sip._udp.zmjp.us\n\n<b>os.zmjp.us:</b>\n\n_h323cs._tcp.os.zmjp.us\n_sip._tcp.os.zmjp.us\n_sips._tcp.os.zmjp.us\n_sip._udp.os.zmjp.us\n\n<b>ty.zmjp.us:</b>\n\n_h323cs._tcp.ty.zmjp.us\n_sip._tcp.ty.zmjp.us\n_sips._tcp.ty.zmjp.us\n_sip._udp.ty.zmjp.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>jp.zoomcrc.com:</b>\n\n_h323cs._tcp.jp.zoomcrc.com\n_sip._tcp.jp.zoomcrc.com\n_sips._tcp.jp.zoomcrc.com\n_sip._udp.jp.zoomcrc.com\n\n<b>kix.zoomcrc.com:</b>\n\n_h323cs._tcp.kix.zoomcrc.com\n_sip._tcp.kix.zoomcrc.com\n_sips._tcp.kix.zoomcrc.com\n_sip._udp.kix.zoomcrc.com\n\n<b>nrt.zoomcrc.com:</b>\n\n_h323cs._tcp.nrt.zoomcrc.com\n_sip._tcp.nrt.zoomcrc.com\n_sips._tcp.nrt.zoomcrc.com\n_sip._udp.nrt.zoomcrc.com\n\n<b>Canada Region</b>\nWe will update the country-level domain and data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nzmca.us >> ca.zoomcrc.com\ntr.zmca.us >> yyz.zoomcrc.com\nvn.zmca.us >> yvr.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>zmca.us:</b>\n\n_h323cs._tcp.zmca.us\n_sip._tcp.zmca.us\n_sips._tcp.zmca.us\n_sip._udp.zmca.us\n\n<b>tr.zmca.us:</b>\n\n_h323cs._tcp.tr.zmca.us\n_sip._tcp.tr.zmca.us\n_sips._tcp.tr.zmca.us\n_sip._udp.tr.zmca.us\n\n<b>vn.zmca.us:</b>\n\n_h323cs._tcp.vn.zmca.us\n_sip._tcp.vn.zmca.us\n_sips._tcp.vn.zmca.us\n_sip._udp.vn.zmca.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>ca.zoomcrc.com:</b>\n\n_h323cs._tcp.ca.zoomcrc.com\n_sip._tcp.ca.zoomcrc.com\n_sips._tcp.ca.zoomcrc.com\n_sip._udp.ca.zoomcrc.com\n\n<b>yyz.zoomcrc.com:</b>\n\n_h323cs._tcp.yyz.zoomcrc.com\n_sip._tcp.yyz.zoomcrc.com\n_sips._tcp.yyz.zoomcrc.com\n_sip._udp.yyz.zoomcrc.com\n\n<b>yvr.zoomcrc.com:</b>\n\n_h323cs._tcp.yvr.zoomcrc.com\n_sip._tcp.yvr.zoomcrc.com\n_sips._tcp.yvr.zoomcrc.com\n_sip._udp.yvr.zoomcrc.com\n\n<b>EU Region</b>\nWe will update the data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nam.zmeu.us >> ams.zoomcrc.com\nfr.zmeu.us >> fra.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>am.zmeu.us:</b>\n\n_h323cs._tcp.am.zmeu.us\n_sip._tcp.am.zmeu.us\n_sips._tcp.am.zmeu.us\n_sip._udp.am.zmeu.us\n\n<b>fr.zmeu.us:</b>\n\n_h323cs._tcp.fr.zmeu.us\n_sip._tcp.fr.zmeu.us\n_sips._tcp.fr.zmeu.us\n_sip._udp.fr.zmeu.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>ams.zoomcrc.com:</b>\n\n_h323cs._tcp.ams.zoomcrc.com\n_sip._tcp.ams.zoomcrc.com\n_sips._tcp.ams.zoomcrc.com\n_sip._udp.ams.zoomcrc.com\n\n<b>fra.zoomcrc.com:</b>\n\n_h323cs._tcp.fra.zoomcrc.com\n_sip._tcp.fra.zoomcrc.com\n_sips._tcp.fra.zoomcrc.com\n_sip._udp.fra.zoomcrc.com\n\n<b>Decommisioned Legacy Records</b>\n<b>Hosted Zone:</b> zmeu.us\n\n<b>A-Records:</b>\n\n<b>sip.zmeu.us</b>\n\nvip2.zmeu.us\nsip2.zmeu.us\nudp2.zmeu.us\nudp.zmeu.us\n\n<b>SRV-Records:</b>\n\n_h323cs._tcp.vip2.zmeu.us\n_sip._tcp.vip2.zmeu.us\n_sips._tcp.vip2.zmeu.us\n_sip._udp.vip2.zmeu.us\n\n<b>Australia Region</b>\nWe will update the country-level domain and data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nzmau.us >> au.zoomcrc.com\nme.zmau.us >> mel.zoomcrc.com\nsy.zmau.us >> syd.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>zmau.us:</b>\n\n_h323cs._tcp.zmau.us\n_sip._tcp.zmau.us\n_sips._tcp.zmau.us\n_sip._udp.zmau.us\n\n<b>me.zmau.us:</b>\n\n_h323cs._tcp.me.zmau.us\n_sip._tcp.me.zmau.us\n_sips._tcp.me.zmau.us\n_sip._udp.me.zmau.us\n\n<b>sy.zmau.us:</b>\n\n_h323cs._tcp.sy.zmau.us\n_sip._tcp.sy.zmau.us\n_sips._tcp.sy.zmau.us\n_sip._udp.sy.zmau.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>au.zoomcrc.com:</b>\n\n_h323cs._tcp.au.zoomcrc.com\n_sip._tcp.au.zoomcrc.com\n_sips._tcp.au.zoomcrc.com\n_sip._udp.au.zoomcrc.com\n\n<b>mel.zoomcrc.com:</b>\n\n_h323cs._tcp.mel.zoomcrc.com\n_sip._tcp.mel.zoomcrc.com\n_sips._tcp.mel.zoomcrc.com\n_sip._udp.mel.zoomcrc.com\n\n<b>syd.zoomcrc.com:</b>\n_h323cs._tcp.syd.zoomcrc.com\n_sip._tcp.syd.zoomcrc.com\n_sips._tcp.syd.zoomcrc.com\n_sip._udp.syd.zoomcrc.com\n\n<b>Decommisioned Legacy Records</b>\n<b>Hosted Zone:</b> zmau.us\n\n<b>SRV-Records:</b>\n\n_h323cs._tcp.vip2.zmau.us\n_sip._tcp.vip2.zmau.us\n_sip._tcp.vip2.zmau.us\n_sip._udp.vip2.zmau.us\n_sips._udp.vip2.zmau.us\n\n<b>China Region</b>\n\n<b>Decommisioned Legacy Records</b>\n<b>Hosted Zone:</b> zmcn.us\n\n<b>A-Records:</b>\n\nudp.zmcn.us\nudp2.zmcn.us\nvip2.zmcn.us\nsip2.zmcn.us\nsip.zmcn.us\n\n<b>SRV-Records:</b>\n\n_h323cs._tcp.vip2.zmcn.us\n_sip._tcp.vip2.zmcn.us\n_sips._tcp.vip2.zmcn.us\n_sip._udp.vip2.zmcn.us\n\n<b>Hong Kong Region</b>\nWe will update the country-level domain and data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nzmhk.us >> hkg.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>zmhk.us:</b>\n\n_h323cs._tcp.zmhk.us\n_sip._tcp.zmhk.us\n_sips._tcp.zmhk.us\n_sip._udp.zmhk.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>hkg.zoomcrc.com:</b>\n\n_h323cs._tcp.hkg.zoomcrc.com\n_sip._tcp.hkg.zoomcrc.com\n_sips._tcp.hkg.zoomcrc.com\n_sip._udp.hkg.zoomcrc.com\n\n<b>Decommisioned Legacy Records</b>\n<b>Hosted Zone:</b> zmhk.us\n\n<b>A-Records:</b>\n\nvip2.zmhk.us\nudp2.zmhk.us\nsip2.zmhk.us\nudp.zmhk.us\nsip.zmhk.us\n\n<b>SRV-Records:</b>\n\n_sip._tcp.vip2.zmhk.us\n_sip._udp.vip2.zmhk.us\n_sips._tcp.vip2.zmhk.us\n_h323cs._tcp.vip2.zmhk.us\n\n<b>India Region</b>\nWe will update the country-level domain and data-center (DC) domains, along with their respective SRV-Records. An example of the change is as follows:\n\nzmin.us >> in.zoomcrc.com\nhy.zmin.us >> hy2.zoomcrc.com\nmb.zmin.us >> mb2.zoomcrc.com\n\n<b>Records to be replaced (A-Record and SRV-Record):</b>\n<b>zmin.us:</b>\n\n_h323cs._tcp.zmin.us\n_sip._tcp.zmin.us\n_sips._tcp.zmin.us\n_sip._udp.zmin.us\n\n<b>hy.zmin.us:</b>\n\n_h323cs._tcp.hy.zmin.us\n_sip._tcp.hy.zmin.us\n_sips._tcp.hy.zmin.us\n_sip._udp.hy.zmin.us\n\n<b>mb.zmin.us:</b>\n\n_h323cs._tcp.mb.zmin.us\n_sip._tcp.mb.zmin.us\n_sips._tcp.mb.zmin.us\n_sip._udp.mb.zmin.us\n\n<b>New records (A-Record and SRV-Record):</b>\n<b>in.zoomcrc.com:</b>\n\n_h323cs._tcp.in.zoomcrc.com\n_sip._tcp.in.zoomcrc.com\n_sips._tcp.in.zoomcrc.com\n_sip._udp.in.zoomcrc.com\n\n<b>hy2.zoomcrc.com:</b>\n\n_h323cs._tcp.hy2.zoomcrc.com\n_sip._tcp.hy2.zoomcrc.com\n_sips._tcp.hy2.zoomcrc.com\n_sip._udp.hy2.zoomcrc.com\n\n<b>mb2.zoomcrc.com:</b>\n\n_h323cs._tcp.mb2.zoomcrc.com\n_sip._tcp.mb2.zoomcrc.com\n_sips._tcp.mb2.zoomcrc.com\n_sip._udp.mb2.zoomcrc.com\n\n<b>Decommisioned Legacy Records</b>\n<b>Hosted Zone:</b> zmin.us\n\n<b>A-Records:</b>\n\nvip2.zmin.us\nudp2.zmin.us\nudp.zmin.us\nsip2.zmin.us\nsip.zmin.us\n\n<b>SRV-Records:</b>\n\n_sips._tcp.vip2.zmin.us\n_sip._udp.vip2.zmin.us\n_sip._tcp.vip2.zmin.us\n_h323cs._tcp.vip2.zmin.us",
+          "incident_id": "ld4htx4mtmc2",
+          "created_at": "2026-10-09T10:27:26.172-07:00",
+          "updated_at": "2026-10-23T01:43:44.367-07:00",
+          "display_at": "2026-10-09T10:27:26.172-07:00",
+          "affected_components": [
+            {
+              "code": "3ml2fn8g0psv",
+              "name": "Zoom Meetings - Zoom Conference Room Connector",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-13T19:30:00.000-08:00",
+      "scheduled_until": "2026-11-14T11:30:00.000-08:00"
+    },
+    {
+      "id": "5l69p57ndml8",
+      "name": "Zoom Phone Maintenance - SA01 - KSA1 Data Center: November 16, 2026",
+      "status": "scheduled",
+      "created_at": "2026-10-19T02:49:03.839-07:00",
+      "updated_at": "2026-10-19T02:49:03.971-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/l9hn4hph8rd3",
+      "started_at": "2026-10-19T02:49:03.828-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "8r6jnf9z9gkh",
+          "status": "scheduled",
+          "body": "Zoom will perform service maintenance at our SA01-KSA1 Data Center starting at 9:00 AM Pacific on November 16, 2026. Zoom Phone users registered to the those sip zones will be automatically registered in the SA01-RUH1 sip zone sequentially. During the maintenance window, a brief disconnection may be experienced and notifications may be missed. If you get disconnected, the system will attempt to reconnect you automatically.",
+          "incident_id": "5l69p57ndml8",
+          "created_at": "2026-10-19T02:49:03.968-07:00",
+          "updated_at": "2026-10-19T02:49:03.968-07:00",
+          "display_at": "2026-10-19T02:49:03.968-07:00",
+          "affected_components": [
+            {
+              "code": "773zkp1jzkgl",
+              "name": "Zoom Phone - EMEA - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-16T09:00:00.000-08:00",
+      "scheduled_until": "2026-11-18T21:30:00.000-08:00"
+    },
+    {
+      "id": "59cn8pc21nsy",
+      "name": "Zoom Phone Maintenance (Sydney Data Center): November 20, 2026",
+      "status": "scheduled",
+      "created_at": "2026-10-29T08:07:22.958-07:00",
+      "updated_at": "2026-10-29T08:07:23.179-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/zfx0qnmsrnv3",
+      "started_at": "2026-10-29T08:07:22.947-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "99wx0t94jynz",
+          "status": "scheduled",
+          "body": "Zoom will perform service maintenance at our SYD1 Data Center starting at 2:00 AM Pacific (or 9:00 PM Sydney) on November 20, 2026. Zoom Phone users registered to those sip zones will be automatically registered in the MEL1 sip zone sequentially.\n\nDuring the maintenance window, a brief disconnection may be experienced and notifications may be missed. If you get disconnected, the system will attempt to reconnect you automatically.",
+          "incident_id": "59cn8pc21nsy",
+          "created_at": "2026-10-29T08:07:23.176-07:00",
+          "updated_at": "2026-10-29T08:07:23.176-07:00",
+          "display_at": "2026-10-29T08:07:23.176-07:00",
+          "affected_components": [
+            {
+              "code": "cwqgbrdl34rr",
+              "name": "Zoom Phone - AUSTRALIA - Zoom Phone",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-20T02:00:00.000-08:00",
+      "scheduled_until": "2026-11-20T10:00:00.000-08:00"
+    },
+    {
+      "id": "v5w5rpvqj35f",
+      "name": "Zoom Chat Backend Update: October, 2026 (No Operational Impact)",
+      "status": "in_progress",
+      "created_at": "2026-10-15T04:41:02.976-07:00",
+      "updated_at": "2026-10-16T09:00:09.485-07:00",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/y6dxc1m9qndl",
+      "started_at": "2026-10-15T04:41:02.964-07:00",
+      "page_id": "14qjgk812kgk",
+      "incident_updates": [
+        {
+          "id": "qmz7vvwhf05l",
+          "status": "in_progress",
+          "body": "Scheduled maintenance is currently in progress. We will provide updates as necessary.",
+          "incident_id": "v5w5rpvqj35f",
+          "created_at": "2026-10-16T09:00:09.457-07:00",
+          "updated_at": "2026-10-16T09:00:09.457-07:00",
+          "display_at": "2026-10-16T09:00:09.457-07:00",
+          "affected_components": null,
+          "deliver_notifications": false,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "2y9x0w6vkzxd",
+          "status": "scheduled",
+          "body": "We will be providing an update to Zoom Chat Backend Service. There will be no operational impact. All services will be available during this scheduled update (ZR status might be displayed as offline in the service logs but no operational impact).",
+          "incident_id": "v5w5rpvqj35f",
+          "created_at": "2026-10-15T04:41:03.120-07:00",
+          "updated_at": "2026-10-15T04:41:03.120-07:00",
+          "display_at": "2026-10-15T04:41:03.120-07:00",
+          "affected_components": [
+            {
+              "code": "t2jk6yrqbp4j",
+              "name": "Zoom Chat - Zoom Chat",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-10-16T09:00:00.000-07:00",
+      "scheduled_until": "2026-11-14T08:00:00.000-08:00"
+    }
+  ],
+  "status": {
+    "indicator": "none",
+    "description": "All Systems Operational"
+  }
+}

@@ -11,7 +11,6 @@ export interface StatusResult {
     providerId: string;
     status: ReadingStatus;
     incidents: IncidentData[];
-    responseTime?: number;
     lastUpdated?: Date;
     /**
      * Marca de "só acesso" (`isAccessOnly` em lib/provider-catalog.ts): o Provider não tem Feed ativo e a leitura
@@ -32,6 +31,12 @@ interface IncidentBase {
     updatedAt?: Date;
     /** Hora em que o Incident foi encerrado (resolved ou completed), quando conhecida. */
     resolvedAt?: Date;
+    /**
+     * Identidade do Incident lido: a Provider Source de origem e o id que o Feed dá a ele. Ausentes nos Incidents
+     * vindos do banco, que só os grava com o Ticket 14, e nos leitores que o Ticket 10 leva à política de leitura.
+     */
+    sourceId?: string;
+    externalId?: string;
 }
 
 /** Incident do tipo problema: falha publicada pelo Provider. */

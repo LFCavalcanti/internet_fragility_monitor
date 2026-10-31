@@ -12,7 +12,6 @@ export class AzureFetcher implements Fetcher {
     }
 
     async fetchStatus(): Promise<StatusResult> {
-        const start = Date.now();
         try {
             const response = await fetch(this.rssUrl, { next: { revalidate: 60 } });
             if (!response.ok) {
@@ -21,7 +20,6 @@ export class AzureFetcher implements Fetcher {
             const xml = await response.text();
             const parser = new XMLParser();
             const data = parser.parse(xml);
-            const responseTime = Date.now() - start;
 
             const items = data.rss?.channel?.item || [];
             const incidents: IncidentData[] = (Array.isArray(items) ? items : [items]).map((item: any) => this.mapIncident(item));
@@ -34,7 +32,6 @@ export class AzureFetcher implements Fetcher {
                 providerId: this.providerId,
                 status,
                 incidents,
-                responseTime,
             };
         } catch (error) {
             console.error("Error fetching Azure status:", error);
@@ -42,7 +39,6 @@ export class AzureFetcher implements Fetcher {
                 providerId: this.providerId,
                 status: "unreachable",
                 incidents: [],
-                responseTime: 0,
             };
         }
     }

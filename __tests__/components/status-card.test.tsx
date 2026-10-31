@@ -178,7 +178,7 @@ describe('StatusCard', () => {
             render(
                 <StatusCard
                     {...baseProps}
-                    result={createResult({ status: 'unreachable', responseTime: 0 })}
+                    result={createResult({ status: 'unreachable' })}
                     decision={createDecision({ status: 'unreachable' })}
                 />
             );
@@ -207,17 +207,6 @@ describe('StatusCard', () => {
             expect(screen.queryByText('Não foi possível ler a status page')).not.toBeInTheDocument();
             expect(container.firstElementChild).not.toHaveClass('grayscale');
         });
-    });
-
-    it('não exibe o tempo de resposta em nenhum estado', () => {
-        render(
-            <StatusCard
-                {...baseProps}
-                result={createResult({ responseTime: 250 })}
-                decision={createDecision()}
-            />
-        );
-        expect(screen.queryByText(/250/)).not.toBeInTheDocument();
     });
 
     it('renders external link to status page', () => {

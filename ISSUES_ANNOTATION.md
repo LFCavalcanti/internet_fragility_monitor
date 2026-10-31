@@ -30,7 +30,6 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Janela de 48 h dos resolvidos:** conta a partir da resolução (`resolvedAt`). Quando a hora da resolução não foi registrada (linhas antigas e RSS da AWS e da Azure, que não publicam essa hora), conta a partir da criação, e a janela nunca fica mais longa do que era antes. Quando um Incident é encerrado pelo Poll, a hora gravada é a do Poll, não a publicada pelo Feed (04).
 - **Título da lista no card:** passou de "Recent Activity (48h)" para "Recent Incidents", o termo do glossário (04).
 - **Provider só com Probes sem Recent Incidents:** sem Feed, ninguém declara nem encerra Incidents, então o card não lista Incidents desses Providers. Hoje Oracle, Salesforce e IBM não têm Incidents gravados (08).
-- **Probes com timeout de 5 s:** o mesmo do ping antigo; o timeout da política de leitura é do Ticket 09 (08).
 
 ## 1.3 Faxina técnica
 

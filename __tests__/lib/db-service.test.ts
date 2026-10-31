@@ -37,7 +37,6 @@ describe('db-service.ts', () => {
         const baseResult: StatusResult = {
             providerId: 'aws',
             status: 'operational',
-            responseTime: 150,
             incidents: [],
             lastUpdated: new Date(),
         };
@@ -49,9 +48,14 @@ describe('db-service.ts', () => {
                 expect.objectContaining({
                     providerId: 'aws',
                     status: 'operational',
-                    responseTime: 150,
                 })
             );
+        });
+
+        it('não grava tempo de resposta: a duração da leitura vai só para o log', async () => {
+            await saveStatusResult(baseResult);
+
+            expect(vi.mocked(saveStatusCheck).mock.calls[0][0].responseTime).toBeUndefined();
         });
 
         it('should create new incident when not in database', async () => {
@@ -220,7 +224,7 @@ describe('db-service.ts', () => {
             vi.mocked(getOpenIncidents).mockResolvedValue([openProblem, openMaintenance]);
 
             try {
-                await saveStatusResult({ providerId: 'aws', status: 'unreachable', incidents: [], responseTime: 0 });
+                await saveStatusResult({ providerId: 'aws', status: 'unreachable', incidents: [] });
             } finally {
                 vi.mocked(getAllIncidentsForProvider).mockResolvedValue([]);
                 vi.mocked(getOpenIncidents).mockResolvedValue([]);

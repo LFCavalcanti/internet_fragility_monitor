@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { fetchAllStatuses } from "./fetchers";
+import { fetchAllStatuses } from "./status-feed";
 import { saveStatusResult } from "./db-service";
 import { getGlobalLatestStatusCheck } from "./dao";
 

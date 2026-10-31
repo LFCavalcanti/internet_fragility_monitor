@@ -11,8 +11,8 @@ vi.mock('node-cron', () => ({
     },
 }));
 
-// Mock fetchers
-vi.mock('@/lib/fetchers', () => ({
+// Mock do módulo de Status Feed
+vi.mock('@/lib/status-feed', () => ({
     fetchAllStatuses: vi.fn().mockResolvedValue([
         { providerId: 'aws', status: 'operational', incidents: [], lastUpdated: new Date() },
     ]),
@@ -30,7 +30,7 @@ vi.mock('@/lib/dao', () => ({
 
 import { getGlobalLatestStatusCheck } from '@/lib/dao';
 import { saveStatusResult } from '@/lib/db-service';
-import { fetchAllStatuses } from '@/lib/fetchers';
+import { fetchAllStatuses } from '@/lib/status-feed';
 
 describe('cron.ts', () => {
     beforeEach(() => {

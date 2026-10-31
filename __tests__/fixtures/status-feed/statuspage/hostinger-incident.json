@@ -1,0 +1,237 @@
+{
+  "page": {
+    "id": "kc6vcr54r52g",
+    "name": "Hostinger",
+    "url": "http://statuspage.hostinger.com",
+    "time_zone": "Etc/UTC",
+    "updated_at": "2026-10-30T17:21:40.469Z"
+  },
+  "incidents": [
+    {
+      "id": "pj2zs1lx3n9d",
+      "name": "PHP Security Update for Web, Agency and cPanel Hosting",
+      "status": "monitoring",
+      "created_at": "2026-10-21T17:44:19.034Z",
+      "updated_at": "2026-10-23T12:57:45.904Z",
+      "monitoring_at": "2026-10-22T06:44:30.000Z",
+      "resolved_at": null,
+      "impact": "major",
+      "shortlink": "https://stspg.io/gsmkg56x1ry7",
+      "started_at": "2026-10-22T06:44:30.000Z",
+      "page_id": "kc6vcr54r52g",
+      "incident_updates": [
+        {
+          "id": "q3jvf3v2l2ld",
+          "status": "monitoring",
+          "body": "On October 23, 2026, the PHP project announced a new vulnerability (CVE-2026-115560).\n\nWebsites on our Web Hosting, Agency Hosting, and cPanel Hosting plans are already protected by the mitigation applied on October 21. No action is needed. PHP's upcoming regular update will be applied as part of our normal maintenance and does not change your protection.\n\nVPS clients manage PHP themselves. If your VPS runs PHP, set session.upload_progress.enabled=0 in php.ini and restart PHP. If you already did this on October 21, no further action is needed. Guide: https://www.hostinger.com/blog/protecting-php2shell/",
+          "incident_id": "pj2zs1lx3n9d",
+          "created_at": "2026-10-23T12:53:04.317Z",
+          "updated_at": "2026-10-23T12:57:45.899Z",
+          "display_at": "2026-10-23T12:53:04.000Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "hl3h32cnlpsn",
+          "status": "monitoring",
+          "body": "PHP upgrades are now complete across all managed hosting servers.\n\nFollowing the PHP security update, some websites show PHP version 8.5.11 rather than 8.5.12. This is expected. The security fix has been added to the PHP version your website already uses, so the version number does not change. To confirm the fix is applied, go to hPanel → Websites → Dashboard and open PHP Info from the sidebar. If the Build Date is October 21, 2026 or later, your website has the fix.\n\nNo action is needed from clients on our Web Hosting, Agency Hosting, or cPanel Hosting plans. VPS clients manage PHP themselves and can follow our guide: https://www.hostinger.com/blog/protecting-php2shell/",
+          "incident_id": "pj2zs1lx3n9d",
+          "created_at": "2026-10-22T06:44:30.616Z",
+          "updated_at": "2026-10-22T08:00:01.461Z",
+          "display_at": "2026-10-22T06:44:30.000Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "h0ls66plvjkf",
+          "status": "identified",
+          "body": "All cPanel servers have been updated to the latest cPanel build, which includes the PHP fix (build 138.18), and the latest Alt-PHP version.",
+          "incident_id": "pj2zs1lx3n9d",
+          "created_at": "2026-10-22T03:34:09.574Z",
+          "updated_at": "2026-10-22T03:34:09.574Z",
+          "display_at": "2026-10-22T03:34:09.574Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "nqvd6d6jdqj9",
+          "status": "identified",
+          "body": "We have completed update work in our Agency Hosting infrastructure and continue working to finish PHP upgrades to remaining managed hosting servers.\n\nWe'll provide further updates on progress. Thank you for your patience.",
+          "incident_id": "pj2zs1lx3n9d",
+          "created_at": "2026-10-21T19:12:34.463Z",
+          "updated_at": "2026-10-21T19:12:34.463Z",
+          "display_at": "2026-10-21T19:12:34.463Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        },
+        {
+          "id": "8sy4kbqc00y5",
+          "status": "identified",
+          "body": "Our team is aware about ongoing PHP security vulnerabilities CVE-2026-109618 and CVE-2026-109619 (php2shell). \n\nAfter conducting tests in our hosting environments, we have confirmed out platform is not vulnerable php2shell. We additionally implemented an extra layer of protection to ensure attack vectors cannot be accessed.\n\nAlthough our environments are not affected, we will be rolling out patched PHP versions across our infrastructure.\n\nNo actions are required from client side. We'll provide further updates soon. Thank you for your patience.",
+          "incident_id": "pj2zs1lx3n9d",
+          "created_at": "2026-10-21T17:44:19.097Z",
+          "updated_at": "2026-10-21T17:44:19.097Z",
+          "display_at": "2026-10-21T17:44:19.097Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "reminder_intervals": null
+    }
+  ],
+  "scheduled_maintenances": [
+    {
+      "id": "q5s826ch2jn4",
+      "name": "Server node1795 Maintenance",
+      "status": "scheduled",
+      "created_at": "2026-10-27T10:10:16.876Z",
+      "updated_at": "2026-10-27T10:10:16.930Z",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/16crw53qvsgr",
+      "started_at": "2026-10-27T10:10:16.871Z",
+      "page_id": "kc6vcr54r52g",
+      "incident_updates": [
+        {
+          "id": "7slfbr0tnjyt",
+          "status": "scheduled",
+          "body": "node1795 server located in United States is currently undergoing maintenance. Services could be temporarily inaccessible or might load slower than usual. We will provide further updates as necessary. Thank You for Your patience.",
+          "incident_id": "q5s826ch2jn4",
+          "created_at": "2026-10-27T10:10:16.928Z",
+          "updated_at": "2026-10-27T10:10:16.928Z",
+          "display_at": "2026-10-27T10:10:16.928Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-02T12:00:00.000Z",
+      "scheduled_until": "2026-11-02T14:30:00.000Z"
+    },
+    {
+      "id": "0y6d1dzq23lb",
+      "name": "Server in-mum-pve-node149.hostinger.io Maintenance",
+      "status": "scheduled",
+      "created_at": "2026-10-29T17:09:02.160Z",
+      "updated_at": "2026-10-29T17:09:02.230Z",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/y90hvtdhlck8",
+      "started_at": "2026-10-29T17:09:02.155Z",
+      "page_id": "kc6vcr54r52g",
+      "incident_updates": [
+        {
+          "id": "q7c81kbnbmjn",
+          "status": "scheduled",
+          "body": "in-mum-pve-node149.hostinger.io server located in India is currently undergoing maintenance. Services could be temporarily inaccessible or might load slower than usual. We will provide further updates as necessary. Thank You for Your patience.",
+          "incident_id": "0y6d1dzq23lb",
+          "created_at": "2026-10-29T17:09:02.227Z",
+          "updated_at": "2026-10-29T17:09:02.227Z",
+          "display_at": "2026-10-29T17:09:02.227Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-05T17:00:00.000Z",
+      "scheduled_until": "2026-11-05T19:00:00.000Z"
+    },
+    {
+      "id": "8wd96vhxxtf7",
+      "name": "Scheduled Hostinger Mail Maintenance",
+      "status": "scheduled",
+      "created_at": "2026-10-28T09:33:55.157Z",
+      "updated_at": "2026-10-28T09:33:55.229Z",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/8y030jpblv3w",
+      "started_at": "2026-10-28T09:33:55.146Z",
+      "page_id": "kc6vcr54r52g",
+      "incident_updates": [
+        {
+          "id": "vnrzy6fg4byk",
+          "status": "scheduled",
+          "body": "We have scheduled maintenance on Hostinger Mail to install security updates on our mail servers. The servers are updated a few at a time, so each mailbox is affected only once during the 1-hour maintenance window, for up to 5 minutes. During those minutes you may be unable to use your mailbox in webmail or in email apps, and you may encounter connection errors. For the rest of the window your email works as usual.",
+          "incident_id": "8wd96vhxxtf7",
+          "created_at": "2026-10-28T09:33:55.226Z",
+          "updated_at": "2026-10-28T09:33:55.226Z",
+          "display_at": "2026-10-28T09:33:55.226Z",
+          "affected_components": [
+            {
+              "code": "h8yzxxjfd2s1",
+              "name": "Hostinger Email - Hostinger Mail",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "k8d5x1z8z4gh",
+              "name": "Hostinger Email - Hostinger Webmail",
+              "old_status": "operational",
+              "new_status": "operational"
+            },
+            {
+              "code": "xkrnbtr2s35l",
+              "name": "Hostinger Email - Hostinger Mail IMAP/POP3 services",
+              "old_status": "operational",
+              "new_status": "operational"
+            }
+          ],
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-08T05:00:00.000Z",
+      "scheduled_until": "2026-11-08T06:00:00.000Z"
+    },
+    {
+      "id": "05zyys6py972",
+      "name": "Verisign registry maintenance",
+      "status": "scheduled",
+      "created_at": "2026-10-15T13:26:51.908Z",
+      "updated_at": "2026-10-15T13:26:51.959Z",
+      "monitoring_at": null,
+      "resolved_at": null,
+      "impact": "maintenance",
+      "shortlink": "https://stspg.io/r8fx5pw0sk17",
+      "started_at": "2026-10-15T13:26:51.905Z",
+      "page_id": "kc6vcr54r52g",
+      "incident_updates": [
+        {
+          "id": "k25j5h6923v3",
+          "status": "scheduled",
+          "body": "The Verisign registry will undergo scheduled maintenance from 2026-11-15 01:00:00 UTC to 2026-11-15 01:45:00 UTC. During this period, there may be disruptions to Verisign registry domain services. Affected TLDs: .com, .net. Domain management, registration and search services might be affected. We apologize for any inconvenience and appreciate your understanding.",
+          "incident_id": "05zyys6py972",
+          "created_at": "2026-10-15T13:26:51.957Z",
+          "updated_at": "2026-10-15T13:26:51.957Z",
+          "display_at": "2026-10-15T13:26:51.957Z",
+          "affected_components": null,
+          "deliver_notifications": true,
+          "custom_tweet": null,
+          "tweet_id": null
+        }
+      ],
+      "scheduled_for": "2026-11-15T01:00:00.000Z",
+      "scheduled_until": "2026-11-15T01:45:00.000Z"
+    }
+  ],
+  "status": {
+    "indicator": "none",
+    "description": "All Systems Operational"
+  }
+}

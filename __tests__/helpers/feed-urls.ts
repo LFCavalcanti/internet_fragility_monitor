@@ -7,5 +7,4 @@ export const FEED_URLS = {
     azure: 'https://azure.status.microsoft/en-us/status/feed/',
     googleCloud: 'https://status.cloud.google.com/incidents.json',
     heroku: 'https://status.heroku.com/api/v4/current-status',
-    jira: 'https://jira-software.status.atlassian.com',
 } as const;

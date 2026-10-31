@@ -11,14 +11,12 @@ export class HerokuFetcher implements Fetcher {
     }
 
     async fetchStatus(): Promise<StatusResult> {
-        const start = Date.now();
         try {
             const response = await fetch(this.apiUrl, { next: { revalidate: 60 } });
             if (!response.ok) {
                 throw new Error(`Failed to fetch Heroku status: ${response.statusText}`);
             }
             const data = await response.json();
-            const responseTime = Date.now() - start;
 
             // Heroku returns status for "production" and "development"
             // We'll check "production" for the main status
@@ -31,7 +29,6 @@ export class HerokuFetcher implements Fetcher {
                 providerId: this.providerId,
                 status,
                 incidents,
-                responseTime,
             };
         } catch (error) {
             console.error("Error fetching Heroku status:", error);
@@ -39,7 +36,6 @@ export class HerokuFetcher implements Fetcher {
                 providerId: this.providerId,
                 status: "unreachable",
                 incidents: [],
-                responseTime: 0,
             };
         }
     }

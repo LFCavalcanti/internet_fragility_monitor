@@ -3,15 +3,17 @@
  * Poll guiado pelo Provider Catalog, no banco real das migrations (SQLite em memória).
  * A rede é a única coisa simulada: cada URL responde como o Feed ou o Probe de verdade responderia.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
 
 let current: MigratedDb;
 vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
 
-import { fetchAllStatuses } from "@/lib/fetchers";
+import { fetchAllStatuses } from "@/lib/status-feed";
 import { saveStatusResult } from "@/lib/db-service";
-import { PROBE_TIMEOUT_MS } from "@/lib/fetchers/probe";
+import { READ_TIMEOUT_MS } from "@/lib/status-feed/read-policy";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -62,6 +64,18 @@ function routeOracleProbes(handler: FetchHandler) {
     route(ORACLE_STATUS_PAGE, handler);
     route(ORACLE_LOGIN, handler);
 }
+
+/** Rede que não responde: só termina quando a política de leitura aborta a requisição. */
+const hang: FetchHandler = (_url, init) =>
+    new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    });
+
+const statuspageFixture = (name: string) =>
+    readFileSync(join(__dirname, "../fixtures/status-feed/statuspage", name), "utf8");
+
+const CLOUDFLARE_FEED = "https://www.cloudflarestatus.com";
+const HOSTINGER_FEED = "https://statuspage.hostinger.com";
 
 beforeEach(async () => {
     current = await createMigratedDb();
@@ -137,6 +151,90 @@ describe("Poll guiado pelo Provider Catalog", () => {
     });
 });
 
+describe("política de leitura no Poll: cada fonte é independente", () => {
+    it("uma status page em timeout vira Unreachable, e os outros Providers saem com a leitura deles no mesmo Poll", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        route(CLOUDFLARE_FEED, hang);
+        let results: Awaited<ReturnType<typeof fetchAllStatuses>> | undefined;
+
+        const reading = fetchAllStatuses().then(r => (results = r));
+        await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
+        expect(results).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(1);
+        await reading;
+
+        expect(results?.find(r => r.providerId === "cloudflare")?.status).toBe("unreachable");
+        expect(results?.find(r => r.providerId === "github")?.status).toBe("operational");
+        expect(results?.find(r => r.providerId === "aws")?.status).toBe("operational");
+        expect(results?.find(r => r.providerId === "oracle-cloud")?.status).toBe("operational");
+    });
+
+    it("as fontes são lidas ao mesmo tempo: a que trava não segura as outras", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        route(CLOUDFLARE_FEED, hang);
+
+        const reading = fetchAllStatuses();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/github-feed lida em \d+ ms/));
+
+        await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+        await reading;
+    });
+
+    it("um Feed com resposta 5xx vira Unreachable, nunca Outage, e não afeta os demais", async () => {
+        route(CLOUDFLARE_FEED, async () => new Response("oops", { status: 503 }));
+
+        await poll();
+
+        expect(await statusChecks("cloudflare")).toEqual(["unreachable"]);
+        expect(await statusChecks("github")).toEqual(["operational"]);
+    });
+
+    it("um Feed com conteúdo fora do formato vira Unreachable, com registro no log", async () => {
+        route(CLOUDFLARE_FEED, async () => Response.json({ page: {}, status: {} }));
+
+        await poll();
+
+        expect(await statusChecks("cloudflare")).toEqual(["unreachable"]);
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining("cloudflare-feed"), expect.anything());
+    });
+
+    it("um Feed não lido não encerra os Incidents já gravados do Provider", async () => {
+        await current.client.execute(
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('inc-1', 'cloudflare', 'Open issue', 'investigating', 'problem')",
+        );
+        route(CLOUDFLARE_FEED, async () => new Response("oops", { status: 503 }));
+
+        await poll();
+
+        const row = await current.client.execute("SELECT status FROM incidents WHERE id = 'inc-1'");
+        expect(row.rows[0].status).toBe("investigating");
+    });
+
+    it("o tempo de resposta não é gravado com a leitura", async () => {
+        await poll();
+
+        const rows = await current.client.execute("SELECT DISTINCT response_time FROM status_checks");
+        expect(rows.rows.map(r => r.response_time)).toEqual([null]);
+    });
+
+    it("os payloads reais gravados atravessam o Poll até o banco, com estado e Incidents", async () => {
+        route(CLOUDFLARE_FEED, async () => new Response(statuspageFixture("cloudflare-major.json")));
+        route(HOSTINGER_FEED, async () => new Response(statuspageFixture("hostinger-incident.json")));
+
+        const results = await poll();
+
+        expect(results.find(r => r.providerId === "cloudflare")?.incidents.every(i => i.sourceId === "cloudflare-feed")).toBe(true);
+        expect(await statusChecks("cloudflare")).toEqual(["outage"]);
+        expect(await statusChecks("hostinger")).toEqual(["operational"]);
+        const rows = await current.client.execute(
+            "SELECT kind, status FROM incidents WHERE provider_id = 'hostinger' AND title LIKE 'PHP Security Update%'",
+        );
+        expect(rows.rows[0]).toMatchObject({ kind: "problem", status: "monitoring" });
+    });
+});
+
 describe("Probes de Providers sem Feed ativo", () => {
     it("Oracle, Salesforce e IBM rodam os Probes da status page e do login e ficam Operational quando respondem", async () => {
         const results = await poll();
@@ -180,14 +278,10 @@ describe("Probes de Providers sem Feed ativo", () => {
 
     it("timeout conta como falha", async () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-        const hang: FetchHandler = (_url, init) =>
-            new Promise((_resolve, reject) => {
-                init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
-            });
         routeOracleProbes(hang);
 
         const polling = poll();
-        await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS);
+        await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
         await polling;
 
         expect(await statusChecks("oracle-cloud")).toEqual(["unreachable"]);

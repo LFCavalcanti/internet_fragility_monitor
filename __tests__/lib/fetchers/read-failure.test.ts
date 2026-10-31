@@ -4,7 +4,6 @@ import { AWSFetcher } from '@/lib/fetchers/aws';
 import { AzureFetcher } from '@/lib/fetchers/azure';
 import { GoogleCloudFetcher } from '@/lib/fetchers/google';
 import { HerokuFetcher } from '@/lib/fetchers/heroku';
-import { StatusPageFetcher } from '@/lib/fetchers/statuspage';
 import type { Fetcher } from '@/lib/fetchers/types';
 import { FEED_URLS } from '../../helpers/feed-urls';
 
@@ -15,7 +14,6 @@ const fetchers: [string, () => Fetcher][] = [
     ['Azure', () => new AzureFetcher('azure', FEED_URLS.azure)],
     ['Google Cloud', () => new GoogleCloudFetcher('google-cloud', FEED_URLS.googleCloud)],
     ['Heroku', () => new HerokuFetcher('heroku', FEED_URLS.heroku)],
-    ['Statuspage.io', () => new StatusPageFetcher('jira', FEED_URLS.jira)],
 ];
 
 beforeEach(() => {
