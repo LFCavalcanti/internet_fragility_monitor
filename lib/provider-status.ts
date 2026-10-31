@@ -18,7 +18,7 @@ export type ProviderStatus =
  * Leitura de um Feed num Poll: lida, com estado declarado e Incidents, ou não lida. O estado vem só do declarado:
  * Maintenance é declarada na leitura, e nenhum Incident muda o estado aqui.
  * Um Feed não lido pode trazer os Incidents já gravados dele: entram nos Recent Incidents,
- * mas não contam para a Upcoming Maintenance, que seria dado velho tomado por atual.
+ * mas não contam para a Upcoming Maintenance, porque nenhum Feed confirmou neste Poll que seguem valendo.
  * `answered` diz se a fonte respondeu mesmo sem poder ser lida (conteúdo fora do formato, por exemplo), o que
  * impede Down. É obrigatório: um campo esquecido não pode virar um Down falso.
  */
