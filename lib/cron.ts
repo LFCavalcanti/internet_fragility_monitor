@@ -1,12 +1,12 @@
 import cron from "node-cron";
-import { fetchAllStatuses } from "./status-feed";
+import type { Database } from "./db";
+import { readActiveCatalog, readSnapshot, recordPoll } from "./poll-recording";
+import { readAllProviders } from "./status-feed";
 import { noSourceAnswered } from "./status-feed/provider-reading";
-import { saveStatusResult } from "./db-service";
-import { getGlobalLatestStatusCheck } from "./dao";
 
 let isRunning = false;
 
-export async function initCron() {
+export async function initCron(db: Database) {
     if (isRunning) return;
     isRunning = true;
 
@@ -14,43 +14,44 @@ export async function initCron() {
 
     // Check last update time
     try {
-        const lastCheck = await getGlobalLatestStatusCheck();
+        const { lastPollAt } = await readSnapshot(db, new Date());
 
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-        if (!lastCheck || !lastCheck.checkedAt || lastCheck.checkedAt < fiveMinutesAgo) {
+        if (!lastPollAt || lastPollAt < fiveMinutesAgo) {
             console.log("Last update was older than 5 minutes (or never). Triggering immediate update...");
-            await runJob();
+            await runPoll(db);
         } else {
-            console.log(`Data is fresh (last updated ${lastCheck.checkedAt.toISOString()}). Skipping immediate update.`);
+            console.log(`Data is fresh (last updated ${lastPollAt.toISOString()}). Skipping immediate update.`);
         }
     } catch (error) {
         console.error("Error checking last update time:", error);
-        
+
         // Fallback to running if check fails
-        runJob();
+        await runPoll(db);
     }
 
     // Schedule to run every 5 minutes
     cron.schedule("*/5 * * * *", () => {
-        console.log("Running scheduled status check...");
-        runJob();
+        console.log("Running scheduled Poll...");
+        runPoll(db);
     });
 }
 
-/** Um Poll: lê todas as fontes e grava, a não ser que nenhuma tenha respondido, que é falha do próprio monitor. */
-export async function runJob() {
+/**
+ * Um Poll: lê todas as fontes e grava, a não ser que nenhuma tenha respondido, que é falha do próprio monitor.
+ * Nunca rejeita: uma falha de leitura ou de gravação vai ao log, não grava nada e o agendador segue para o próximo Poll.
+ */
+export async function runPoll(db: Database) {
     try {
-        const results = await fetchAllStatuses();
-        if (noSourceAnswered(results)) {
+        const readings = await readAllProviders(await readActiveCatalog(db));
+        if (noSourceAnswered(readings)) {
             console.error("Poll descartado: nenhuma fonte de nenhum Provider respondeu (falha do próprio monitor). Nada foi gravado.");
             return;
         }
-        for (const result of results) {
-            await saveStatusResult(result);
-        }
-        console.log(`Updated status for ${results.length} providers.`);
+        await recordPoll(db, readings);
+        console.log(`Updated status for ${readings.length} providers.`);
     } catch (error) {
-        console.error("Error in Cron Job:", error);
+        console.error("Poll não gravado:", error);
     }
 }

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatusCard } from '@/components/status-card';
-import type { StatusResult } from '@/lib/status-feed/types';
 import type { ProviderStatusDecision } from '@/lib/provider-status';
 import { hoursBefore } from '../helpers/time';
 
@@ -36,18 +35,11 @@ const now = new Date('2026-10-28T12:00:00Z');
 describe('StatusCard', () => {
     const baseProps = {
         now,
+        lastUpdated: hoursBefore(now, 0.1),
         name: 'AWS',
         logo: '/logos/aws.svg',
         statusPageUrl: 'https://status.aws.amazon.com',
     };
-
-    const createResult = (overrides: Partial<StatusResult> = {}): StatusResult => ({
-        providerId: 'aws',
-        readings: ['operational'],
-        incidents: [],
-        lastUpdated: hoursBefore(now, 0.1),
-        ...overrides,
-    });
 
     const createDecision = (overrides: Partial<ProviderStatusDecision> = {}): ProviderStatusDecision => ({
         status: 'operational',
@@ -59,7 +51,7 @@ describe('StatusCard', () => {
     });
 
     const renderCard = (decision: Partial<ProviderStatusDecision> = {}, props: Partial<typeof baseProps> = {}) =>
-        render(<StatusCard {...baseProps} {...props} result={createResult()} decision={createDecision(decision)} />);
+        render(<StatusCard {...baseProps} {...props} decision={createDecision(decision)} />);
 
     it('renders provider name correctly', () => {
         renderCard();
@@ -83,7 +75,6 @@ describe('StatusCard', () => {
         render(
             <StatusCard
                 {...baseProps}
-                result={createResult({ readings: ['operational'] })}
                 decision={createDecision({ status: 'maintenance' })}
             />
         );
@@ -190,7 +181,6 @@ describe('StatusCard', () => {
             render(
                 <StatusCard
                     {...baseProps}
-                    result={createResult({ readings: ['unreachable'] })}
                     decision={createDecision({ status: 'unreachable' })}
                 />
             );
@@ -233,7 +223,6 @@ describe('StatusCard', () => {
             <StatusCard
                 name="Test Provider"
                 now={now}
-                result={createResult({ providerId: 'test-provider' })}
                 decision={createDecision()}
             />
         );

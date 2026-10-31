@@ -3,8 +3,8 @@
  * a leitura de cada Feed e o resultado de cada Probe. Quem decide o estado é o módulo de Provider Status.
  * Toda busca de rede passa pela política de leitura (`read-policy.ts`); cada família só interpreta o conteúdo.
  */
-import { getActiveProviders, getActiveSources } from "../dao";
-import { isAccessOnly, isFeedFamily, sourcesByProvider, type FeedFamily } from "../provider-catalog";
+import type { ActiveCatalog } from "../poll-recording";
+import { groupByProvider, isAccessOnly, isFeedFamily, type FeedFamily } from "../provider-catalog";
 import type { FeedReading } from "../provider-status";
 import type { ProviderSource } from "../schema";
 import type { ProviderReading } from "./provider-reading";
@@ -48,9 +48,8 @@ async function readProvider(providerId: string, sources: ProviderSource[]): Prom
     return { providerId, accessOnly: isAccessOnly(sources), feeds, probes };
 }
 
-/** Um Poll: lê o Provider Catalog no banco a cada rodada e cada Provider ativo pelas suas fontes ativas. */
-export async function fetchAllStatuses(): Promise<ProviderReading<ReadIncident>[]> {
-    const [providers, sources] = await Promise.all([getActiveProviders(), getActiveSources()]);
-    const byProvider = sourcesByProvider(sources);
+/** A leitura de um Poll: cada Provider ativo do catálogo, pelas suas fontes ativas. */
+export async function readAllProviders({ providers, sources }: ActiveCatalog): Promise<ProviderReading<ReadIncident>[]> {
+    const byProvider = groupByProvider(sources);
     return Promise.all(providers.map(p => readProvider(p.id, byProvider.get(p.id) ?? [])));
 }

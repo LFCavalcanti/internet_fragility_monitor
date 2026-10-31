@@ -18,7 +18,6 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Card Unreachable sem Upcoming Maintenance:** o card Unreachable não mostra a linha de manutenções agendadas. Escolha do agente, apoiada na história 6; a spec não cobre (03).
 - **Textos do hero fora do glossário:** o destaque usa "reporting a major outage", "Major outage reported.", "Major outages detected" (o glossário evita "major" para Outage) e "Service Down", "Service Outage", "Service Degraded" (o glossário evita "service" para Provider). Decidir se troca os textos (05).
 - **Banco sem nenhum Poll:** o hero entra no estado neutro de Stale Snapshot e mostra "No Poll recorded yet." no lugar da hora do último Poll. A spec não cobre o caso (06).
-- **Todos os Providers Unreachable:** até o Ticket 13 trazer a hora real do Poll, a hora do último Poll considera só leituras respondidas; com todos Unreachable desde sempre, o hero e o aviso mostram "No Poll recorded yet." em vez de uma hora (06, correção pós-review `e71d499`).
 - **Português e inglês misturados na tela:** a página é em inglês, mas alguns textos ficaram em português porque a spec e a árvore os citam assim: "Não foi possível ler a status page" (card Unreachable), "Status page e serviço sem resposta" (destaque de Down), "Sem leitura recente" (hero e aviso), "verificação de acesso, sem feed de status" (marca de "só acesso" no card). O aviso de Stale ficou "Sem leitura recente. The provider cards may be out of date." Decidir o idioma da página (03, 05, 06, 08).
 
 - **Data do Incident da AWS no card:** a decisão de 28/10/2026 fala em Incident "com a data da última atualização", mas o card mostra a data de início: o evento do Oriente Médio aparece como 01/03/2026, não 15/09/2026. O leitor traz as duas datas; a gravação guarda só a de início. Decidir qual data o card mostra (10, code review).
@@ -41,7 +40,6 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 ## 1.3 Faxina técnica
 
 - **Testes e lint pegam os worktrees:** `vitest run` e `eslint .` na checkout principal também varrem `.claude/worktrees/`, e os testes em andamento de um agente aparecem como falhas na `main`. Hoje o orquestrador roda com `--exclude ".claude/**"` e `--ignore-pattern ".claude/**"`. Proposta: acrescentar a exclusão em `vitest.config.mts` e `eslint.config.mjs` (orquestração, 28/10/2026).
-- **Testes com banco mockado:** os testes de `dao` e `db-service` dos tickets 02–04 mockam o banco, em vez de usar o SQLite em memória com as migrations reais (decisão Q33). O helper `__tests__/helpers/migrated-db.ts` já existe (Ticket 07); a troca é do Ticket 13 (02, 04).
 
 ---
 
@@ -58,7 +56,7 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 
 - **Incidents da AWS reabertos pelo título:** a gravação casa Incidents pelo título, e os eventos da AWS repetem poucos títulos; um Incident encerrado pode voltar a abrir quando outro evento com o mesmo título aparece. A identidade pela fonte é do Ticket 14; o agrupamento por evento do Ticket 10 reduz o efeito (04).
 - **Manutenções da Heroku com o mesmo título:** a lista `scheduled` repete "Heroku Platform Maintenance". Pela identidade por título, cada Poll alterna a fase da mesma linha. Não aparece na página, porque as manutenções vêm com data passada. Ticket 14 (10).
-- **Um Poll lido pelo catálogo novo:** a leitura gravada não registra se veio de Feed ou de Probes; a página decide pelo catálogo atual. Logo depois de uma migration que ative ou desative um Feed, e até o Poll seguinte, a última leitura é interpretada pelo tipo novo (ex.: um "operational" dos Probes da Salesforce lido como Feed). Janela de um Poll; a leitura do Snapshot é refeita no Ticket 13 (08, code review).
+- **Um Poll lido pelo catálogo novo:** a leitura gravada não registra se veio de Feed ou de Probes; a página decide pelo catálogo atual. Logo depois de uma migration que ative ou desative um Feed, e até o Poll seguinte, a última leitura é interpretada pelo tipo novo (ex.: um "operational" dos Probes da Salesforce lido como Feed). Janela de um Poll. O Ticket 13 refez a leitura do Snapshot, mas isso continua: resolver exige gravar a origem da leitura numa coluna, assunto do Ticket 15, que muda a linha gravada (08, code review).
 - **Manutenções da Salesforce com o mesmo título:** a Salesforce publica uma manutenção por instância, com poucos nomes (20 nomes em 1000 itens). Pela identidade por título, o primeiro Poll grava cerca de 1000 linhas e os seguintes atualizam sempre a mesma linha de cada nome, alternando a fase; uma "em andamento" pode ser sobrescrita por uma agendada de mesmo nome, ou uma agendada aparecer como em andamento. Ticket 14 (11).
 - **Manutenções da Cloudflare com o mesmo título:** pela identidade por título, 25 manutenções agendadas aparecem como 22. Ticket 14 (02).
 

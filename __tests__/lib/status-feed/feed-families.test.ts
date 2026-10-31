@@ -10,13 +10,14 @@ import { FEED_URLS } from '../../helpers/feed-urls';
 import { feedFixture, hang, outcomeOf, healthyResponse } from '../../helpers/status-feed';
 import { hoursBefore } from '../../helpers/time';
 
-let current: MigratedDb;
-vi.mock('@/lib/db', () => ({ getDb: () => current.db }));
-
-import { fetchAllStatuses } from '@/lib/status-feed';
+import { readActiveCatalog, recordPoll } from '@/lib/poll-recording';
+import { readAllProviders } from '@/lib/status-feed';
 import { READ_TIMEOUT_MS } from '@/lib/status-feed/read-policy';
-import { saveStatusResult } from '@/lib/db-service';
 import { decideProviderStatus } from '@/lib/provider-status';
+
+let current: MigratedDb;
+
+const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
 
 type Network = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -24,7 +25,7 @@ const answers = new Map<string, Network>();
 const respondWith = (feedUrl: string, body: string) => answers.set(feedUrl, async () => new Response(body));
 
 async function readProvider(providerId: string) {
-    const results = await fetchAllStatuses();
+    const results = await readAll();
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
     return outcomeOf(result);
@@ -110,7 +111,7 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
 
     it('payload real gravado por dois Polls: três Incidents, não 39, e o resolvido com a hora publicada', async () => {
         for (let i = 0; i < 2; i++) {
-            for (const result of await fetchAllStatuses()) await saveStatusResult(result);
+            await recordPoll(current.db, await readAll());
         }
 
         const rows = await current.client.execute(
@@ -357,7 +358,7 @@ describe('Google Cloud', () => {
     it('os payloads reais, com relatórios longos, são gravados sem interromper o Poll', async () => {
         respondWith(FEED_URLS.googleCloud, feedFixture('google-cloud', 'incidents.json'));
 
-        for (const result of await fetchAllStatuses()) await saveStatusResult(result);
+        await recordPoll(current.db, await readAll());
 
         const rows = await current.client.execute(
             "SELECT count(*) AS total, max(length(description)) AS longest FROM incidents WHERE provider_id = 'google-cloud'",
@@ -479,7 +480,7 @@ describe.each([
         answers.set(feedUrl, hang);
         let result: ReturnType<typeof outcomeOf>[] | undefined;
 
-        const reading = fetchAllStatuses().then(r => (result = r.map(outcomeOf)));
+        const reading = readAll().then(r => (result = r.map(outcomeOf)));
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
         expect(result).toBeUndefined();
         expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/github-feed lida em \d+ ms/));
@@ -525,7 +526,7 @@ describe.each([
 
 describe('o registro de leitores cobre as famílias que o Poll lê', () => {
     it('nenhum Feed ativo do catálogo fica sem leitor', async () => {
-        await fetchAllStatuses();
+        await readAll();
 
         expect(console.error).not.toHaveBeenCalled();
     });

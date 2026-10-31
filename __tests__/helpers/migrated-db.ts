@@ -19,6 +19,8 @@ export interface MigratedDb {
     db: TestDb;
     /** Aplica as migrations que ainda faltam, como o deploy faria num banco existente. */
     migrateRest(): Promise<void>;
+    /** As instruções SQL que o banco recebeu durante `action`. */
+    statementsDuring(action: () => Promise<unknown>): Promise<string[]>;
 }
 
 /**
@@ -27,7 +29,16 @@ export interface MigratedDb {
  */
 export async function createMigratedDb(options: { upTo?: string } = {}): Promise<MigratedDb> {
     const client = createClient({ url: ":memory:" });
-    const db = drizzle(client, { schema });
+    const statements: string[] = [];
+
+    // O logger do Drizzle vê cada consulta, inclusive dentro de transação, mas não as de um `batch`.
+    const batch = client.batch.bind(client);
+    client.batch = (stmts, mode) => {
+        statements.push(...stmts.map(s => (typeof s === "string" ? s : Array.isArray(s) ? s[0] : s.sql)));
+        return batch(stmts, mode);
+    };
+
+    const db = drizzle(client, { schema, logger: { logQuery: query => statements.push(query) } });
 
     const folder = options.upTo ? partialMigrationsFolder(options.upTo) : MIGRATIONS_FOLDER;
     try {
@@ -40,6 +51,11 @@ export async function createMigratedDb(options: { upTo?: string } = {}): Promise
         client,
         db,
         migrateRest: () => migrate(db, { migrationsFolder: MIGRATIONS_FOLDER }),
+        async statementsDuring(action) {
+            const start = statements.length;
+            await action();
+            return statements.slice(start);
+        },
     };
 }
 

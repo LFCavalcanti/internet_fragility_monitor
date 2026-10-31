@@ -7,7 +7,7 @@
  */
 import type { FeedReading } from "../provider-status";
 import type { ProviderSource } from "../schema";
-import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "../validation";
+import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "../incident-status";
 import type { DeclaredStatus, PublishedIncident, ReadIncident } from "./types";
 
 /** Quanto uma leitura espera, do pedido ao fim do conteúdo, antes de contar como falha. */

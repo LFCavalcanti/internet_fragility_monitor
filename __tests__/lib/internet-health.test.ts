@@ -2,12 +2,11 @@
 import { describe, it, expect } from 'vitest';
 import {
     decideInternetHealth,
-    lastAnsweredPollAt,
     type InternetHealth,
     type ProviderHealthEntry,
 } from '@/lib/internet-health';
 import type { ProviderStatus } from '@/lib/provider-status';
-import type { IncidentData, StatusResult } from '@/lib/status-feed/types';
+import type { IncidentData } from '@/lib/status-feed/types';
 
 const now = new Date('2026-10-26T15:00:00Z');
 
@@ -241,52 +240,5 @@ describe('decideInternetHealth: Stale Snapshot', () => {
         });
 
         expect(health).toEqual({ status: 'Stale', lastPollAt: null });
-    });
-});
-
-describe('lastAnsweredPollAt: hora do último Poll a partir do Snapshot', () => {
-    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
-    const reading = (
-        status: StatusResult['readings'][number],
-        lastUpdated?: Date,
-    ): Pick<StatusResult, 'readings' | 'lastUpdated'> => ({ readings: [status], lastUpdated });
-
-    it('é a leitura respondida mais recente', () => {
-        expect(lastAnsweredPollAt([reading('operational', minutesAgo(9)), reading('outage', minutesAgo(4))])).toEqual(
-            minutesAgo(4),
-        );
-    });
-
-    it('leituras unreachable não contam: Poll em que nenhum Provider responde é falha do monitor', () => {
-        expect(
-            lastAnsweredPollAt([reading('unreachable', minutesAgo(1)), reading('operational', minutesAgo(16))]),
-        ).toEqual(minutesAgo(16));
-    });
-
-    it('todos Unreachable desde o último Poll respondido, há 16 minutos: Stale Snapshot', () => {
-        const lastPollAt = lastAnsweredPollAt([
-            reading('unreachable', minutesAgo(1)),
-            reading('unreachable', minutesAgo(1)),
-            reading('degraded', minutesAgo(16)),
-        ]);
-        const health = decideInternetHealth({
-            providers: [provider('aws', 'outage')],
-            lastPollAt,
-            now,
-        });
-
-        expect(health).toEqual({ status: 'Stale', lastPollAt: minutesAgo(16) });
-    });
-
-    it('todos os Providers Unreachable: nenhum Poll respondido, Stale Snapshot', () => {
-        const lastPollAt = lastAnsweredPollAt([
-            reading('unreachable', minutesAgo(1)),
-            reading('unreachable', minutesAgo(1)),
-        ]);
-
-        expect(lastPollAt).toBeNull();
-        expect(decideInternetHealth({ providers: [], lastPollAt, now }).status).toBe(
-            'Stale',
-        );
     });
 });

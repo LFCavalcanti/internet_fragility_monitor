@@ -3,9 +3,8 @@
  * Módulo puro: recebe cada Provider do Snapshot com o estado decidido, a hora do último Poll e o relógio.
  * Termos conforme GLOSSARY.md.
  */
-import type { StatusResult } from "./status-feed/types";
 import type { ProviderStatus, ProviderStatusDecision } from "./provider-status";
-import type { SnapshotProvider } from "./snapshot-reading";
+import type { SnapshotProvider } from "./poll-recording";
 import { isClosed } from "./incident-status";
 
 export type InternetHealthStatus = "Healthy" | "Unstable" | "Critical";
@@ -62,21 +61,6 @@ export const STALE_TEXT = "Sem leitura recente";
  * O Ticket 17 (Poll Schedule) passa a derivar o limite da cadência central.
  */
 export const STALE_SNAPSHOT_AFTER_MS = 3 * 5 * 60 * 1000;
-
-/**
- * Hora do último Poll a partir do Snapshot: a leitura mais recente que não é `unreachable`.
- * Um Poll em que nenhum Provider responde é falha do próprio monitor e não renova o Snapshot.
- * Interino: o Ticket 13 troca pela hora real do Poll, gravada pela leitura do Snapshot.
- */
-export function lastAnsweredPollAt(results: Pick<StatusResult, "readings" | "lastUpdated">[]): Date | null {
-    return results.reduce<Date | null>(
-        (latest, r) =>
-            r.readings.some(reading => reading !== "unreachable") && r.lastUpdated && (!latest || r.lastUpdated > latest)
-                ? r.lastUpdated
-                : latest,
-        null,
-    );
-}
 
 /** Texto combinado para Down (árvore de decisões, seção 10). */
 export const DOWN_TEXT = "Status page e serviço sem resposta";

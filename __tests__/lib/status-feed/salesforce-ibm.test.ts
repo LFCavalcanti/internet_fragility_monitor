@@ -7,14 +7,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMigratedDb, type MigratedDb } from '../../helpers/migrated-db';
 import { FEED_URLS } from '../../helpers/feed-urls';
-import { feedFixture, healthyResponse, outcomeOf } from '../../helpers/status-feed';
+import { feedFixture, healthyResponse, outcomeOf, snapshotIncidentsOf } from '../../helpers/status-feed';
+import { readActiveCatalog, readSnapshot, recordPoll } from '@/lib/poll-recording';
+import { decideProviderStatus } from '@/lib/provider-status';
+import { readAllProviders } from '@/lib/status-feed';
+import type { ReadIncident } from '@/lib/status-feed/types';
 
 let current: MigratedDb;
-vi.mock('@/lib/db', () => ({ getDb: () => current.db }));
 
-import { fetchAllStatuses } from '@/lib/status-feed';
-import { getLatestStatus, saveStatusResult } from '@/lib/db-service';
-import type { ReadIncident } from '@/lib/status-feed/types';
+const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
+
+async function snapshotEntry(providerId: string) {
+    const now = new Date();
+    const entry = (await readSnapshot(current.db, now)).providers.find(e => e.provider.id === providerId)!;
+    return { entry, decision: decideProviderStatus({ ...entry.reading, now }) };
+}
 
 type Network = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -25,7 +32,7 @@ const salesforceIncidents = () => JSON.parse(feedFixture('salesforce', 'incident
 const salesforceMaintenances = () => JSON.parse(feedFixture('salesforce', 'maintenances.json'));
 
 async function readProvider(providerId: string) {
-    const results = await fetchAllStatuses();
+    const results = await readAll();
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
     return outcomeOf(result);
@@ -214,14 +221,12 @@ describe('Salesforce: incidentes ativos e manutenções', () => {
     });
 
     it('os payloads reais são gravados e o card sai do catálogo sem a marca de "só acesso"', async () => {
-        for (const result of await fetchAllStatuses()) await saveStatusResult(result);
+        await recordPoll(current.db, await readAll());
 
-        const snapshot = await getLatestStatus(new Date());
-        const entry = snapshot.find(e => e.provider.id === 'salesforce');
+        const { entry, decision } = await snapshotEntry('salesforce');
 
-        expect(entry?.result.readings).toEqual(['outage']);
-        expect(entry?.result.accessOnly).toBe(false);
-        expect(entry?.result.incidents.map(i => i.title)).toContain('Disruption #20004549');
+        expect(decision).toMatchObject({ status: 'outage', accessOnly: false });
+        expect(snapshotIncidentsOf(entry).map(i => i.title)).toContain('Disruption #20004549');
     });
 });
 
@@ -387,9 +392,8 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('os payloads reais são gravados sem interromper o Poll', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
-        for (const result of await fetchAllStatuses()) await saveStatusResult(result);
+        await recordPoll(current.db, await readAll());
 
-        const entry = (await getLatestStatus(new Date())).find(e => e.provider.id === 'ibm-cloud');
-        expect(entry?.result.accessOnly).toBe(false);
+        expect((await snapshotEntry('ibm-cloud')).decision.accessOnly).toBe(false);
     });
 });

@@ -1,215 +1,193 @@
+// @vitest-environment node
 /**
- * Tests for lib/cron.ts - Cron job scheduling
+ * Agendamento do Poll no banco real das migrations (SQLite em memória).
+ * Só o relógio do agendador (`node-cron`) e a rede são simulados.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createMigratedDb, type MigratedDb } from '../helpers/migrated-db';
+import { healthyResponse } from '../helpers/status-feed';
 
-// Mock node-cron
-const mockSchedule = vi.fn();
-vi.mock('node-cron', () => ({
-    default: {
-        schedule: mockSchedule,
-    },
-}));
+const mockSchedule = vi.hoisted(() => vi.fn());
+vi.mock('node-cron', () => ({ default: { schedule: mockSchedule } }));
 
-// Mock do módulo de Status Feed
-vi.mock('@/lib/status-feed', () => ({
-    fetchAllStatuses: vi.fn().mockResolvedValue([
-        { providerId: 'aws', accessOnly: false, feeds: [{ read: true, declared: 'operational', incidents: [] }], probes: [] },
-    ]),
-}));
+let current: MigratedDb;
 
-// Mock db-service
-vi.mock('@/lib/db-service', () => ({
-    saveStatusResult: vi.fn().mockResolvedValue(undefined),
-}));
+const checksCount = async () => (await current.client.execute('SELECT count(*) AS n FROM status_checks')).rows[0].n;
 
-// Mock DAO
-vi.mock('@/lib/dao', () => ({
-    getGlobalLatestStatusCheck: vi.fn().mockResolvedValue(undefined),
-}));
+const pollOf = (minutesAgo: number) =>
+    current.client.execute({
+        sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('aws', 'operational', ?)",
+        args: [Math.floor(Date.now() / 1000) - minutesAgo * 60],
+    });
 
-import { getGlobalLatestStatusCheck } from '@/lib/dao';
-import { saveStatusResult } from '@/lib/db-service';
-import { fetchAllStatuses } from '@/lib/status-feed';
+// O guarda de "uma vez só" fica no módulo: cada teste recebe um módulo novo.
+const loadCron = () => import('@/lib/cron');
 
-describe('cron.ts', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        // Reset the isRunning state by reimporting
+/** Quantas linhas um Poll grava: uma por Provider do catálogo, cada um com o seu Feed ou Probes. */
+const ACTIVE_PROVIDERS = 13;
+
+describe('agendamento do Poll', () => {
+    beforeEach(async () => {
         vi.resetModules();
+        mockSchedule.mockReset();
+        current = await createMigratedDb();
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => healthyResponse(String(url))));
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'error').mockImplementation(() => {});
     });
 
     afterEach(() => {
+        vi.unstubAllGlobals();
         vi.restoreAllMocks();
     });
 
-    describe('initCron', () => {
-        it('should schedule a cron job for every 5 minutes', async () => {
-            // Need to re-import after mocks are set up
-            const { initCron } = await import('@/lib/cron');
-            
-            // Suppress console.log
-            vi.spyOn(console, 'log').mockImplementation(() => {});
+    it('agenda um Poll a cada 5 minutos', async () => {
+        const { initCron } = await loadCron();
 
-            await initCron();
+        await initCron(current.db);
 
-            expect(mockSchedule).toHaveBeenCalledWith(
-                '*/5 * * * *',
-                expect.any(Function)
-            );
-        });
-
-        it('should only initialize once (singleton behavior)', async () => {
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-
-            await initCron();
-            await initCron(); // Second call should be ignored
-
-            // Schedule should only be called once
-            expect(mockSchedule).toHaveBeenCalledTimes(1);
-        });
-
-        it('should run job immediately if last check is older than 5 minutes', async () => {
-            // Set up old check (10 minutes ago)
-            const oldCheck = {
-                id: 1,
-                providerId: 'aws',
-                status: 'operational',
-                responseTime: 100,
-                checkedAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
-            };
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(oldCheck);
-
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-
-            await initCron();
-
-            // Should trigger immediate update
-            expect(fetchAllStatuses).toHaveBeenCalled();
-        });
-
-        it('should skip immediate update if data is fresh', async () => {
-            // Set up fresh check (1 minute ago)
-            const freshCheck = {
-                id: 1,
-                providerId: 'aws',
-                status: 'operational',
-                responseTime: 100,
-                checkedAt: new Date(Date.now() - 1 * 60 * 1000), // 1 minute ago
-            };
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(freshCheck);
-
-            const { initCron } = await import('@/lib/cron');
-            
-            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-            await initCron();
-
-            // Should not trigger immediate update
-            expect(logSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Data is fresh')
-            );
-        });
-
-        it('should run job on error checking last update', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockRejectedValueOnce(new Error('DB Error'));
-
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-            vi.spyOn(console, 'error').mockImplementation(() => {});
-
-            await initCron();
-
-            // Should fallback to running the job
-            // Note: runJob is called but not awaited in the catch block
-            // This tests that it doesn't throw
-        });
-
-        it('should run job immediately when no previous check exists', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
-
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-
-            await initCron();
-
-            expect(fetchAllStatuses).toHaveBeenCalled();
-        });
+        expect(mockSchedule).toHaveBeenCalledWith('*/5 * * * *', expect.any(Function));
     });
 
-    describe('scheduled job execution', () => {
-        it('should save status results for all fetched providers', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
-                { providerId: 'aws', accessOnly: false, feeds: [{ read: true, declared: 'operational', incidents: [] }], probes: [] },
-                { providerId: 'azure', accessOnly: false, feeds: [{ read: true, declared: 'degraded', incidents: [] }], probes: [] },
-            ]);
+    it('inicializa uma vez só', async () => {
+        const { initCron } = await loadCron();
 
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
+        await initCron(current.db);
+        await initCron(current.db);
 
-            await initCron();
+        expect(mockSchedule).toHaveBeenCalledTimes(1);
+    });
 
-            expect(saveStatusResult).toHaveBeenCalledTimes(2);
-        });
+    it('roda um Poll na hora quando o último tem mais de 5 minutos', async () => {
+        await pollOf(10);
+        const { initCron } = await loadCron();
 
-        it('descarta o Poll em que nenhuma fonte respondeu, com registro no log', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
-                { providerId: 'aws', accessOnly: false, feeds: [{ read: false, answered: false }], probes: [false, false] },
-                { providerId: 'oracle-cloud', accessOnly: true, feeds: [], probes: [false] },
-            ]);
+        await initCron(current.db);
 
-            const { initCron } = await import('@/lib/cron');
+        expect(await checksCount()).toBe(1 + ACTIVE_PROVIDERS);
+    });
 
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('não roda um Poll na hora quando o último é recente', async () => {
+        await pollOf(1);
+        const { initCron } = await loadCron();
 
-            await initCron();
+        await initCron(current.db);
 
-            expect(saveStatusResult).not.toHaveBeenCalled();
-            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Poll descartado'));
-        });
+        expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Data is fresh'));
+        expect(await checksCount()).toBe(1);
+    });
 
-        it('grava o Poll em que só um Feed fora do formato respondeu', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(fetchAllStatuses).mockResolvedValueOnce([
-                { providerId: 'aws', accessOnly: false, feeds: [{ read: false, answered: true }], probes: [false] },
-                { providerId: 'azure', accessOnly: false, feeds: [{ read: false, answered: false }], probes: [false] },
-            ]);
+    it('roda um Poll na hora quando nenhum foi gravado', async () => {
+        const { initCron } = await loadCron();
 
-            const { initCron } = await import('@/lib/cron');
+        await initCron(current.db);
 
-            vi.spyOn(console, 'log').mockImplementation(() => {});
+        expect(await checksCount()).toBe(ACTIVE_PROVIDERS);
+    });
 
-            await initCron();
+    it('sem conseguir ler o banco, registra no log, tenta o Poll e agenda mesmo assim', async () => {
+        const { initCron } = await loadCron();
+        current.client.close();
 
-            expect(saveStatusResult).toHaveBeenCalledTimes(2);
-        });
+        await initCron(current.db);
 
-        it('should handle errors gracefully in runJob', async () => {
-            vi.mocked(getGlobalLatestStatusCheck).mockResolvedValueOnce(undefined);
-            vi.mocked(fetchAllStatuses).mockRejectedValueOnce(new Error('Fetch failed'));
+        expect(console.error).toHaveBeenCalledWith('Error checking last update time:', expect.any(Error));
+        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
+        expect(mockSchedule).toHaveBeenCalledTimes(1);
+    });
 
-            const { initCron } = await import('@/lib/cron');
-            
-            vi.spyOn(console, 'log').mockImplementation(() => {});
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('o Poll agendado grava com o banco recebido', async () => {
+        await pollOf(1);
+        const { initCron } = await loadCron();
+        await initCron(current.db);
 
-            // Should not throw
-            await initCron();
+        const scheduledPoll = mockSchedule.mock.calls[0][1];
+        await scheduledPoll();
+        await vi.waitFor(async () => expect(await checksCount()).toBe(1 + ACTIVE_PROVIDERS));
+    });
+});
 
-            expect(errorSpy).toHaveBeenCalledWith(
-                'Error in Cron Job:',
-                expect.any(Error)
-            );
-        });
+describe('falha ao gravar um Poll', () => {
+    beforeEach(async () => {
+        vi.resetModules();
+        mockSchedule.mockReset();
+        current = await createMigratedDb();
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => healthyResponse(String(url))));
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('vai ao log, não derruba o agendador nem deixa nada gravado, e o Poll seguinte grava', async () => {
+        await current.client.execute(`CREATE TRIGGER fail_write BEFORE INSERT ON status_checks WHEN NEW.provider_id = 'heroku'
+            BEGIN SELECT RAISE(ABORT, 'falha simulada'); END`);
+        const { runPoll } = await loadCron();
+
+        await expect(runPoll(current.db)).resolves.toBeUndefined();
+
+        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
+        expect(await checksCount()).toBe(0);
+
+        await current.client.execute('DROP TRIGGER fail_write');
+        await runPoll(current.db);
+
+        expect(await checksCount()).toBe(ACTIVE_PROVIDERS);
+    });
+
+    it('falha de leitura do catálogo também vai ao log, sem rejeitar', async () => {
+        const { runPoll } = await loadCron();
+        current.client.close();
+
+        await expect(runPoll(current.db)).resolves.toBeUndefined();
+
+        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.any(Error));
+    });
+
+    it('um Incident inválido num Provider desfaz o Poll de todos', async () => {
+        vi.mocked(fetch).mockImplementation(async url =>
+            String(url).endsWith('/api/v4/current-status')
+                ? Response.json({
+                      status: [{ system: 'Apps', status: 'green' }],
+                      incidents: [{ id: 1, title: '   ', state: 'investigating', created_at: '2026-10-30T10:00:00Z', updated_at: '2026-10-30T10:00:00Z' }],
+                      scheduled: [],
+                  })
+                : healthyResponse(String(url)),
+        );
+        const { runPoll } = await loadCron();
+
+        await runPoll(current.db);
+
+        expect(console.error).toHaveBeenCalledWith('Poll não gravado:', expect.objectContaining({ message: expect.stringContaining('heroku') }));
+        expect(await checksCount()).toBe(0);
+    });
+});
+
+describe('Poll descartado', () => {
+    beforeEach(async () => {
+        vi.resetModules();
+        mockSchedule.mockReset();
+        current = await createMigratedDb();
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('no primeiro Poll da inicialização, sem nenhuma resposta, nada é gravado e o agendador sobe', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+        const { initCron } = await loadCron();
+
+        await initCron(current.db);
+
+        expect(await checksCount()).toBe(0);
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Poll descartado'));
+        expect(mockSchedule).toHaveBeenCalledTimes(1);
     });
 });

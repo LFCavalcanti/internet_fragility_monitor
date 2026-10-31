@@ -3,7 +3,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { decideProviderStatus } from '@/lib/provider-status';
+import { decideProviderStatus, readIncidentsOf } from '@/lib/provider-status';
+import type { SnapshotEntry } from '@/lib/poll-recording';
 import type { ProviderReading } from '@/lib/status-feed/provider-reading';
 import type { IncidentData } from '@/lib/status-feed/types';
 
@@ -12,9 +13,12 @@ export function outcomeOf<I extends IncidentData>(reading: ProviderReading<I>) {
     return {
         ...reading,
         status: decideProviderStatus({ ...reading, previousPollUnanswered: false, now: new Date() }).status,
-        incidents: reading.feeds.flatMap(f => (f.read ? f.incidents : [])),
+        incidents: readIncidentsOf(reading.feeds),
     };
 }
+
+/** Tudo o que a leitura do Snapshot trouxe de Incidents de um Provider, antes do corte da lista do card. */
+export const snapshotIncidentsOf = (entry: SnapshotEntry) => entry.reading.feeds.flatMap(f => f.incidents ?? []);
 
 /** Payload real gravado de uma família (`__tests__/fixtures/status-feed/<família>/<arquivo>`). */
 export const feedFixture = (family: string, name: string): string =>

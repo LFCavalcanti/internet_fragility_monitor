@@ -7,16 +7,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
 import { feedFixture, hang, healthyResponse, outcomeOf } from "../helpers/status-feed";
 
-let current: MigratedDb;
-vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
-
-import { fetchAllStatuses } from "@/lib/status-feed";
-import { runJob } from "@/lib/cron";
-import { getLatestStatus, saveStatusResult } from "@/lib/db-service";
+import { runPoll } from "@/lib/cron";
+import { readActiveCatalog, readSnapshot, recordPoll } from "@/lib/poll-recording";
 import { decideProviderStatus } from "@/lib/provider-status";
-import { toProviderStatusInput } from "@/lib/snapshot-reading";
+import { readAllProviders } from "@/lib/status-feed";
 import { READ_TIMEOUT_MS } from "@/lib/status-feed/read-policy";
 import { FEED_URLS } from "../helpers/feed-urls";
+
+let current: MigratedDb;
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -29,10 +27,12 @@ function route(prefix: string, handler: FetchHandler) {
     fetchMock.mockImplementation((url, init) => (String(url).startsWith(prefix) ? handler(String(url), init) : previous(url, init)));
 }
 
-/** Um Poll que responde, como o cron grava: lê todos os Providers ativos e grava cada leitura. */
+const readAll = async () => readAllProviders(await readActiveCatalog(current.db));
+
+/** Um Poll que responde, como o agendador grava: lê todos os Providers ativos e grava as leituras. */
 async function poll() {
-    const readings = await fetchAllStatuses();
-    for (const reading of readings) await saveStatusResult(reading);
+    const readings = await readAll();
+    await recordPoll(current.db, readings);
     return readings.map(outcomeOf);
 }
 
@@ -140,7 +140,7 @@ describe("Poll guiado pelo Provider Catalog", () => {
     });
 
     it("os Probes rodam para todos os Providers ativos, com ou sem Feed, e os resultados vêm com a leitura", async () => {
-        const readings = await fetchAllStatuses();
+        const readings = await readAll();
 
         expect(fetchedUrls()).toEqual(
             expect.arrayContaining(["https://dash.cloudflare.com", "https://github.com/login", ORACLE_LOGIN]),
@@ -152,7 +152,7 @@ describe("Poll guiado pelo Provider Catalog", () => {
         await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'cloudflare-login'");
         await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'github'");
 
-        await fetchAllStatuses();
+        await readAll();
 
         expect(fetchedUrls()).not.toContain("https://dash.cloudflare.com");
         expect(fetchedUrls()).not.toContain("https://github.com/login");
@@ -165,7 +165,7 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
         route(CLOUDFLARE_FEED, hang);
         let results: ReturnType<typeof outcomeOf>[] | undefined;
 
-        const reading = fetchAllStatuses().then(r => (results = r.map(outcomeOf)));
+        const reading = readAll().then(r => (results = r.map(outcomeOf)));
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
         expect(results).toBeUndefined();
         await vi.advanceTimersByTimeAsync(1);
@@ -181,7 +181,7 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         route(CLOUDFLARE_FEED, hang);
 
-        const reading = fetchAllStatuses();
+        const reading = readAll();
         await vi.advanceTimersByTimeAsync(0);
 
         expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/github-feed lida em \d+ ms/));
@@ -266,9 +266,10 @@ describe("Provider com vários Feeds (catálogo montado no teste)", () => {
     });
 
     async function githubDecision() {
-        const snapshot = await getLatestStatus(new Date());
-        const entry = snapshot.find(e => e.provider.id === "github")!;
-        return decideProviderStatus(toProviderStatusInput(entry.result, new Date()));
+        const now = new Date();
+        const { providers } = await readSnapshot(current.db, now);
+        const entry = providers.find(e => e.provider.id === "github")!;
+        return decideProviderStatus({ ...entry.reading, now });
     }
 
     it("os dois Feeds são lidos, e cada um chega ao módulo de Provider Status", async () => {
@@ -372,7 +373,7 @@ describe("Probes ao lado dos Feeds", () => {
         route(CLOUDFLARE_LOGIN, hang);
         let finished = false;
 
-        const reading = fetchAllStatuses().then(r => {
+        const reading = readAll().then(r => {
             finished = true;
             return r;
         });
@@ -409,7 +410,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         );
         everySource(async () => { throw new TypeError("fetch failed"); });
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(await totalChecks()).toBe(0);
         expect(console.error).toHaveBeenCalledWith(discarded);
@@ -421,7 +422,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         everySource(hang);
 
-        const job = runJob();
+        const job = runPoll(current.db);
         await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
         await job;
 
@@ -432,7 +433,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
     it("toda fonte com 5xx é sem resposta, a mesma regra dos Probes", async () => {
         everySource(async () => new Response("oops", { status: 503 }));
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(await totalChecks()).toBe(0);
         expect(console.error).toHaveBeenCalledWith(discarded);
@@ -441,11 +442,27 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
     it("o Snapshot do último Poll respondido continua o mesmo", async () => {
         await poll();
         const before = await totalChecks();
+        const { lastPollAt } = await readSnapshot(current.db, new Date());
         everySource(async () => { throw new TypeError("fetch failed"); });
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(await totalChecks()).toBe(before);
+        expect((await readSnapshot(current.db, new Date())).lastPollAt).toEqual(lastPollAt);
+    });
+
+    it("o Poll gravado só com os Probes de Providers com Feed respondendo renova a hora do último Poll", async () => {
+        const before = Date.now();
+        everySource(async url => {
+            if (String(url) === "https://dash.cloudflare.com") return new Response(null, { status: 302 });
+            throw new TypeError("fetch failed");
+        });
+
+        await runPoll(current.db);
+
+        expect(await statusChecks("cloudflare")).toEqual(["unreachable"]);
+        const { lastPollAt } = await readSnapshot(current.db, new Date());
+        expect(lastPollAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
     });
 
     it("basta um Probe de um Provider responder: o Poll é gravado", async () => {
@@ -454,7 +471,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
             throw new TypeError("fetch failed");
         });
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(console.error).not.toHaveBeenCalledWith(discarded);
         expect(await statusChecks("oracle-cloud")).toEqual(["operational"]);
@@ -467,7 +484,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
             throw new TypeError("fetch failed");
         });
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(console.error).not.toHaveBeenCalledWith(discarded);
         expect(await statusChecks("cloudflare")).toEqual(["unreachable"]);
@@ -476,7 +493,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
     it("toda fonte com 404 respondeu: o Poll é gravado, com os Feeds não lidos e os Probes de pé", async () => {
         everySource(async () => new Response("não encontrado", { status: 404 }));
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(console.error).not.toHaveBeenCalledWith(discarded);
         expect(await statusChecks("aws")).toEqual(["unreachable"]);
@@ -486,7 +503,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
     it("sem nenhuma fonte ativa não é falha do monitor", async () => {
         await current.client.execute("UPDATE provider_sources SET active = 0");
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(fetchMock).not.toHaveBeenCalled();
         expect(console.error).not.toHaveBeenCalledWith(discarded);
@@ -496,7 +513,7 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
     it("com o catálogo vazio não é falha do monitor", async () => {
         await current.client.execute("UPDATE providers SET active = 0");
 
-        await runJob();
+        await runPoll(current.db);
 
         expect(console.error).not.toHaveBeenCalledWith(discarded);
         expect(await totalChecks()).toBe(0);

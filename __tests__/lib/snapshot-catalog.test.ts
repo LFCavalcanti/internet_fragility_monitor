@@ -2,16 +2,16 @@
 /**
  * Leitura do Snapshot guiada pelo Provider Catalog, no banco real das migrations (SQLite em memória).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
 
-let current: MigratedDb;
-vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
-
-import { getLatestStatus } from "@/lib/db-service";
-import { toProviderStatusInput } from "@/lib/snapshot-reading";
+import { snapshotIncidentsOf } from "../helpers/status-feed";
+import { readSnapshot } from "@/lib/poll-recording";
 import { decideProviderStatus } from "@/lib/provider-status";
+import { decideInternetHealth } from "@/lib/internet-health";
 import { hoursBefore } from "../helpers/time";
+
+let current: MigratedDb;
 
 const now = new Date("2026-10-28T12:00:00Z");
 
@@ -40,18 +40,23 @@ function insertIncident({ providerId, title, status, kind = "problem", createdAt
     });
 }
 
+const activeProviders = async () => (await readSnapshot(current.db, now)).providers;
+
 async function snapshotOf(providerId: string) {
-    const snapshot = await getLatestStatus(now);
-    return snapshot.find(e => e.provider.id === providerId)!;
+    return (await activeProviders()).find(e => e.provider.id === providerId)!;
 }
 
-describe("getLatestStatus lê o Provider Catalog", () => {
+async function decisionFor(providerId: string) {
+    return decideProviderStatus({ ...(await snapshotOf(providerId)).reading, now });
+}
+
+describe("readSnapshot lê o Provider Catalog", () => {
     beforeEach(async () => {
         current = await createMigratedDb();
     });
 
     it("traz os 13 Providers ativos na ordem de exibição, com nome, logo, status page e marcação de Major Provider", async () => {
-        const snapshot = await getLatestStatus(now);
+        const snapshot = await activeProviders();
 
         expect(snapshot.map(e => e.provider.id)).toEqual([
             "aws", "google-cloud", "azure", "cloudflare", "vercel", "github", "jira",
@@ -71,7 +76,7 @@ describe("getLatestStatus lê o Provider Catalog", () => {
         // Como uma migration de catálogo faria.
         await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'vercel'");
 
-        const snapshot = await getLatestStatus(now);
+        const snapshot = await activeProviders();
 
         expect(snapshot.map(e => e.provider.id)).not.toContain("vercel");
         expect(snapshot).toHaveLength(12);
@@ -82,7 +87,7 @@ describe("getLatestStatus lê o Provider Catalog", () => {
     it("segue a ordem de exibição do catálogo, não a de inserção", async () => {
         await current.client.execute("UPDATE providers SET display_order = 0 WHERE id = 'heroku'");
 
-        const snapshot = await getLatestStatus(now);
+        const snapshot = await activeProviders();
 
         expect(snapshot[0].provider.id).toBe("heroku");
     });
@@ -93,10 +98,11 @@ describe("getLatestStatus lê o Provider Catalog", () => {
             args: [Math.floor(now.getTime() / 1000) - 60],
         });
 
-        const snapshot = await getLatestStatus(now);
+        const snapshot = await activeProviders();
 
-        const cloudflare = snapshot.find(e => e.provider.id === "cloudflare");
-        expect(cloudflare?.result).toMatchObject({ providerId: "cloudflare", readings: ["degraded"] });
+        expect(snapshot.find(e => e.provider.id === "cloudflare")?.reading.feeds).toEqual([
+            { read: true, declared: "degraded", incidents: [] },
+        ]);
     });
 
     it("traz as leituras de cada Feed do último Poll, na ordem gravada, e nenhuma de um Poll anterior", async () => {
@@ -111,14 +117,20 @@ describe("getLatestStatus lê o Provider Catalog", () => {
         await check("degraded", checkedAt);
         await check("unreachable", checkedAt);
 
-        expect((await snapshotOf("github")).result).toMatchObject({
-            readings: ["degraded", "unreachable"],
-            lastUpdated: new Date(checkedAt * 1000),
-        });
+        const { reading, lastUpdated } = await snapshotOf("github");
+
+        expect(reading.feeds).toEqual([
+            { read: true, declared: "degraded", incidents: [] },
+            { read: false, incidents: [] },
+        ]);
+        expect(lastUpdated).toEqual(new Date(checkedAt * 1000));
     });
 
     it("um Provider sem leitura gravada vem Operational", async () => {
-        expect((await snapshotOf("aws")).result).toMatchObject({ providerId: "aws", readings: ["operational"], incidents: [] });
+        const { reading, lastUpdated } = await snapshotOf("aws");
+
+        expect(reading.feeds).toEqual([{ read: true, declared: "operational", incidents: [] }]);
+        expect(lastUpdated).toBeUndefined();
     });
 
     it("um Provider sem logo nem status page no catálogo vem com os campos ausentes, não nulos", async () => {
@@ -143,10 +155,10 @@ describe("Incidents do Snapshot", () => {
         });
         await insertIncident({ providerId: "aws", title: "Elevated errors", status: "identified", createdAt: hoursBefore(now, 1) });
 
-        const { result } = await snapshotOf("aws");
+        const entry = await snapshotOf("aws");
 
-        expect(result.readings).toEqual(["unreachable"]);
-        expect(result.incidents).toEqual([
+        expect(entry.reading.feeds[0].read).toBe(false);
+        expect(snapshotIncidentsOf(entry)).toEqual([
             expect.objectContaining({ kind: "problem", title: "Elevated errors", status: "identified" }),
         ]);
     });
@@ -167,12 +179,12 @@ describe("Incidents do Snapshot", () => {
         await insertIncident({ providerId: "aws", title: "Resolved sem hora, criado há 30h", status: "resolved", createdAt: hoursBefore(now, 30) });
         await insertIncident({ providerId: "aws", title: "Resolved sem hora, criado há 72h", status: "resolved", createdAt: hoursBefore(now, 72) });
 
-        const { result } = await snapshotOf("aws");
+        const incidents = snapshotIncidentsOf(await snapshotOf("aws"));
 
-        expect(result.incidents.map(i => i.title).sort()).toEqual(
+        expect(incidents.map(i => i.title).sort()).toEqual(
             [...active, "Resolved 47h", "Resolved sem hora, criado há 30h"].sort(),
         );
-        expect(result.incidents.find(i => i.title === "Resolved 47h")?.resolvedAt).toEqual(hoursBefore(now, 47));
+        expect(incidents.find(i => i.title === "Resolved 47h")?.resolvedAt).toEqual(hoursBefore(now, 47));
     });
 
     it("traz todas as manutenções agendadas e em andamento, sem corte por quantidade, e omite as completed", async () => {
@@ -192,16 +204,71 @@ describe("Incidents do Snapshot", () => {
         });
         await insertIncident({ providerId: "cloudflare", title: "problem", status: "identified", createdAt: hoursBefore(now, 3) });
 
-        const { result } = await snapshotOf("cloudflare");
+        const incidents = snapshotIncidentsOf(await snapshotOf("cloudflare"));
 
-        expect(result.incidents.filter(i => i.kind === "maintenance" && i.status === "scheduled")).toHaveLength(25);
-        expect(result.incidents.filter(i => i.kind === "maintenance" && i.status === "in_progress")).toHaveLength(1);
-        expect(result.incidents.some(i => i.kind === "maintenance" && i.status === "completed")).toBe(false);
-        expect(result.incidents.find(i => i.kind === "problem")).toMatchObject({ title: "problem", status: "identified" });
-        expect(result.incidents.find(i => i.title === "maintenance 0")).toMatchObject({
+        expect(incidents.filter(i => i.kind === "maintenance" && i.status === "scheduled")).toHaveLength(25);
+        expect(incidents.filter(i => i.kind === "maintenance" && i.status === "in_progress")).toHaveLength(1);
+        expect(incidents.some(i => i.kind === "maintenance" && i.status === "completed")).toBe(false);
+        expect(incidents.find(i => i.kind === "problem")).toMatchObject({ title: "problem", status: "identified" });
+        expect(incidents.find(i => i.title === "maintenance 0")).toMatchObject({
             kind: "maintenance",
             scheduledFor: new Date(Date.UTC(2026, 9, 29, 0)),
         });
+    });
+});
+
+describe("Hora do último Poll vai ao Internet Health", () => {
+    const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+
+    beforeEach(async () => {
+        current = await createMigratedDb();
+    });
+
+    const recordedAt = (status: string, at: Date, providerId = "aws") =>
+        current.client.execute({
+            sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES (?, ?, ?)",
+            args: [providerId, status, seconds(at)],
+        });
+
+    async function hero() {
+        const { providers, lastPollAt } = await readSnapshot(current.db, now);
+        const statuses = providers.map(entry => ({ ...entry, decision: decideProviderStatus({ ...entry.reading, now }) }));
+        return { lastPollAt, health: decideInternetHealth({ providers: statuses, lastPollAt, now }) };
+    }
+
+    it("é a leitura mais recente, entre os Providers", async () => {
+        await recordedAt("operational", minutesAgo(9));
+        await recordedAt("outage", minutesAgo(4), "azure");
+
+        expect((await hero()).lastPollAt).toEqual(minutesAgo(4));
+    });
+
+    it("um Poll gravado com todos Unreachable há 1 minuto vale: a hora é a real e o Snapshot não fica Stale", async () => {
+        await recordedAt("unreachable", minutesAgo(1));
+        await recordedAt("unreachable", minutesAgo(1), "azure");
+
+        const { lastPollAt, health } = await hero();
+
+        expect(lastPollAt).toEqual(minutesAgo(1));
+        expect(health.status).toBe("Healthy");
+    });
+
+    it("sem Poll gravado há 16 minutos, porque os seguintes foram descartados: Stale Snapshot com a hora do último", async () => {
+        await recordedAt("outage", minutesAgo(16));
+
+        expect((await hero()).health).toEqual({ status: "Stale", lastPollAt: minutesAgo(16) });
+    });
+
+    it("sem nenhum Poll gravado: Stale Snapshot, sem hora", async () => {
+        expect((await hero()).health).toEqual({ status: "Stale", lastPollAt: null });
+    });
+
+    it("a leitura de um Provider inativo não renova a hora", async () => {
+        await recordedAt("operational", minutesAgo(30));
+        await recordedAt("operational", minutesAgo(1), "vercel");
+        await current.client.execute("UPDATE providers SET active = 0 WHERE id = 'vercel'");
+
+        expect((await hero()).lastPollAt).toEqual(minutesAgo(30));
     });
 });
 
@@ -215,10 +282,6 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
             sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES (?, ?, ?)",
             args: [providerId, status, Math.floor(now.getTime() / 1000) - 60],
         });
-
-    async function decisionFor(providerId: string) {
-        return decideProviderStatus(toProviderStatusInput((await snapshotOf(providerId)).result, now));
-    }
 
     it("a Oracle, sem Feed ativo, fica Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {
         await checkedAgo("oracle-cloud", "operational");

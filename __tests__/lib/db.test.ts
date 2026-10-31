@@ -1,80 +1,87 @@
+// @vitest-environment node
 /**
- * Tests for lib/db.ts - Database initialization and environment validation
+ * Conexão da aplicação: uma só, aberta no primeiro uso, nunca no import, e sem a URL no log.
+ * O cliente anota a URL pedida e abre um banco em memória, para o teste não criar arquivo nem ir à rede.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Save original env
-const originalEnv = { ...process.env };
+const openedUrls = vi.hoisted(() => [] as string[]);
 
-describe('db.ts', () => {
+vi.mock('@libsql/client', async importOriginal => {
+    const real = await importOriginal<typeof import('@libsql/client')>();
+    return {
+        ...real,
+        createClient: ({ url }: { url: string }) => {
+            openedUrls.push(url);
+            return real.createClient({ url: ':memory:' });
+        },
+    };
+});
+
+describe('getDb', () => {
     beforeEach(() => {
-        // Reset env before each test
         vi.resetModules();
-        process.env = { ...originalEnv };
+        openedUrls.length = 0;
+        vi.stubGlobal('ifmDatabase', undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
     afterEach(() => {
-        process.env = originalEnv;
+        vi.unstubAllEnvs();
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
     });
 
-    describe('Environment Validation', () => {
-        it('should warn when DATABASE_URL is not set in development', async () => {
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            (process.env as any).NODE_ENV = 'development';
-            delete process.env.DATABASE_URL;
+    it('importar o módulo não conecta', async () => {
+        vi.stubEnv('DATABASE_URL', 'file:qualquer.db');
 
-            // Dynamic import to get fresh module
-            await import('@/lib/db');
+        await import('@/lib/db');
 
-            expect(warnSpy).toHaveBeenCalledWith(
-                expect.stringContaining('DATABASE_URL is not set')
-            );
-            warnSpy.mockRestore();
-        });
-
-
-
-        it('should throw error when DATABASE_URL is not set in production', async () => {
-            (process.env as any).NODE_ENV = 'production';
-            delete process.env.DATABASE_URL;
-
-            await expect(async () => {
-                await import('@/lib/db');
-            }).rejects.toThrow('DATABASE_URL is not set');
-        });
-
-
+        expect(openedUrls).toEqual([]);
     });
 
-    describe('getDb', () => {
-        it('should return a database instance', async () => {
-            (process.env as any).NODE_ENV = 'test';
-            process.env.DATABASE_URL = 'file:test.db';
-            
-            // Suppress warnings for test
-            vi.spyOn(console, 'warn').mockImplementation(() => {});
-            
-            const { getDb } = await import('@/lib/db');
-            const db = getDb();
-            
-            expect(db).toBeDefined();
-            expect(db).toHaveProperty('select');
-            expect(db).toHaveProperty('insert');
-            expect(db).toHaveProperty('update');
-            expect(db).toHaveProperty('delete');
-        });
+    it('sem DATABASE_URL em produção, o erro vem no primeiro uso, não no import', async () => {
+        vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('DATABASE_URL', '');
 
-        it('should return the same instance on multiple calls (singleton)', async () => {
-            (process.env as any).NODE_ENV = 'test';
-            process.env.DATABASE_URL = 'file:test.db';
-            
-            vi.spyOn(console, 'warn').mockImplementation(() => {});
-            
-            const { getDb } = await import('@/lib/db');
-            const db1 = getDb();
-            const db2 = getDb();
-            
-            expect(db1).toBe(db2);
-        });
+        const { getDb } = await import('@/lib/db');
+
+        expect(getDb).toThrow('DATABASE_URL is not set');
+    });
+
+    it('avisa quando DATABASE_URL falta fora de produção e usa o banco padrão', async () => {
+        vi.stubEnv('NODE_ENV', 'development');
+        vi.stubEnv('DATABASE_URL', '');
+
+        const { getDb } = await import('@/lib/db');
+        getDb();
+
+        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('DATABASE_URL is not set'));
+        expect(openedUrls).toEqual(['file:sqlite.db']);
+    });
+
+    it('devolve sempre a mesma conexão, mesmo com outra cópia do módulo, como a da instrumentação', async () => {
+        vi.stubEnv('DATABASE_URL', 'file:qualquer.db');
+
+        const first = (await import('@/lib/db')).getDb();
+        vi.resetModules();
+        const second = (await import('@/lib/db')).getDb();
+
+        expect(second).toBe(first);
+        expect(first).toHaveProperty('select');
+        expect(openedUrls).toHaveLength(1);
+    });
+
+    it('não imprime a URL do banco no log', async () => {
+        const url = 'libsql://user:segredo@banco.example.test';
+        vi.stubEnv('DATABASE_URL', url);
+
+        const { getDb } = await import('@/lib/db');
+        getDb();
+
+        expect(openedUrls).toEqual([url]);
+        const logged = [...vi.mocked(console.log).mock.calls, ...vi.mocked(console.warn).mock.calls].flat().join(' ');
+        expect(logged).not.toContain('segredo');
     });
 });

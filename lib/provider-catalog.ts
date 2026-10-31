@@ -37,13 +37,13 @@ export function isAccessOnly(sources: readonly { kind: SourceKind }[]): boolean 
     return !sources.some(s => s.kind === "feed");
 }
 
-/** As fontes agrupadas por Provider, numa passada só. Provider sem fonte não aparece no mapa. */
-export function sourcesByProvider<S extends { providerId: string }>(sources: readonly S[]): Map<string, S[]> {
-    const grouped = new Map<string, S[]>();
-    for (const source of sources) {
-        const list = grouped.get(source.providerId);
-        if (list) list.push(source);
-        else grouped.set(source.providerId, [source]);
+/** Linhas agrupadas por Provider, numa passada só, na ordem recebida. Provider sem linha não aparece no mapa. */
+export function groupByProvider<R extends { providerId: string }>(rows: readonly R[]): Map<string, R[]> {
+    const grouped = new Map<string, R[]>();
+    for (const row of rows) {
+        const list = grouped.get(row.providerId);
+        if (list) list.push(row);
+        else grouped.set(row.providerId, [row]);
     }
     return grouped;
 }

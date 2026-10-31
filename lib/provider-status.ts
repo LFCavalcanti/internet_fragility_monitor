@@ -75,16 +75,20 @@ const RECENT_INCIDENTS_LIST_SIZE = 3;
 export function decideProviderStatus(input: ProviderStatusInput): ProviderStatusDecision {
     const { accessOnly, probes, previousPollUnanswered, now } = input;
     const feeds = accessOnly ? [] : input.feeds;
-    const readIncidents = feeds.flatMap(f => (f.read ? f.incidents : []));
     const allIncidents = feeds.flatMap(f => f.incidents ?? []);
 
     return {
         status: decideStatus({ accessOnly, feeds, probes, previousPollUnanswered }),
         incidents: recentIncidents(allIncidents, now),
-        upcomingMaintenance: summarizeUpcoming(readIncidents, now),
+        upcomingMaintenance: summarizeUpcoming(readIncidentsOf(feeds), now),
         accessOnly,
         partialReading: partialReadingOf(feeds),
     };
+}
+
+/** Os Incidents dos Feeds lidos: os únicos que valem como atuais neste Poll. */
+export function readIncidentsOf<I extends IncidentData>(feeds: readonly FeedReading<I>[]): I[] {
+    return feeds.flatMap(f => (f.read ? f.incidents : []));
 }
 
 /** Uma fonte de Feed respondeu quando foi lida ou quando respondeu com algo que não pôde ser lido. */

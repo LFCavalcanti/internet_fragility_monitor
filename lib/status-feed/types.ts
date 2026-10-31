@@ -7,23 +7,6 @@ export type DeclaredStatus = 'operational' | 'degraded' | 'outage';
  */
 export type ReadingStatus = DeclaredStatus | 'unreachable';
 
-/** A leitura gravada de um Provider no último Poll, como a leitura do Snapshot a devolve. */
-export interface StatusResult {
-    providerId: string;
-    /**
-     * O que o último Poll gravou (`toRecordedReadings` em lib/snapshot-reading.ts): uma leitura por Feed ou,
-     * em Provider só com Probes, uma só. O estado do Provider é decidido a partir delas pelo módulo de Provider Status.
-     */
-    readings: ReadingStatus[];
-    incidents: IncidentData[];
-    lastUpdated?: Date;
-    /**
-     * Marca de "só acesso" (`isAccessOnly` em lib/provider-catalog.ts): o Provider não tem Feed ativo e a leitura
-     * vem só dos Probes, que não declaram estado nem Incidents.
-     */
-    accessOnly?: boolean;
-}
-
 export type ProblemStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
 export type MaintenancePhase = 'scheduled' | 'in_progress' | 'completed';
 export type IncidentKind = 'problem' | 'maintenance';

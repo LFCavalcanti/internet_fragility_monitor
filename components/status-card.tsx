@@ -1,6 +1,5 @@
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusResult } from "@/lib/status-feed/types";
 import type { ProviderStatus, ProviderStatusDecision, UpcomingMaintenanceSummary } from "@/lib/provider-status";
 import {
     CircleCheckBig,
@@ -21,7 +20,8 @@ interface StatusCardProps {
     name: string;
     logo?: string;
     statusPageUrl?: string;
-    result: StatusResult;
+    /** Hora do último Poll que gravou o Provider. */
+    lastUpdated?: Date;
     /** Estado, Recent Incidents e Upcoming Maintenance decididos pelo módulo de Provider Status. */
     decision: ProviderStatusDecision;
     /** Hora do servidor que a página passou ao módulo: as idades exibidas contam dela, não do relógio. */
@@ -42,7 +42,7 @@ function formatUpcoming({ count, next }: UpcomingMaintenanceSummary): string {
     return next ? `${label} · next ${formatUtc(next)}` : label;
 }
 
-export function StatusCard({ name, logo, statusPageUrl, result, decision, now }: StatusCardProps) {
+export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, now }: StatusCardProps) {
     const displayStatus = decision.status;
     const { icon: StatusIcon, className: statusColor } = STATUS_ICON[displayStatus];
     // Unreachable descreve a leitura, não o Provider: card cinza e neutro, sem último status conhecido.
@@ -122,9 +122,9 @@ export function StatusCard({ name, logo, statusPageUrl, result, decision, now }:
                                 {decision.partialReading.unread} de {decision.partialReading.total} feeds sem leitura
                             </p>
                         )}
-                        {result.lastUpdated && (
+                        {lastUpdated && (
                             <p className="text-[10px] text-muted-foreground/70">
-                                Updated {formatDistance(result.lastUpdated, now, { addSuffix: true })}
+                                Updated {formatDistance(lastUpdated, now, { addSuffix: true })}
                             </p>
                         )}
                         {upcoming && (

@@ -5,6 +5,10 @@
  */
 import type { IncidentData, IncidentKind, MaintenancePhase, ProblemStatus } from "./status-feed/types";
 
+/** Limites de texto de um Incident gravado. A política de leitura corta o que o Feed publica a estes tamanhos. */
+export const INCIDENT_TITLE_MAX = 500;
+export const INCIDENT_DESCRIPTION_MAX = 5000;
+
 /** Status de um Incident: a fase de um problema ou de uma manutenção. */
 export type IncidentStatus = ProblemStatus | MaintenancePhase;
 
@@ -21,7 +25,7 @@ export function closedStatusFor(kind: IncidentKind): IncidentStatus {
 }
 
 /** Por quanto tempo um Incident resolvido continua Recent Incident, contado da resolução. */
-const RECENT_INCIDENT_WINDOW_MS = 48 * 60 * 60 * 1000;
+export const RECENT_INCIDENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /**
  * Instante, em milissegundos, de onde conta a janela de um Incident encerrado: a resolução, ou a criação
