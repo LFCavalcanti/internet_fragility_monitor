@@ -26,4 +26,5 @@
 - Com 38 fontes, 19 é exatamente a metade: os casos "19 grava" e "metade grava" da spec coincidem nesse catálogo. A regra também é testada com 4 fontes.
 - Feed de família sem leitor não vai à rede e conta como fonte sem resposta HTTP, pela letra da regra (fonte ativa sem resposta). Em `poll-catalog.test.ts`, os casos em que uma fonte só salvava o Poll mudaram: agora ele é descartado, ou o caso passou a ter a maioria das fontes respondendo.
 - Sem migration.
+- Code review da onda 16: `readFeed` segue redirects, então um 3xx cujo destino falha conta como sem resposta HTTP, ao contrário do Probe, que lê o 3xx. O efeito é uma fonte a mais na conta do descarte, que só pesa com mais da metade delas sem resposta. Fica assim: ler o 3xx exigiria seguir os redirects à mão só para este caso.
 
