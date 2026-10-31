@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./__tests__/setup.ts'],
+    exclude: [...configDefaults.exclude, '.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

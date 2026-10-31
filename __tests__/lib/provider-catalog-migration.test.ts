@@ -102,6 +102,21 @@ describe("migration de carga do Provider Catalog", () => {
         expect(inactive.map(s => s.id)).toEqual(["heroku-feed"]);
     });
 
+    it("o site do GitHub passa a ser o GitHub: a status page e o resto do catálogo não mudam", async () => {
+        const { db, migrateRest } = await createMigratedDb({ upTo: "0008_remove_response_time_severity" });
+        const catalog = () => db.select().from(providers).orderBy(asc(providers.displayOrder)).all();
+        const sources = () => db.select().from(providerSources).orderBy(asc(providerSources.id)).all();
+        const [providersBefore, sourcesBefore] = [await catalog(), await sources()];
+        expect(providersBefore.find(p => p.id === "github")?.url).toBe("https://githubstatus.com");
+
+        await migrateRest();
+
+        const github = (await catalog()).find(p => p.id === "github");
+        expect(github).toMatchObject({ url: "https://github.com", statusPageUrl: "https://www.githubstatus.com" });
+        expect(await catalog()).toEqual(providersBefore.map(p => (p.id === "github" ? { ...p, url: "https://github.com" } : p)));
+        expect(await sources()).toEqual(sourcesBefore);
+    });
+
     it("usa só famílias de Feed conhecidas pelo código", async () => {
         const { db } = await createMigratedDb();
 

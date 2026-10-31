@@ -312,8 +312,9 @@ export async function recordPoll(db: Database, readings: readonly ProviderReadin
  * gravado e o anterior. Um Poll descartado não grava nada, então não conta nem zera: os Polls vizinhos são seguidos.
  * O custo depende do número de Providers, não do tamanho do histórico, por duas peças: o índice por Provider e hora, e
  * o CROSS JOIN, que no SQLite fixa `providers` por fora. Com um JOIN comum, o planejador varre `status_checks` inteira.
+ * Exportada só para o teste conferir esse plano; a leitura de fora continua sendo `readSnapshot`.
  */
-function latestChecks(db: Database) {
+export function latestChecks(db: Database) {
     return db
         .select({
             providerId: statusChecks.providerId,
