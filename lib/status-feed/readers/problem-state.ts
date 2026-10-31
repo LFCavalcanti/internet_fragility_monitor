@@ -28,7 +28,7 @@ function isDormant(incident: PublishedIncident, pollAt: Date): boolean {
 /**
  * Estado declarado pelos Feeds sem estado geral, a partir dos Incidents ativos que não são Dormant Incidents: o pior
  * entre os problemas abertos; sem nenhum, Maintenance se houver manutenção em andamento; senão, Operational.
- * `severityOf` diz a gravidade de cada problema publicado, Outage ou Degraded; o leitor que não sabe dizer usa o padrão,
+ * `severityOf` diz a gravidade de cada problema publicado, Outage ou Degraded; o Feed que não a publica usa o padrão,
  * Degraded. Quem decide que um Incident não muda o estado o deixa fora da lista. Os Feeds com estado geral não usam esta regra.
  */
 export function declaredByActiveIncidents(

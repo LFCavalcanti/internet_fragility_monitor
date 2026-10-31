@@ -50,6 +50,26 @@ ${updates
 const azureRss = (items: string) =>
     `<?xml version="1.0"?><rss version="2.0"><channel><title>Azure Status</title>${items}</channel></rss>`;
 
+/** Payload real da AWS em que a última atualização de cada evento do Oriente Médio (15/09/2026) ganha outro título. */
+const awsFixtureWithLatestTitle = (title: string) =>
+    feedFixture('aws-rss', 'all.rss').replace(/<item>[\s\S]*?<\/item>/g, item =>
+        item.includes('15 Sep 2026') ? item.replace(/Service disruption: [^\]]*/, title) : item,
+    );
+
+/** Payload real do Google Cloud com os Incidents dados reabertos, atualizados na hora do Poll, cada um com o impacto dado. */
+const googleFixtureReopened = (impacts: Record<string, string>) =>
+    JSON.stringify(
+        JSON.parse(feedFixture('google-cloud', 'incidents.json')).map((incident: { id: string }) =>
+            incident.id in impacts
+                ? { ...incident, end: null, modified: POLL_AT.toISOString(), status_impact: impacts[incident.id] }
+                : incident,
+        ),
+    );
+
+/** Ids reais de um Incident com `SERVICE_OUTAGE` e de um com `SERVICE_DISRUPTION` no payload gravado. */
+const GOOGLE_OUTAGE = 'utF3FMFdQfwBzJcGG6vf';
+const GOOGLE_DISRUPTION = 'Xs2XTHzAVC9YnafnPyzj';
+
 beforeEach(async () => {
     current = await createMigratedDb();
     answers.clear();
@@ -71,6 +91,8 @@ afterEach(() => {
 });
 
 describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', () => {
+    const start = new Date('2026-10-20T10:00:00Z');
+
     beforeEach(() => {
         respondWith(FEED_URLS.aws, feedFixture('aws-rss', 'all.rss'));
     });
@@ -104,10 +126,78 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
         ]);
     });
 
-    it('payload real: os eventos do Oriente Médio contavam até 30 dias depois da última atualização', async () => {
-        const { status } = await readProvider('aws', new Date('2026-10-01T00:00:00Z'));
+    it('payload real: última atualização "Service disruption" é Outage, até 30 dias depois dela', async () => {
+        const { status, feeds } = await readProvider('aws', new Date('2026-10-01T00:00:00Z'));
+
+        expect(status).toBe('outage');
+        expect(feeds).toMatchObject([{ read: true, declared: 'outage' }]);
+    });
+
+    it('payload real: "Service impact" depois de "Service disruption" é Degraded', async () => {
+        respondWith(FEED_URLS.aws, awsFixtureWithLatestTitle('Service impact: Increased Error Rates'));
+
+        const { status, incidents } = await readProvider('aws', new Date('2026-10-01T00:00:00Z'));
 
         expect(status).toBe('degraded');
+        expect(incidents.find(i => i.externalId === 'multipleservices-me-central-1')).toMatchObject({
+            status: 'investigating',
+            title: 'Service impact: Increased Error Rates',
+        });
+    });
+
+    it.each(['Service degradation: Errors', 'Informational message: Errors', 'Título que a AWS passe a usar'])(
+        'qualquer outro título na última atualização é Degraded: %s',
+        async title => {
+            respondWith(
+                FEED_URLS.aws,
+                awsRss([
+                    { event: 'ec2-us-east-1', title: 'Service disruption: Errors', at: hoursBefore(start, 1) },
+                    { event: 'ec2-us-east-1', title, at: start },
+                ]),
+            );
+
+            expect((await readProvider('aws')).status).toBe('degraded');
+        },
+    );
+
+    it.each([
+        ['outage', 'Service impact: Errors', 'Service disruption: Errors'],
+        ['degraded', 'Service disruption: Errors', 'Service impact: Errors'],
+    ])('a gravidade vem da última atualização publicada, com o item dela no meio do Feed: %s', async (expected, earlier, latest) => {
+        respondWith(
+            FEED_URLS.aws,
+            awsRss([
+                { event: 'ec2-us-east-1', title: earlier, at: hoursBefore(start, 2) },
+                { event: 'ec2-us-east-1', title: latest, at: start },
+                { event: 'ec2-us-east-1', title: earlier, at: hoursBefore(start, 1) },
+            ]),
+        );
+
+        expect((await readProvider('aws')).status).toBe(expected);
+    });
+
+    it('o pior entre os eventos: um "Service disruption" prevalece sobre um "Service impact"', async () => {
+        respondWith(
+            FEED_URLS.aws,
+            awsRss([
+                { event: 'ec2-us-east-1', title: 'Service impact: Errors', at: start },
+                { event: 's3-us-east-1', title: 'Service disruption: Errors', at: start },
+            ]),
+        );
+
+        expect((await readProvider('aws')).status).toBe('outage');
+    });
+
+    it('um evento resolvido não conta, mesmo com o título "Service disruption"', async () => {
+        respondWith(
+            FEED_URLS.aws,
+            awsRss([{ event: 'ec2-us-east-1', title: 'Service disruption: Errors', at: start, description: 'The issue has been resolved.' }]),
+        );
+
+        const { status, incidents } = await readProvider('aws');
+
+        expect(status).toBe('operational');
+        expect(incidents[0]).toMatchObject({ status: 'resolved' });
     });
 
     it('payload real: o evento que a AWS marcou como resolvido fecha na data da última atualização', async () => {
@@ -130,8 +220,6 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
         expect(rows.rows.map(r => r.status)).toEqual(['investigating', 'investigating', 'resolved']);
         expect(rows.rows[2].resolved_at).toBe(Date.parse('2026-10-30T01:28:38Z') / 1000);
     });
-
-    const start = new Date('2026-10-20T10:00:00Z');
 
     it('um evento encerrado não mantém o Provider degradado', async () => {
         respondWith(
@@ -260,12 +348,12 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
         expect(await readProvider('azure')).toMatchObject({ status: 'operational', incidents: [] });
     });
 
-    it('payload real com Incident ativo: degrada, com o guid como id e a fonte de origem', async () => {
+    it('payload real com Incident ativo: é Outage, com o guid como id e a fonte de origem', async () => {
         respondWith(FEED_URLS.azure, feedFixture('azure-rss', 'active-incident-2024-12-27.xml'));
 
         const { status, incidents } = await readProvider('azure', new Date('2024-12-27T12:00:00Z'));
 
-        expect(status).toBe('degraded');
+        expect(status).toBe('outage');
         expect(incidents).toHaveLength(1);
         expect(incidents[0]).toMatchObject({
             sourceId: 'azure-feed',
@@ -278,7 +366,7 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
         });
     });
 
-    it('um item declarado resolvido não degrada o Provider', async () => {
+    it('um item declarado resolvido não conta', async () => {
         respondWith(
             FEED_URLS.azure,
             azureRss(
@@ -301,13 +389,13 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
         expect((await readProvider('azure')).incidents[0].externalId).toBe('Active - Latency');
     });
 
-    it('Incident ativo há 30 horas vem na leitura e mantém o Provider degradado', async () => {
+    it('Incident ativo há 30 horas vem na leitura e mantém o Provider em Outage', async () => {
         const at = hoursBefore(POLL_AT, 30).toUTCString();
         respondWith(FEED_URLS.azure, azureRss(`<item><guid>a</guid><title>Increased Error Rates</title><pubDate>${at}</pubDate></item>`));
 
         const { status, incidents } = await readProvider('azure');
 
-        expect(status).toBe('degraded');
+        expect(status).toBe('outage');
         expect(incidents.map(i => i.title)).toEqual(['Increased Error Rates']);
     });
 });
@@ -331,6 +419,39 @@ describe('Google Cloud', () => {
             updatedAt: new Date('2026-10-28T00:38:39Z'),
             resolvedAt: new Date('2026-10-20T12:08:00Z'),
         });
+    });
+
+    it('payload real: `SERVICE_OUTAGE` encerrado não conta', async () => {
+        respondWith(FEED_URLS.googleCloud, feedFixture('google-cloud', 'incidents.json'));
+
+        const { status, incidents } = await readProvider('google-cloud', new Date('2026-08-21T00:00:00Z'));
+
+        expect(status).toBe('operational');
+        expect(incidents.find(i => i.externalId === GOOGLE_OUTAGE)).toMatchObject({ status: 'resolved' });
+    });
+
+    it('payload real: `SERVICE_OUTAGE` aberto é Outage', async () => {
+        respondWith(FEED_URLS.googleCloud, googleFixtureReopened({ [GOOGLE_OUTAGE]: 'SERVICE_OUTAGE' }));
+
+        expect((await readProvider('google-cloud')).status).toBe('outage');
+    });
+
+    it.each(['SERVICE_DISRUPTION', 'SERVICE_INFORMATION', 'SERVICE_NOVO'])('payload real: %s aberto é Degraded', async impact => {
+        respondWith(FEED_URLS.googleCloud, googleFixtureReopened({ [GOOGLE_DISRUPTION]: impact }));
+
+        const { status, incidents } = await readProvider('google-cloud');
+
+        expect(status).toBe('degraded');
+        expect(incidents.find(i => i.externalId === GOOGLE_OUTAGE)).toMatchObject({ status: 'resolved' });
+    });
+
+    it('o pior entre os abertos: `SERVICE_OUTAGE` prevalece sobre `SERVICE_DISRUPTION`', async () => {
+        respondWith(
+            FEED_URLS.googleCloud,
+            googleFixtureReopened({ [GOOGLE_OUTAGE]: 'SERVICE_OUTAGE', [GOOGLE_DISRUPTION]: 'SERVICE_DISRUPTION' }),
+        );
+
+        expect((await readProvider('google-cloud')).status).toBe('outage');
     });
 
     it('Incident ativo há 30 horas vem na leitura e degrada; o resolvido traz a hora de resolução', async () => {

@@ -77,6 +77,7 @@ function toIncidents(item: RssItem): PublishedIncident[] {
 
 function toFeedContent(items: RssItem[], pollAt: Date): FeedContent {
     const incidents = items.flatMap(toIncidents);
+    // O Feed não publica gravidade: todo problema aberto fica no padrão da regra, Degraded.
     return { declared: declaredByActiveIncidents(incidents, pollAt), incidents };
 }
 

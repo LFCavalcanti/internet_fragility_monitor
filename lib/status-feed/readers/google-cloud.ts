@@ -13,6 +13,7 @@ const incidentsSchema = z.array(
         end: feedDate.nullish(),
         modified: feedDate.nullish(),
         uri: z.string().nullish(),
+        status_impact: z.string().nullish(),
         updates: z.array(z.object({ text: z.string().nullish() })).nullish(),
     }),
 );
@@ -36,7 +37,10 @@ function toIncident(incident: GoogleIncident, address: string): PublishedInciden
 
 function toFeedContent(incidents: GoogleIncident[], address: string, pollAt: Date): FeedContent {
     const published = incidents.map(incident => toIncident(incident, address));
-    return { declared: declaredByActiveIncidents(published, pollAt), incidents: published };
+    // Só `SERVICE_OUTAGE` é Outage: qualquer outro valor, inclusive um novo, é Degraded.
+    const outages = new Set(incidents.filter(incident => incident.status_impact === "SERVICE_OUTAGE").map(incident => incident.id));
+    const declared = declaredByActiveIncidents(published, pollAt, problem => (outages.has(problem.externalId) ? "outage" : "degraded"));
+    return { declared, incidents: published };
 }
 
 /** Leitor do Google Cloud (incidents.json): a lista traz também os encerrados, com a hora de fim em `end`. */

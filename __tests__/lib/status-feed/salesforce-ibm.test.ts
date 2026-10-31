@@ -336,6 +336,16 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
         });
     });
 
+    it('captura real: um incidente aberto é Degraded, porque o Feed não publica gravidade', async () => {
+        const withoutEnd = feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml').replace(/Outage End: [^<]+<br\s*\/?>/g, '');
+        respondWith(FEED_URLS.ibm, withoutEnd);
+
+        const { status, incidents } = await readProvider('ibm-cloud', IBM_CAPTURE_AT);
+
+        expect(status).toBe('degraded');
+        expect(byId(incidents, 'INC2825083')).toMatchObject({ status: 'investigating' });
+    });
+
     it('captura real: as fases de manutenção vêm do prefixo do título, e o início marcado do rodapé', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 

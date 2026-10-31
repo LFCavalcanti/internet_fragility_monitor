@@ -1,6 +1,6 @@
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
-import { declaredByActiveIncidents, problemPhase } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase, type ProblemSeverity } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 /** `guid` da AWS: `https://status.aws.amazon.com/#<evento>_<instante da atualização>`. */
@@ -42,6 +42,7 @@ function byEvent(items: RssItem[]): Map<string, RssItem[]> {
 /**
  * Um evento como um Incident, a partir das atualizações dele em ordem cronológica. O evento é serviço e região:
  * o que veio antes de um resolvido anterior é outra ocorrência, já encerrada, e não conta para a data de início.
+ * O título é sempre o da última atualização: é dele que sai a gravidade.
  */
 function toIncident(externalId: string, updates: RssItem[]): PublishedIncident {
     const latest = updates[updates.length - 1];
@@ -62,11 +63,16 @@ function toIncident(externalId: string, updates: RssItem[]): PublishedIncident {
     };
 }
 
+/** Vale o que a AWS diz agora: um título que ela passe a usar fica Degraded até entrar aqui. */
+function severityOf(problem: PublishedIncident): ProblemSeverity {
+    return problem.title.startsWith("Service disruption") ? "outage" : "degraded";
+}
+
 function toFeedContent(items: RssItem[], pollAt: Date): FeedContent {
     const chronological = [...items].sort((a, b) => a.pubDate.getTime() - b.pubDate.getTime());
     const incidents = [...byEvent(chronological)].map(([event, updates]) => toIncident(event, updates));
 
-    return { declared: declaredByActiveIncidents(incidents, pollAt), incidents };
+    return { declared: declaredByActiveIncidents(incidents, pollAt, severityOf), incidents };
 }
 
 /**

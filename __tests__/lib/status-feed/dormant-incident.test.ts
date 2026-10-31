@@ -25,21 +25,26 @@ const secondsLater = (date: Date, seconds: number) => new Date(date.getTime() + 
 
 const rss = (items: string) => `<?xml version="1.0"?><rss version="2.0"><channel><title>Status</title>${items}</channel></rss>`;
 
+const AWS_IMPACT = 'Service impact: Errors';
+const AWS_DISRUPTION = 'Service disruption: Errors';
+
 const awsItem = (title: string, at: Date) => `<item><title><![CDATA[${title}]]></title>
 <pubDate>${at.toUTCString()}</pubDate>
 <guid isPermaLink="false">https://status.aws.amazon.com/#ec2-us-east-1_${Math.floor(at.getTime() / 1000)}</guid>
 <description><![CDATA[We are investigating.]]></description></item>`;
 
-/** Evento da AWS com as atualizações dadas, da primeira para a última. */
-const awsEvent = (...updates: Date[]) => rss(updates.map(at => awsItem('Service impact: Errors', at)).join(''));
+/** Evento da AWS com as atualizações dadas, da primeira para a última, todas com o título dado. */
+const awsEventTitled = (title: string, ...updates: Date[]) => rss(updates.map(at => awsItem(title, at)).join(''));
+const awsEvent = (...updates: Date[]) => awsEventTitled(AWS_IMPACT, ...updates);
 
 const azureProblem = (at: Date) =>
     rss(`<item><guid>a</guid><title>Active - Storage latency</title><pubDate>${at.toUTCString()}</pubDate></item>`);
 
-const googleProblem = (begin: Date, modified: Date | null) =>
+const googleProblem = (begin: Date, modified: Date | null, status_impact = 'SERVICE_DISRUPTION') =>
     JSON.stringify([
         {
             id: 'a1',
+            status_impact,
             service_name: 'Cloud Run',
             external_desc: 'Elevated latency',
             begin: begin.toISOString(),
@@ -114,10 +119,13 @@ const recentIncidents = (reading: FeedReading) =>
 /** Cada Feed sem estado geral, com um problema aberto cuja última atualização é a data dada. */
 const FEEDS_WITHOUT_OVERALL_STATE: [name: string, counted: string, readAt: (at: Date) => Promise<FeedReading>][] = [
     ['AWS', 'degraded', at => read(awsRssReader, AWS, [awsEvent(daysAgo(120), at)])],
-    ['Azure', 'degraded', at => read(azureRssReader, AZURE, [azureProblem(at)])],
+    ['AWS com "Service disruption"', 'outage', at => read(awsRssReader, AWS, [awsEventTitled(AWS_DISRUPTION, daysAgo(120), at)])],
+    ['Azure', 'outage', at => read(azureRssReader, AZURE, [azureProblem(at)])],
     ['Google Cloud', 'degraded', at => read(googleCloudReader, GOOGLE, [googleProblem(daysAgo(120), at)])],
+    ['Google Cloud com `SERVICE_OUTAGE`', 'outage', at => read(googleCloudReader, GOOGLE, [googleProblem(daysAgo(120), at, 'SERVICE_OUTAGE')])],
     ['IBM', 'degraded', at => read(ibmRssReader, IBM, [rss(ibmProblem(daysAgo(120), at))])],
     ['Salesforce', 'degraded', at => readSalesforce([salesforceIncident({ created: daysAgo(120), updated: at })])],
+    ['Salesforce com `major`', 'outage', at => readSalesforce([salesforceIncident({ created: daysAgo(120), updated: at, severity: 'major' })])],
 ];
 
 beforeEach(() => {
