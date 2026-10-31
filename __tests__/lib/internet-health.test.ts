@@ -19,6 +19,7 @@ const NAMES: Record<string, string> = {
     azure: 'Azure',
     cloudflare: 'Cloudflare',
     heroku: 'Heroku',
+    salesforce: 'Salesforce',
     vercel: 'Vercel',
     github: 'GitHub',
 };
@@ -76,9 +77,10 @@ describe('decideInternetHealth', () => {
         ]);
 
         expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage at Cloudflare. Internet stability is at risk.');
         expect(health.highlight).toEqual({
             type: 'outage',
-            title: 'Service Outage',
+            title: 'Major Outage',
             providerName: 'Cloudflare',
             providerLogo: 'https://logos.example/cloudflare.svg',
             description: 'Partial System Outage',
@@ -89,33 +91,94 @@ describe('decideInternetHealth', () => {
         expect(decide([provider('cloudflare', 'outage')]).status).toBe('Critical');
     });
 
-    it('Down de Major Provider é Critical, com o destaque próprio de Down', () => {
+    it('Down de Major Provider sozinho é Critical, com "Major Outage" e o texto de Down', () => {
         const health = decide([provider('aws', 'down'), provider('heroku', 'operational')]);
 
         expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage at AWS. Internet stability is at risk.');
         expect(health.highlight).toEqual({
             type: 'down',
-            title: 'Service Down',
+            title: 'Major Outage',
             providerName: 'AWS',
             providerLogo: 'https://logos.example/aws.svg',
-            description: 'Status page e serviço sem resposta',
+            description: 'Status page and service not responding',
         });
     });
 
-    it('dois Providers pequenos em Outage ou Down são Critical, com a menção a vários Providers', () => {
+    it('Major Provider sem Incident ativo cai no texto genérico de Outage', () => {
+        expect(decide([provider('aws', 'outage')]).highlight).toMatchObject({
+            title: 'Major Outage',
+            description: 'Outage reported.',
+        });
+    });
+
+    it('um Major Provider e um comum são Critical com "Widespread Outage", contando os dois', () => {
+        const health = decide([provider('aws', 'outage'), provider('heroku', 'outage')]);
+
+        expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage across 2 providers. Internet stability is at risk.');
+        expect(health.highlight).toEqual({
+            type: 'outage',
+            title: 'Widespread Outage',
+            providerName: 'Multiple Providers',
+            description: 'Outages detected in AWS, Heroku.',
+        });
+    });
+
+    it('três Providers comuns em Outage ou Down são Critical, com o Down na lista em minúsculas', () => {
         const health = decide([
             provider('heroku', 'outage'),
             provider('aws', 'degraded'),
+            provider('salesforce', 'outage'),
             provider('vercel', 'down'),
         ]);
 
         expect(health.status).toBe('Critical');
+        expect(health.description).toBe('Major outage across 3 providers. Internet stability is at risk.');
         expect(health.highlight).toEqual({
             type: 'down',
             title: 'Widespread Outage',
             providerName: 'Multiple Providers',
-            description: 'Major outages detected in Heroku, Vercel (status page e serviço sem resposta).',
+            description: 'Outages detected in Heroku, Salesforce, Vercel (status page and service not responding).',
         });
+    });
+
+    it('dois Providers comuns em Outage são Unstable, com "Multiple Outages"', () => {
+        const health = decide([provider('heroku', 'outage'), provider('salesforce', 'outage')]);
+
+        expect(health.status).toBe('Unstable');
+        expect(health.description).toBe('2 providers are experiencing problems.');
+        expect(health.highlight).toEqual({
+            type: 'outage',
+            title: 'Multiple Outages',
+            providerName: 'Multiple Providers',
+            description: 'Outages detected in Heroku, Salesforce.',
+        });
+    });
+
+    it('dois Providers comuns, um em Down, são Unstable, com o Down na lista em minúsculas', () => {
+        const health = decide([provider('heroku', 'outage'), provider('vercel', 'down')]);
+
+        expect(health.status).toBe('Unstable');
+        expect(health.highlight).toEqual({
+            type: 'down',
+            title: 'Multiple Outages',
+            providerName: 'Multiple Providers',
+            description: 'Outages detected in Heroku, Vercel (status page and service not responding).',
+        });
+    });
+
+    it('em Unstable o texto conta Degraded também, e o destaque prioriza Outage e Down', () => {
+        const health = decide([
+            provider('heroku', 'outage'),
+            provider('salesforce', 'down'),
+            provider('google-cloud', 'degraded'),
+        ]);
+
+        expect(health.status).toBe('Unstable');
+        expect(health.description).toBe('3 providers are experiencing problems.');
+        expect(health.highlight?.title).toBe('Multiple Outages');
+        expect(health.highlight?.description).not.toContain('Google Cloud');
     });
 
     it('queda isolada de um Provider pequeno é Unstable, com ele no destaque', () => {
@@ -127,9 +190,10 @@ describe('decideInternetHealth', () => {
         ]);
 
         expect(health.status).toBe('Unstable');
+        expect(health.description).toBe('2 providers are experiencing problems.');
         expect(health.highlight).toEqual({
             type: 'outage',
-            title: 'Service Outage',
+            title: 'Provider Outage',
             providerName: 'Heroku',
             providerLogo: 'https://logos.example/heroku.svg',
             description: 'Dyno errors',
@@ -140,8 +204,29 @@ describe('decideInternetHealth', () => {
         const health = decide([provider('github', 'down')]);
 
         expect(health.status).toBe('Unstable');
-        expect(health.highlight?.type).toBe('down');
-        expect(health.highlight?.description).toBe('Status page e serviço sem resposta');
+        expect(health.description).toBe('1 provider is experiencing problems.');
+        expect(health.highlight).toEqual({
+            type: 'down',
+            title: 'Provider Down',
+            providerName: 'GitHub',
+            providerLogo: 'https://logos.example/github.svg',
+            description: 'Status page and service not responding',
+        });
+    });
+
+    it('Outage isolada de um Provider comum sem título de Incident diz "Outage reported.", sem a palavra major', () => {
+        const health = decide([provider('heroku', 'outage')]);
+
+        expect(health.status).toBe('Unstable');
+        expect(health.description).toBe('1 provider is experiencing problems.');
+        expect(health.highlight).toEqual({
+            type: 'outage',
+            title: 'Provider Outage',
+            providerName: 'Heroku',
+            providerLogo: 'https://logos.example/heroku.svg',
+            description: 'Outage reported.',
+        });
+        expect(JSON.stringify(health)).not.toMatch(/major/i);
     });
 
     it('Degraded de um Major Provider é Unstable, não Critical', () => {
@@ -150,7 +235,7 @@ describe('decideInternetHealth', () => {
         expect(health.status).toBe('Unstable');
         expect(health.highlight).toEqual({
             type: 'degraded',
-            title: 'Service Degraded',
+            title: 'Provider Degraded',
             providerName: 'Google Cloud',
             providerLogo: 'https://logos.example/google-cloud.svg',
             description: 'Service issues reported.',
@@ -190,6 +275,16 @@ describe('decideInternetHealth', () => {
 
         expect(health.status).toBe('Unstable');
         expect(health.highlight?.providerName).toBe('Heroku');
+    });
+
+    it('Unreachable não soma com duas quedas para chegar aos três Providers de uma Major Outage', () => {
+        const health = decide([
+            provider('heroku', 'outage'),
+            provider('salesforce', 'outage'),
+            provider('vercel', 'unreachable'),
+        ]);
+
+        expect(health.status).toBe('Unstable');
     });
 
     it('a marca de Major Provider do item decide, não o id', () => {

@@ -27,7 +27,7 @@ export interface InternetHealthInput {
     now: Date;
 }
 
-/** Destaque do hero: um Provider com o Incident principal, ou a menção a vários Providers. */
+/** Destaque do hero, abaixo do texto: um Provider com o Incident principal, ou a menção a vários Providers. */
 export interface HeroHighlight {
     type: "down" | "outage" | "degraded";
     title: string;
@@ -39,7 +39,7 @@ export interface HeroHighlight {
 /** Internet Health: Healthy, Unstable ou Critical, com o texto e o destaque do hero. */
 export interface InternetHealth {
     status: InternetHealthStatus;
-    /** Texto do hero quando não há destaque. */
+    /** Texto do hero. */
     description: string;
     highlight?: HeroHighlight;
 }
@@ -54,14 +54,21 @@ export interface StaleSnapshotState {
 /** O que o hero mostra: o Internet Health, ou o estado neutro de Stale Snapshot. */
 export type HeroState = InternetHealth | StaleSnapshotState;
 
-/** Texto do estado neutro (árvore de decisões, seção 3). */
-export const STALE_TEXT = "Sem leitura recente";
+/** Texto do estado neutro. */
+export const STALE_TEXT = "No recent reading";
 
-/** Texto combinado para Down (árvore de decisões, seção 10). */
-export const DOWN_TEXT = "Status page e serviço sem resposta";
+/** Texto combinado para Down. */
+export const DOWN_TEXT = "Status page and service not responding";
 
 /** Down conta como Outage no Internet Health. */
 const isSevere = (s: ProviderStatus) => s === "outage" || s === "down";
+
+/** Quantos Providers quaisquer em Outage ou Down, ao mesmo tempo, formam uma Major Outage. */
+const MAJOR_OUTAGE_PROVIDERS = 3;
+
+/** Major Outage: a única conta de Critical. Recebe só os Providers em Outage ou Down. */
+const isMajorOutage = (severe: ProviderHealthEntry[]) =>
+    severe.length >= MAJOR_OUTAGE_PROVIDERS || severe.some(p => p.provider.isMajor);
 
 export function decideInternetHealth({
     providers,
@@ -76,23 +83,23 @@ export function decideInternetHealth({
     const severe = providers.filter(p => isSevere(p.decision.status));
     const degraded = providers.filter(p => p.decision.status === "degraded");
 
-    const critical = severe.length >= 2 || severe.some(p => p.provider.isMajor);
-
-    if (critical) {
+    if (isMajorOutage(severe)) {
+        const [only] = severe;
         return {
             status: "Critical",
-            description: `${providersPhrase(severe.length)} reporting a major outage. Internet stability is at risk.`,
-            highlight: highlightFor(severe),
+            description: `Major outage ${severe.length === 1 ? `at ${only.provider.name}` : `across ${severe.length} providers`}. Internet stability is at risk.`,
+            highlight:
+                severe.length === 1
+                    ? { ...singleHighlight(only), title: "Major Outage" }
+                    : outagesHighlight(severe, "Widespread Outage"),
         };
     }
 
-    // Sem chegar a Critical, sobra no máximo um Provider em Outage ou Down: ele é o destaque.
     if (severe.length > 0 || degraded.length > 0) {
-        const affected = severe.length > 0 ? severe : degraded;
         return {
             status: "Unstable",
             description: `${providersPhrase(severe.length + degraded.length)} experiencing problems.`,
-            highlight: highlightFor(affected),
+            highlight: unstableHighlight(severe, degraded),
         };
     }
 
@@ -103,36 +110,37 @@ function providersPhrase(n: number): string {
     return `${n} provider${n === 1 ? " is" : "s are"}`;
 }
 
-function highlightFor(affected: ProviderHealthEntry[]): HeroHighlight {
+/** O destaque de Unstable prioriza Outage e Down sobre Degraded. */
+function unstableHighlight(severe: ProviderHealthEntry[], degraded: ProviderHealthEntry[]): HeroHighlight {
+    const affected = severe.length > 0 ? severe : degraded;
+
     if (affected.length === 1) {
-        const [p] = affected;
-        return singleHighlight(p);
+        return singleHighlight(affected[0]);
     }
 
-    const type = affected.some(p => p.decision.status === "down")
-        ? "down"
-        : affected.some(p => p.decision.status === "outage")
-          ? "outage"
-          : "degraded";
-    const names = affected
+    return severe.length > 0
+        ? outagesHighlight(severe, "Multiple Outages")
+        : {
+              type: "degraded",
+              title: "Widespread Instability",
+              providerName: "Multiple Providers",
+              description: `Degraded service detected in ${degraded.map(p => p.provider.name).join(", ")}.`,
+          };
+}
+
+function outagesHighlight(severe: ProviderHealthEntry[], title: string): HeroHighlight {
+    const names = severe
         .map(({ provider, decision }) =>
             decision.status === "down" ? `${provider.name} (${DOWN_TEXT.toLowerCase()})` : provider.name,
         )
         .join(", ");
 
-    return type === "degraded"
-        ? {
-              type,
-              title: "Widespread Instability",
-              providerName: "Multiple Providers",
-              description: `Degraded service detected in ${names}.`,
-          }
-        : {
-              type,
-              title: "Widespread Outage",
-              providerName: "Multiple Providers",
-              description: `Major outages detected in ${names}.`,
-          };
+    return {
+        type: severe.some(p => p.decision.status === "down") ? "down" : "outage",
+        title,
+        providerName: "Multiple Providers",
+        description: `Outages detected in ${names}.`,
+    };
 }
 
 function singleHighlight({ provider, decision }: ProviderHealthEntry): HeroHighlight {
@@ -140,17 +148,17 @@ function singleHighlight({ provider, decision }: ProviderHealthEntry): HeroHighl
 
     if (decision.status === "down") {
         // Down não tem Feed lido, então não há Incident a citar.
-        return { ...base, type: "down", title: "Service Down", description: DOWN_TEXT };
+        return { ...base, type: "down", title: "Provider Down", description: DOWN_TEXT };
     }
 
     const active = decision.incidents.find(i => i.kind === "problem" && !isClosed(i));
 
     return decision.status === "outage"
-        ? { ...base, type: "outage", title: "Service Outage", description: active?.title ?? "Major outage reported." }
+        ? { ...base, type: "outage", title: "Provider Outage", description: active?.title ?? "Outage reported." }
         : {
               ...base,
               type: "degraded",
-              title: "Service Degraded",
+              title: "Provider Degraded",
               description: active?.title ?? "Service issues reported.",
           };
 }

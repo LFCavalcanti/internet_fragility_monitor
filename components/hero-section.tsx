@@ -60,13 +60,17 @@ export function HeroSection({ health }: HeroSectionProps) {
                     {/* Left Column: Text & Status */}
                     <div className="flex flex-col justify-center py-8 md:py-16 md:pr-8">
                         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-6">
-                            <span className="text-lg font-medium text-muted-foreground">Global Status:</span>
+                            <span className="text-lg font-medium text-muted-foreground">Internet Health:</span>
                             <span className={cn("text-4xl md:text-5xl font-extrabold tracking-tight", getStatusColor())}>
                                 {label}
                             </span>
                         </div>
 
-                        {highlight ? (
+                        <p className="text-lg text-muted-foreground max-w-xl">
+                            {description}
+                        </p>
+
+                        {highlight && (
                             <div
                                 data-testid="hero-highlight"
                                 data-type={highlight.type}
@@ -106,10 +110,6 @@ export function HeroSection({ health }: HeroSectionProps) {
                                     {highlight.description}
                                 </p>
                             </div>
-                        ) : (
-                            <p className="text-lg text-muted-foreground max-w-xl">
-                                {description}
-                            </p>
                         )}
                     </div>
 

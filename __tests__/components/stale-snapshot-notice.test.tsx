@@ -7,7 +7,7 @@ describe('StaleSnapshotNotice', () => {
         render(<StaleSnapshotNotice lastPollAt={new Date('2026-10-26T14:44:00Z')} />);
 
         expect(screen.getByRole('status')).toHaveTextContent(
-            'Sem leitura recente. The provider cards may be out of date. Last Poll: Oct 26, 14:44 UTC',
+            'No recent reading. The provider cards may be out of date. Last Poll: Oct 26, 14:44 UTC',
         );
     });
 
@@ -15,7 +15,7 @@ describe('StaleSnapshotNotice', () => {
         render(<StaleSnapshotNotice lastPollAt={null} />);
 
         expect(screen.getByRole('status')).toHaveTextContent(
-            'Sem leitura recente. The provider cards may be out of date. No Poll recorded yet.',
+            'No recent reading. The provider cards may be out of date. No Poll recorded yet.',
         );
     });
 });
