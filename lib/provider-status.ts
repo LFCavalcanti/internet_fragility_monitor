@@ -27,8 +27,8 @@ export type FeedReading<I extends IncidentData = IncidentData> =
 
 export interface ProviderStatusInput {
     /**
-     * Marca de "só acesso" do Provider, decidida pelas fontes dele no catálogo (`isAccessOnly`). Com a marca,
-     * o Provider não tem Feed: nenhuma leitura de Feed conta, só os Probes.
+     * Marca de "só acesso" do Provider: sem Feed no Poll gravado ou, em linha antiga ou Provider sem leitura, sem Feed
+     * no catálogo (`isAccessOnly`). Com a marca, nenhuma leitura de Feed conta, só os Probes.
      */
     accessOnly: boolean;
     feeds: FeedReading[];
@@ -93,7 +93,7 @@ export function readIncidentsOf<I extends IncidentData>(feeds: readonly FeedRead
 
 /** Uma fonte de Feed respondeu quando foi lida ou quando respondeu com algo que não pôde ser lido. */
 export function feedAnswered(feed: FeedReading): boolean {
-    return feed.read || feed.answered === true;
+    return feed.read || feed.answered;
 }
 
 /**

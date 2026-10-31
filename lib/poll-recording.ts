@@ -129,7 +129,7 @@ const DECLARED_WORST_FIRST: DeclaredStatus[] = ["outage", "degraded", "operation
 /**
  * A linha que um Poll grava de um Provider em `status_checks`. O pior estado lido basta para o vence-o-pior da leitura:
  * manutenção em andamento só vale quando o pior é "operational", e aí todos os Feeds lidos são "operational".
- * `feeds` guarda o resto, quais Feeds foram lidos neste Poll, e é a origem da leitura: lista vazia, lida por Probes.
+ * `feeds` guarda o resto, quais Feeds foram lidos neste Poll, e diz como a leitura foi feita: lista vazia, por Probes.
  */
 function toRecordedReading({ feeds, probes }: ProviderReading) {
     const recordedFeeds = feeds.map((f): RecordedFeed => ({ sourceId: f.sourceId, declared: f.read ? f.declared : null }));

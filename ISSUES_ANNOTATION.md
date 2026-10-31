@@ -39,7 +39,11 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 - **Título da lista no card:** passou de "Recent Activity (48h)" para "Recent Incidents", o termo do glossário (04).
 - **Provider só com Probes sem Recent Incidents:** sem Feed, ninguém declara nem encerra Incidents, então o card não lista Incidents desses Providers. Hoje a Oracle não tem Incidents gravados (08).
 
+- **`status_checks` guarda a leitura, não o Provider Status decidido:** a spec de Poll Recording manda `recordPoll` receber e gravar o Provider Status decidido. A gravação guarda o pior estado lido, e a decisão continua na leitura do Snapshot, porque depende dos Incidents e do Poll anterior. Sem efeito na página; a spec não foi ajustada (15, code review).
+
 ## 1.3 Faxina técnica
+
+- **Consulta da última leitura depende do plano do SQLite:** `latestChecks` usa `CROSS JOIN` para o SQLite usar o índice novo. Com JOIN comum, a consulta varre `status_checks`: o resultado é o mesmo, mas custou 12 s em 400 mil linhas. Nenhum teste trava esse plano; uma reescrita da consulta pode voltar a ficar lenta em silêncio. O Ticket 16 limita a tabela a 90 dias, o que ainda dá cerca de 337 mil linhas (13 Providers × 288 Polls por dia × 90 dias), então a lentidão seria real (15, code review).
 
 - **Histórico inteiro lido a cada Poll:** a reconciliação lê todos os Incidents do Provider, porque um id encerrado pode reabrir, e Incidents nunca são apagados. A Salesforce publica cerca de mil manutenções por Poll, e cada manutenção nova vira uma linha que fica para sempre, então essa leitura só cresce. Sem efeito hoje; se pesar, a leitura pode se limitar às linhas abertas e aos ids publicados naquele Poll (14, code review).
 - **Testes e lint pegam os worktrees:** `vitest run` e `eslint .` na checkout principal também varrem `.claude/worktrees/`, e os testes em andamento de um agente aparecem como falhas na `main`. Hoje o orquestrador roda com `--exclude ".claude/**"` e `--ignore-pattern ".claude/**"`. Proposta: acrescentar a exclusão em `vitest.config.mts` e `eslint.config.mjs` (orquestração, 28/10/2026).
@@ -59,6 +63,10 @@ Cada item traz, no fim, entre parênteses, o ticket de origem, só para rastrear
 ## 2.2 O que a página mostra de errado até um ticket posterior
 
 Nenhum item aberto.
+
+## 2.3 Decisão de produto antes do próximo deploy
+
+- **Down falso por falha parcial da rede do monitor:** um Poll só é descartado quando nenhuma das 38 fontes responde. Se a rede ou o DNS do monitor falhar em parte e uma fonte qualquer responder, mesmo com 404, o Poll é gravado, e os Providers que não responderam ficam sem resposta. Dois Polls assim seguidos e o card mostra "Sem resposta da status page nem do serviço"; se um deles for Major Provider, o hero fica Critical, sem nenhum problema real nos Providers. O Poll da inicialização pode cair a segundos do Poll agendado, então esses dois podem ser pegos pela mesma falha curta. O código segue a spec e o glossário ao pé da letra; falta uma regra. Decidir, por exemplo: descartar o Poll quando mais da metade das fontes não responder, ou exigir um tempo mínimo entre os dois Polls para declarar Down (15, code review).
 
 ---
 
