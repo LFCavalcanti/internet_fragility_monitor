@@ -30,6 +30,7 @@ Mantido pelo orquestrador (a sessão principal, na `main`). Agentes de ticket n�
 | 22 | [Dormant Incident](.scratch/internet-fragility-monitor/issues/22-dormant-incident.md) | `230f060` |
 | 23 | [Descarte do Poll por falha parcial do monitor](.scratch/internet-fragility-monitor/issues/23-partial-monitor-failure-discard.md) | `4defdd7` |
 | 24 | [Major Providers chegam a Outage](.scratch/internet-fragility-monitor/issues/24-major-providers-reach-outage.md) | `70a9517` |
+| 25 | [Leitor da Cloudflare com Core Services](.scratch/internet-fragility-monitor/issues/25-cloudflare-reader-with-core-services.md) | `b226c22` |
 
 ## 2. Ciclo atual: revisão de arquitetura (tickets 02–17)
 
@@ -67,7 +68,7 @@ Origem: `arvore-de-decisoes-2026-10-31-pendencias.md` e as quatro specs de 31/10
 | ~~[22](.scratch/internet-fragility-monitor/issues/22-dormant-incident.md)~~ | ~~Dormant Incident~~ | declared-severity | T6 | 18 |
 | ~~[23](.scratch/internet-fragility-monitor/issues/23-partial-monitor-failure-discard.md)~~ | ~~Descarte do Poll por falha parcial do monitor~~ | monitor-failure-discard | T10 | 18 |
 | ~~[24](.scratch/internet-fragility-monitor/issues/24-major-providers-reach-outage.md)~~ | ~~Major Providers chegam a Outage~~ | declared-severity | T6 | 22 |
-| [25](.scratch/internet-fragility-monitor/issues/25-cloudflare-reader-with-core-services.md) | Leitor da Cloudflare com Core Services **(esquema)** | declared-severity | T6 | 24 |
+| ~~[25](.scratch/internet-fragility-monitor/issues/25-cloudflare-reader-with-core-services.md)~~ | ~~Leitor da Cloudflare com Core Services~~ **(esquema)** | declared-severity | T6 | 24 |
 
 ## 3. Execução em Paralelo (Trilhas)
 
@@ -80,7 +81,7 @@ Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos
 | **T3 – Catálogo e Status Feed** | ~~07~~ → ~~08~~ → ~~09~~ → ~~10~~ → ~~11~~ → ~~12~~ | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
 | **T4 – Persistência** | ~~13~~ → ~~14~~ → ~~15~~ → ~~16~~ | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
 | **T5 – Agendamento** | ~~17~~ | agendador, inicialização, atualização automática da página |
-| **T6 – Gravidade declarada** | ~~18~~ → ~~22~~ → ~~24~~ → 25 | leitores, decisão de Provider Status, catálogo de famílias |
+| **T6 – Gravidade declarada** | ~~18~~ → ~~22~~ → ~~24~~ → ~~25~~ | leitores, decisão de Provider Status, catálogo de famílias |
 | **T7 – Topo da página** | ~~19~~ | módulo de Internet Health, topo da página, aviso de Stale |
 | **T8 – Card** | ~~20~~ | card do Provider |
 | **T9 – Faxina** | ~~21~~ | catálogo por migration, configuração de testes, teste da consulta da última leitura |
@@ -130,7 +131,7 @@ Uma onda só começa quando os tickets da onda anterior de que ela depende estã
 | 15 | ~~**18**~~, ~~**19**~~, ~~**20**~~, ~~**21**~~ (esquema) | T6, T7, T8, T9 |
 | 16 | ~~**22**~~, ~~**23**~~ | T6, T10 |
 | 17 | ~~**24**~~ | T6 |
-| 18 | **25** (esquema) | T6 |
+| 18 | ~~**25**~~ (esquema) | T6 |
 
 No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint e o code review de dois eixos na `main`, conforme `docs/agents/parallel-work.md`.
 
@@ -153,11 +154,10 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 - **Onda 15 (fechada, 31/10/2026):** Tickets 20 (`983afc8`), 21 (`9585fe3`), 19 (`3d5341b`) e 18 (`494ad1c`), os quatro agentes em paralelo, sem travas (de 3 a 7 min) e sem conflito de rebase. Migration `0009_github_site_url` (dados); `_journal.json` linear, aplicada numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Na `main`: 599 testes, tsc limpo, lint com 0 erros e 3 avisos antigos. Code review: "Service Providers" continuava fora do glossário (story 12) e faltavam dois casos mistos de Major Provider, corrigidos em `011fc76` (601 testes). Mudanças visíveis decididas pelos agentes e mantidas: o rótulo "Global Status:" vira "Internet Health:" e o texto do hero aparece sempre, acima do destaque. Consequências do 18: as horas gravadas num Poll passam a ser as do começo dele (até cerca de 10 s antes), e um Feed desativado com manutenção aberta deixa de prender o Provider em Maintenance. Pendências: aviso no card Down em `ISSUES_ANNOTATION.md` 2.3; site do Provider sem nenhuma tela em 1.1. O comentário "dado velho" em `lib/provider-status.ts` fica para o code review da onda 16, porque o 23 mexe no mesmo bloco. Próxima: onda 16 (22, 23).
 - **Onda 16 (fechada, 31/10/2026):** Tickets 22 (`230f060`) e 23 (`4defdd7`), sem migrations, agentes sem travas (cerca de 6 min cada) e sem conflito de rebase. Na `main`: 663 testes, tsc limpo, lint com 0 erros e 3 avisos antigos. Code review sem defeito de comportamento: `2d2226e` faz o teste de item resolvido da Azure usar um relógio perto da data dele, porque com relógio de 2026 ele passaria também pela regra de Dormant Incident; `6d8fb7b` tira "dado velho" do comentário. Com o Feed gravado, a AWS sai de Degraded para Operational, e os eventos do Oriente Médio continuam na lista. Mantidos, com os fatos conferidos: "evento" nos testes é o termo do Feed da AWS, usado pelas specs; Feed de família sem leitor conta como sem resposta HTTP, caso que não existe com o catálogo atual; redirect cujo destino falha conta como sem resposta HTTP (Comments do 23). Próxima: onda 17 (24).
 - **Onda 17 (fechada, 31/10/2026):** Ticket 24, commit `70a9517`, sem migrations. Agente sem travas (cerca de 5 min). Na `main` antes das correções: 690 testes, tsc limpo, lint com 0 erros e 3 avisos antigos. Code review: os leitores seguem a spec, com dois defeitos corrigidos. `d6ce9ce` faz o destaque do hero citar o Incident ativo que mudou por último, porque ele citava o criado por último, mesmo Dormant: na volta dos Emirados, a página apontaria o Bahrein. `0b5ec2c` faz o título "Active" da Azure valer sobre "resolved" na descrição, que esconderia uma Outage. Depois das correções: 692 testes. Próxima: onda 18 (25).
+- **Onda 18 (fechada, 31/10/2026):** Ticket 25, commit `b226c22`. Migration `0010_cloudflare_feed_family` (dados); `_journal.json` linear, aplicada numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Agente sem travas (cerca de 8 min). Na `main`: 776 testes, tsc limpo, lint com 0 erros e 3 avisos antigos, build limpo. Code review: um Incident `none` ou `maintenance` num Core Service marcado em falha levava a Cloudflare a Operational, corrigido em `c16bfdc`, com a definição de problema que conta num lugar só e o `GLOSSARY.md` atualizado em Core Service (779 testes). Decisão pendente em `ISSUES_ANNOTATION.md` 2.3: o destaque do topo pode citar outro Incident do Provider. Execução real: `next start` sobre cópia migrada, Poll do boot gravado com 13 linhas e HTTP 200; AWS e Cloudflare Operational, Internet Health em Healthy e os eventos parados da AWS ainda no card. Fim do ciclo 18–25.
 
 ### Onde paramos (31/10/2026)
 
-Ciclo de revisão de arquitetura concluído: todos os tickets 02–17 integrados na `main`, com code review feito em todas as ondas. As decisões pendentes foram fechadas na árvore de 31/10/2026, e viraram quatro specs e os tickets 18–25.
+Ciclo de pendências concluído: todos os tickets 18–25 integrados na `main`, com code review feito em todas as ondas. Antes, o ciclo de arquitetura (02–17) já estava fechado.
 
-Próximo passo: onda 18 (25), em andamento, com o code review da onda 17. Depois do ciclo, o deploy, com as ações do `ISSUES_ANNOTATION.md`, seção 2.1.
-
-Situação visível conhecida até os tickets 24 e 25: uma queda grande da AWS, da Azure ou do Google Cloud aparece como Degraded, e a Cloudflare pode deixar a página em Critical só por data centers em falha.
+Próximo passo: as duas decisões do `ISSUES_ANNOTATION.md`, seção 2.3, e depois o deploy, com as ações da seção 2.1.

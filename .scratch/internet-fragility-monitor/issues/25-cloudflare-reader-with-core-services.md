@@ -48,3 +48,5 @@
 **Mudança visível.** Com o Feed de hoje, a Cloudflare sai de Outage para Operational, e a página deixa de ficar Critical por causa dela. As manutenções agendadas seguem na linha de Upcoming Maintenance.
 
 **Para o deploy.** A linha gravada antes do deploy se corrige no primeiro Poll.
+
+**Code review da onda 18.** Um Incident `none` ou `maintenance` num Core Service marcado em falha levava a Cloudflare a Operational, corrigido em `c16bfdc`: só um Incident que conta segue a tabela no lugar do componente. Mantido: um Dormant Incident não tira o Core Service da regra, então `minor` no CDN marcado em `major_outage` é Degraded com 29 dias e Outage com 31. Isso exigiria um Core Service marcado em falha por mais de 30 dias sem nenhuma novidade, e nesse caso é a própria Cloudflare dizendo que ele segue em falha.
