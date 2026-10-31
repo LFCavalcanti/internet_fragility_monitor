@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusResult } from "@/lib/fetchers/types";
+import { StatusResult } from "@/lib/status-feed/types";
 import type { ProviderStatus, ProviderStatusDecision, UpcomingMaintenanceSummary } from "@/lib/provider-status";
 import {
     CircleCheckBig,

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { decideProviderStatus, type FeedReading } from '@/lib/provider-status';
-import type { IncidentData, MaintenanceIncident, ProblemIncident } from '@/lib/fetchers/types';
+import type { IncidentData, MaintenanceIncident, ProblemIncident } from '@/lib/status-feed/types';
 import { hoursBefore } from '../helpers/time';
 
 const now = new Date('2026-10-26T15:00:00Z');

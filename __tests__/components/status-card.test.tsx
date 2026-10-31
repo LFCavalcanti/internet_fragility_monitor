@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatusCard } from '@/components/status-card';
-import type { StatusResult } from '@/lib/fetchers/types';
+import type { StatusResult } from '@/lib/status-feed/types';
 import type { ProviderStatusDecision } from '@/lib/provider-status';
 import { hoursBefore } from '../helpers/time';
 

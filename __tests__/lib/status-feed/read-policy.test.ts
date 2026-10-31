@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { READ_TIMEOUT_MS, readFeed, readProbe, type FeedReader } from '@/lib/status-feed/read-policy';
+import { hang } from '../../helpers/status-feed';
 
 const FEED = { id: 'acme-feed', url: 'https://status.acme.test/feed' };
 const PROBE = { id: 'acme-login', url: 'https://login.acme.test' };
@@ -15,12 +16,6 @@ const reader: FeedReader = {
         incidents: [{ kind: 'problem', status: 'investigating', title: body, createdAt: new Date(0), externalId: 'x1' }],
     }),
 };
-
-/** Rede que não responde: só termina quando a política aborta a requisição. */
-const hang = (_url: unknown, init?: RequestInit) =>
-    new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
-    });
 
 /** Resposta cujo cabeçalho chega, mas o corpo trava até a requisição ser abortada. */
 const hangBody = async (_url: unknown, init?: RequestInit) =>
@@ -122,6 +117,40 @@ describe('leitura de um Feed', () => {
         };
 
         expect(await readFeed(FEED, refuses)).toEqual({ read: false });
+    });
+
+    it('o leitor recebe o endereço de onde o conteúdo veio', async () => {
+        stubNetwork(async () => new Response('x'));
+        const read = vi.fn(reader.read);
+
+        await readFeed(FEED, { address: url => `${url}/v2`, read });
+
+        expect(read).toHaveBeenCalledWith('x', `${FEED.url}/v2`);
+    });
+
+    it('um texto maior do que a gravação aceita chega cortado, em vez de derrubar o Poll', async () => {
+        stubNetwork(async () => new Response('x'));
+        const long: FeedReader = {
+            read: () => ({
+                declared: 'degraded',
+                incidents: [
+                    {
+                        kind: 'problem',
+                        status: 'investigating',
+                        title: 'a'.repeat(501),
+                        description: 'b'.repeat(5001),
+                        createdAt: new Date(0),
+                        externalId: 'x1',
+                    },
+                ],
+            }),
+        };
+
+        const reading = await readFeed(FEED, long);
+
+        if (!reading.read) throw new Error('Feed não lido');
+        expect(reading.incidents[0].title).toHaveLength(500);
+        expect(reading.incidents[0].description).toHaveLength(5000);
     });
 
     it('sem endereço próprio no leitor, busca a URL do catálogo', async () => {

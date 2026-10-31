@@ -3,7 +3,7 @@
  * Módulo puro: recebe cada Provider do Snapshot com o estado decidido, a hora do último Poll e o relógio.
  * Termos conforme GLOSSARY.md.
  */
-import type { StatusResult } from "./fetchers/types";
+import type { StatusResult } from "./status-feed/types";
 import type { ProviderStatus, ProviderStatusDecision } from "./provider-status";
 import type { SnapshotProvider } from "./snapshot-reading";
 import { isClosed } from "./incident-status";

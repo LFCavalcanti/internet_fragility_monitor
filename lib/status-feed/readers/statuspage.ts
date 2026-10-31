@@ -1,8 +1,7 @@
 import { z } from "zod";
-import type { DeclaredStatus, MaintenancePhase, ProblemStatus } from "../../fetchers/types";
 import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
-
-const feedDate = z.string().pipe(z.coerce.date());
+import type { DeclaredStatus, MaintenancePhase, ProblemStatus } from "../types";
+import { feedDate } from "./feed-date";
 
 /** "maintenance" não conta aqui: Maintenance vem das manutenções em andamento, não do indicador. */
 const INDICATOR_STATUS = {

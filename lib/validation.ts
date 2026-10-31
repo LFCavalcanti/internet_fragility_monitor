@@ -7,6 +7,10 @@
 
 import { z } from "zod";
 
+/** Limites de texto de um Incident gravado. A política de leitura corta o que o Feed publica a estes tamanhos. */
+export const INCIDENT_TITLE_MAX = 500;
+export const INCIDENT_DESCRIPTION_MAX = 5000;
+
 // ============================================================================
 // Common Field Schemas
 // ============================================================================
@@ -81,8 +85,8 @@ export const incidentSeveritySchema = z.enum(["minor", "major", "critical"]).opt
 export const incidentSchema = z.object({
     id: idSchema,
     providerId: idSchema,
-    title: z.string().min(1, "Title is required").max(500, "Title exceeds maximum length").trim(),
-    description: z.string().max(5000, "Description exceeds maximum length").optional().nullable(),
+    title: z.string().min(1, "Title is required").max(INCIDENT_TITLE_MAX, "Title exceeds maximum length").trim(),
+    description: z.string().max(INCIDENT_DESCRIPTION_MAX, "Description exceeds maximum length").optional().nullable(),
     status: z.string().min(1, "Status is required").max(50, "Status exceeds maximum length"),
     kind: incidentKindSchema.optional(),
     severity: z.string().max(20, "Severity exceeds maximum length").optional().nullable(),
@@ -108,7 +112,7 @@ export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 export const updateIncidentStatusSchema = z.object({
     id: idSchema,
     status: incidentStatusSchema,
-    description: z.string().max(5000, "Description exceeds maximum length").optional(),
+    description: z.string().max(INCIDENT_DESCRIPTION_MAX, "Description exceeds maximum length").optional(),
     kind: incidentKindSchema.optional(),
     scheduledFor: z.date().optional().nullable(),
 });
@@ -129,7 +133,7 @@ export const incidentIdParamSchema = z.object({
 
 export const incidentByTitleParamSchema = z.object({
     providerId: idSchema,
-    title: z.string().min(1, "Title is required").max(500, "Title exceeds maximum length").trim(),
+    title: z.string().min(1, "Title is required").max(INCIDENT_TITLE_MAX, "Title exceeds maximum length").trim(),
 });
 
 // ============================================================================

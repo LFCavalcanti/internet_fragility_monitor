@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:a10="http://www.w3.org/2005/Atom"
+  version="2.0">
+  <channel xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <title>Azure Status</title>
+    <link>https://status.azure.com/en-us/status/</link>
+    <description>Azure Status</description>
+    <language>en-us</language>
+    <lastBuildDate>Fri, 27 Dec 2024 01:54:16 Z</lastBuildDate>
+    <item>
+      <guid
+        isPermaLink="false">active-storage-latency-timeouts-or-http-500-errors-in-south-central-us</guid>
+      <link>https://status.azure.com/en-us/status/</link>
+      <category>App Service</category>
+      <category>Application Gateway</category>
+      <category>Azure Cosmos DB</category>
+      <category>Azure Sentinel</category>
+      <category>Log Analytics</category>
+      <category>Storage Accounts</category>
+      <category>Virtual Machines</category>
+      <category>South Central US</category>
+      <category>Public Non-Regional</category>
+      <title>Active - Storage latency, timeouts, or HTTP 500 errors in South Central US</title>
+      <description>&lt;p&gt;&lt;strong&gt;Impact Statement:&lt;/strong&gt; Starting at 18:44 UTC on 26 Dec 2024, you have been identified as a customer who was impacted by a power incident in South Central US and may be experiencing a degraded service.&amp;nbsp;&amp;nbsp;&lt;/p&gt;&lt;p&gt;&lt;strong&gt;Current Status: &lt;/strong&gt;There was a power incident in a portion of South Central US AZ03 which affected multiple services. At approximately 20:43 UTC, power was fully restored, and services started to recover.&amp;nbsp;However not all storage stamps have successfully recovered, this is blocking the recovery of some services. We are working with an onsite team and will need to manually replace network components aiding in faster recovery.&amp;nbsp;&lt;/p&gt;&lt;p&gt;We will continue to monitor and will provide further updates in 2 hours, or sooner as events develop. If you are impacted, and it’s possible, we advise you to consider failing your services to a different Availability Zone or region until we are fully restored.&lt;/p&gt;</description>
+      <pubDate>Thu, 26 Dec 2024 18:44:00 Z</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -3,7 +3,7 @@
  * Módulo puro: recebe as leituras e o relógio, não lê banco nem rede.
  * Termos conforme GLOSSARY.md.
  */
-import type { DeclaredStatus, IncidentData, MaintenanceIncident } from "./fetchers/types";
+import type { DeclaredStatus, IncidentData, MaintenanceIncident } from "./status-feed/types";
 import { closedAtMs, isClosed, isRecentlyResolved } from "./incident-status";
 
 export type ProviderStatus =

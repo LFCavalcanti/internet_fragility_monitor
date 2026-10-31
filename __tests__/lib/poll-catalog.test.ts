@@ -3,10 +3,9 @@
  * Poll guiado pelo Provider Catalog, no banco real das migrations (SQLite em memória).
  * A rede é a única coisa simulada: cada URL responde como o Feed ou o Probe de verdade responderia.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
+import { feedFixture, hang, healthyResponse } from "../helpers/status-feed";
 
 let current: MigratedDb;
 vi.mock("@/lib/db", () => ({ getDb: () => current.db }));
@@ -16,21 +15,6 @@ import { saveStatusResult } from "@/lib/db-service";
 import { READ_TIMEOUT_MS } from "@/lib/status-feed/read-policy";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
-
-/** Resposta de cada Feed real com tudo funcionando; qualquer outra URL é um Probe que responde 200. */
-function healthyResponse(url: string): Response {
-    if (url.endsWith("/api/v2/summary.json")) {
-        return Response.json({ status: { indicator: "none" }, incidents: [], scheduled_maintenances: [] });
-    }
-    if (url.endsWith("incidents.json")) return Response.json([]);
-    if (url.includes("/api/v4/current-status")) {
-        return Response.json({ status: [{ system: "Apps", status: "green" }], incidents: [] });
-    }
-    if (url.endsWith(".rss") || url.endsWith("/feed/")) {
-        return new Response('<?xml version="1.0"?><rss version="2.0"><channel><title>Status</title></channel></rss>');
-    }
-    return new Response("ok", { status: 200 });
-}
 
 let fetchMock: ReturnType<typeof vi.fn<FetchHandler>>;
 const fetchedUrls = () => fetchMock.mock.calls.map(c => String(c[0]));
@@ -65,14 +49,7 @@ function routeOracleProbes(handler: FetchHandler) {
     route(ORACLE_LOGIN, handler);
 }
 
-/** Rede que não responde: só termina quando a política de leitura aborta a requisição. */
-const hang: FetchHandler = (_url, init) =>
-    new Promise((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
-    });
-
-const statuspageFixture = (name: string) =>
-    readFileSync(join(__dirname, "../fixtures/status-feed/statuspage", name), "utf8");
+const statuspageFixture = (name: string) => feedFixture("statuspage", name);
 
 const CLOUDFLARE_FEED = "https://www.cloudflarestatus.com";
 const HOSTINGER_FEED = "https://statuspage.hostinger.com";

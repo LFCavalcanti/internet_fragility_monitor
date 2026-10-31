@@ -13,7 +13,7 @@ import { getDb } from "./db";
 import { providers, providerSources, incidents, statusChecks } from "./schema";
 import type { Provider, ProviderSource, Incident, NewIncident, StatusCheck, NewStatusCheck } from "./schema";
 import { eq, desc, asc, and, notInArray } from "drizzle-orm";
-import type { IncidentKind } from "./fetchers/types";
+import type { IncidentKind } from "./status-feed/types";
 import { CLOSED_STATUSES, closedStatusFor, isClosed, type IncidentStatus } from "./incident-status";
 import {
     validate,

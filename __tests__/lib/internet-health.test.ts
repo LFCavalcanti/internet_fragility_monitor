@@ -7,7 +7,7 @@ import {
     type ProviderHealthEntry,
 } from '@/lib/internet-health';
 import type { ProviderStatus } from '@/lib/provider-status';
-import type { IncidentData, StatusResult } from '@/lib/fetchers/types';
+import type { IncidentData, StatusResult } from '@/lib/status-feed/types';
 
 const now = new Date('2026-10-26T15:00:00Z');
 

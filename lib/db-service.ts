@@ -17,7 +17,7 @@ import type {
     MaintenancePhase,
     ProblemStatus,
     StatusResult,
-} from "./fetchers/types";
+} from "./status-feed/types";
 import { isClosed, isRecentlyResolved } from "./incident-status";
 import { isAccessOnly, sourcesByProvider } from "./provider-catalog";
 import type { SnapshotEntry, SnapshotProvider } from "./snapshot-reading";

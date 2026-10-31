@@ -2,7 +2,7 @@
  * Tests for lib/db-service.ts - Database service layer
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { StatusResult } from '@/lib/fetchers/types';
+import type { StatusResult } from '@/lib/status-feed/types';
 
 // Mock the DAO functions
 vi.mock('@/lib/dao', () => ({

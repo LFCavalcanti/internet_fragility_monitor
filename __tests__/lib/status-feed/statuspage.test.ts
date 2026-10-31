@@ -3,15 +3,13 @@
  * Família Statuspage.io lida pela política de leitura, com a rede simulada.
  * As fixtures são payloads reais gravados (coleta nos Comments do Ticket 09); só `components` foi retirado.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFeed } from '@/lib/status-feed/read-policy';
 import { statuspageReader } from '@/lib/status-feed/readers/statuspage';
 import { decideProviderStatus, type FeedReading } from '@/lib/provider-status';
+import { feedFixture } from '../../helpers/status-feed';
 
-const fixture = (name: string): string =>
-    readFileSync(join(__dirname, '../../fixtures/status-feed/statuspage', name), 'utf8');
+const fixture = (name: string): string => feedFixture('statuspage', name);
 
 const CLOUDFLARE = { id: 'cloudflare-feed', url: 'https://www.cloudflarestatus.com' };
 const HOSTINGER = { id: 'hostinger-feed', url: 'https://statuspage.hostinger.com' };

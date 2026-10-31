@@ -2,7 +2,7 @@
  * O Snapshot de cada Provider e a entrada do módulo de Provider Status montada a partir dele.
  * Módulo puro, como o de Provider Status: não lê banco nem rede.
  */
-import type { StatusResult } from "./fetchers/types";
+import type { StatusResult } from "./status-feed/types";
 import type { ProviderStatusInput } from "./provider-status";
 
 /** Um Provider ativo do Provider Catalog, com os dados que a página e o Internet Health usam. */

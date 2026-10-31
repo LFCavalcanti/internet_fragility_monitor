@@ -3,7 +3,7 @@
  * Todo lugar que pergunta se um Incident está aberto ou encerrado usa este módulo.
  * Termos conforme GLOSSARY.md.
  */
-import type { IncidentData, IncidentKind, MaintenancePhase, ProblemStatus } from "./fetchers/types";
+import type { IncidentData, IncidentKind, MaintenancePhase, ProblemStatus } from "./status-feed/types";
 
 /** Status de um Incident: a fase de um problema ou de uma manutenção. */
 export type IncidentStatus = ProblemStatus | MaintenancePhase;
