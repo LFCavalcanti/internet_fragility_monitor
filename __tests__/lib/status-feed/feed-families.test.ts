@@ -468,6 +468,8 @@ describe.each([
     ['Azure', 'azure', 'azure-feed', FEED_URLS.azure],
     ['Google Cloud', 'google-cloud', 'google-cloud-feed', FEED_URLS.googleCloud],
     ['Heroku', 'heroku', 'heroku-feed', FEED_URLS.heroku],
+    ['RSS da IBM', 'ibm-cloud', 'ibm-cloud-feed', FEED_URLS.ibm],
+    ['Salesforce', 'salesforce', 'salesforce-feed', FEED_URLS.salesforceIncidents],
 ])('%s pela política de leitura', (_name, providerId, sourceId, feedUrl) => {
     it('uma leitura registra a fonte e a duração no log', async () => {
         await readProvider(providerId);

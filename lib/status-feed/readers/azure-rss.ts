@@ -1,5 +1,6 @@
-import { isClosed } from "../../incident-status";
-import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
+import type { FeedContent, FeedReader } from "../read-policy";
+import type { PublishedIncident } from "../types";
+import { declaredByOpenProblems, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 const RESOLVED = /\bresolved\b/i;
@@ -9,7 +10,7 @@ function toIncident(item: RssItem): PublishedIncident {
 
     return {
         kind: "problem",
-        status: resolved ? "resolved" : "investigating",
+        status: problemPhase(resolved),
         externalId: item.guid || item.title,
         title: item.title,
         description: item.description,
@@ -20,7 +21,7 @@ function toIncident(item: RssItem): PublishedIncident {
 
 function toFeedContent(items: RssItem[]): FeedContent {
     const incidents = items.map(toIncident);
-    return { declared: incidents.some(i => !isClosed(i)) ? "degraded" : "operational", incidents };
+    return { declared: declaredByOpenProblems(incidents), incidents };
 }
 
 /**
@@ -28,5 +29,5 @@ function toFeedContent(items: RssItem[]): FeedContent {
  * O Feed só lista o que está em andamento: fica vazio quando não há Incidents.
  */
 export const azureRssReader: FeedReader = {
-    read: body => toFeedContent(parseRssItems(body)),
+    read: ([body]) => toFeedContent(parseRssItems(body)),
 };

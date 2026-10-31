@@ -2,8 +2,8 @@ import { XMLParser } from "fast-xml-parser";
 import { z } from "zod";
 import { feedDate } from "./feed-date";
 
-/** Texto fica texto: um título só com dígitos não vira número. `item` é sempre lista, mesmo com um item só. */
-const parser = new XMLParser({ parseTagValue: false, isArray: name => name === "item" });
+/** Texto fica texto: um título só com dígitos não vira número. `item` e `category` são sempre listas, mesmo com um só. */
+const parser = new XMLParser({ parseTagValue: false, isArray: name => name === "item" || name === "category" });
 
 const rssSchema = z.object({
     rss: z.object({
@@ -16,6 +16,7 @@ const rssSchema = z.object({
                         guid: z.string().optional(),
                         link: z.string().optional(),
                         description: z.string().optional(),
+                        category: z.array(z.string()).default([]),
                     }),
                 )
                 .default([]),

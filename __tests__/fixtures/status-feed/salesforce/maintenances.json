@@ -1,0 +1,397 @@
+[
+  {
+    "id": 20173265,
+    "message": {
+      "maintenanceType": "release",
+      "availability": "storefrontDowntimeShouldNotExceed15MinutesActiveJobsAndReplicationsWillBeInterruptedDuringThisMaintenance",
+      "eventStatus": "resolved"
+    },
+    "externalId": "a3GEE0000008v2j2AA",
+    "name": "26.10 B2C Commerce GA - Thursday October 29, 2026",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "release",
+    "plannedStartTime": "2026-10-29T01:00:00.000Z",
+    "plannedEndTime": "2026-10-29T06:00:00.000Z",
+    "additionalInformation": "26.10 B2C Commerce GA - Thursday October 29, 2026\\n\n\\n\nSalesforce B2C Commerce GA is scheduled to be deployed to Primary Instance Group (PIG).\\n\nAll impacted instances will be restarted when the deployment is done.\\n\n\\n\nYou may review the Salesforce B2C Commerce Release Notes for this version on the Salesforce Help site under Docs > B2C Commerce Release Notes.\\n\nLinks to the full year release schedule and an overview of the B2C Commerce Release policies can also be found here.\\n\n\\n\n\\n\nIf you have any further questions, please contact your local representative or Salesforce Commerce Cloud Support via the Support Community.\\n\n\\n\nEnvironment\\n\nPrimary Instance Group (PIG)\\n\n\\n\nTime: 0200 - 0700 (Local POD Time)\\n\n\\n\nImpact\\n\nTypically should not exceed 15 minutes of downtime. All PIG instances will be restarted as part of the update. Active jobs and replications will be interrupted.\\nWe make our best effort to minimize downtime through this process, however, other factors such as your customizations, data shape, size of your production realm or content of the release may also influence deployment times.",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Resolved",
+    "createdAt": "2026-10-05T21:34:58.678Z",
+    "updatedAt": "2026-10-29T03:06:32.566Z",
+    "instanceKeys": [
+      "POD284"
+    ],
+    "serviceKeys": [
+      "B2CCore"
+    ],
+    "MaintenanceImpacts": [
+      {
+        "id": 20087293,
+        "startTime": "2026-10-29T01:00:00.000Z",
+        "endTime": "2026-10-29T03:06:32.180Z",
+        "type": "deployingMaintenance",
+        "severity": "maintenance",
+        "createdAt": "2026-10-29T01:12:45.440Z",
+        "updatedAt": "2026-10-29T03:06:32.558Z",
+        "startTimeCreatedAt": "2026-10-29T01:12:45.440Z",
+        "startTimeModifiedAt": null,
+        "endTimeCreatedAt": "2026-10-29T03:06:32.558Z",
+        "endTimeModifiedAt": null
+      }
+    ],
+    "MaintenanceEvents": [
+      {
+        "id": 20301039,
+        "type": "scheduled",
+        "message": "This maintenance is scheduled.",
+        "createdAt": "2026-10-05T21:34:59.098Z",
+        "updatedAt": "2026-10-05T21:34:59.102Z"
+      }
+    ]
+  },
+  {
+    "id": 20175289,
+    "message": {
+      "maintenanceType": "release",
+      "availability": "generallyAvailable",
+      "eventStatus": "ongoing"
+    },
+    "externalId": "",
+    "name": "Spiff Application Updates",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "release",
+    "plannedStartTime": "2026-10-30T18:00:00.000Z",
+    "plannedEndTime": "2026-11-03T03:00:00.000Z",
+    "additionalInformation": "Salesforce is releasing updates and bug fixes to the Spiff Application.  Spiff will continue to be generally available.  Expect occasional feature and performance degradation during this time.",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Active",
+    "createdAt": "2026-10-26T20:19:06.674Z",
+    "updatedAt": "2026-10-30T18:02:15.757Z",
+    "instanceKeys": [
+      "SPIFF-EU1"
+    ],
+    "serviceKeys": [
+      "Spiff"
+    ],
+    "MaintenanceImpacts": [
+      {
+        "id": 20087366,
+        "startTime": "2026-10-30T18:01:00.000Z",
+        "endTime": null,
+        "type": "startingRelease",
+        "severity": "maintenance",
+        "createdAt": "2026-10-30T18:02:15.741Z",
+        "updatedAt": "2026-10-30T18:02:15.746Z",
+        "startTimeCreatedAt": "2026-10-30T18:02:15.741Z",
+        "startTimeModifiedAt": null,
+        "endTimeCreatedAt": null,
+        "endTimeModifiedAt": null
+      }
+    ],
+    "MaintenanceEvents": [
+      {
+        "id": 20303983,
+        "type": "scheduledRelease",
+        "message": "Scheduled",
+        "createdAt": "2026-10-26T20:19:40.998Z",
+        "updatedAt": "2026-10-26T20:19:41.002Z"
+      }
+    ]
+  },
+  {
+    "id": 20175321,
+    "message": {
+      "maintenanceType": "scheduledMaintenance",
+      "availability": "generallyAvailable",
+      "eventStatus": "planned"
+    },
+    "externalId": "",
+    "name": "Spiff Application Updates",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "maintenance",
+    "plannedStartTime": "2026-11-01T12:00:00.000Z",
+    "plannedEndTime": "2026-11-01T20:00:00.000Z",
+    "additionalInformation": "",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Confirmed",
+    "createdAt": "2026-10-30T17:47:47.872Z",
+    "updatedAt": "2026-10-30T17:51:27.691Z",
+    "instanceKeys": [
+      "SPIFF-US1"
+    ],
+    "serviceKeys": [
+      "Spiff"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": [
+      {
+        "id": 20304200,
+        "type": "update",
+        "message": "Maintenance Scheduled",
+        "createdAt": "2026-10-30T17:47:47.942Z",
+        "updatedAt": "2026-10-30T17:47:47.948Z"
+      }
+    ]
+  },
+  {
+    "id": 20175043,
+    "message": {
+      "maintenanceType": "scheduledMaintenance",
+      "eventStatus": "eventStatusCanceled",
+      "availability": "fullyAvailable"
+    },
+    "externalId": "",
+    "name": "External IP List Update",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "maintenance",
+    "plannedStartTime": "2026-11-21T05:14:00.000Z",
+    "plannedEndTime": "2026-11-21T05:14:00.000Z",
+    "additionalInformation": "The External IP List has been updated, and the changes will take effect in 30 days. Delta changes in ip-ranges-gov-cloud.json between syncToken 1779299209 and 1792621079: us-gov-east-1 - Added 155.226.200.0/23. Important: This is a change summary relative to the first sync version mentioned above— not the complete list of IPs you should allowlist. Because updates occur as needed, always reconcile against the source of truth at https://ip-ranges.salesforce.com/ip-ranges-gov-cloud.json rather than this notice. For guidance on managing IP allowlisting, see https://help.salesforce.com/s/articleView?id=003876184&type=1",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Canceled",
+    "createdAt": "2026-10-22T05:14:47.923Z",
+    "updatedAt": "2026-10-29T22:49:46.563Z",
+    "instanceKeys": [
+      "USA9002",
+      "USA9004S",
+      "USA9006S",
+      "USA9008",
+      "USA9010S",
+      "USA9012S",
+      "USA9014",
+      "USA9016S",
+      "USA9018S",
+      "USA9020",
+      "USA9022S",
+      "USA9024S",
+      "USA9026",
+      "USA9028S",
+      "USA9402",
+      "USA9404S",
+      "USA9406S",
+      "USA9902",
+      "USA9904S",
+      "USA9918S"
+    ],
+    "serviceKeys": [
+      "coreService"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": [
+      {
+        "id": 20304196,
+        "type": "update",
+        "message": "Update: This notice was sent in error. No IP address changes will take effect on November 21, 2026.\nThe October 21 “External IP List Update” notice gave an incorrect 30-day effective date. No action is required by November 21.\n\nThe range in that notice, 155.226.200.0/23 (us-gov-east-1), is a valid Salesforce-owned range published at  https://ip-ranges.salesforce.com/ip-ranges-gov-cloud.json. Salesforce will begin using this IP range at a later date. We will send full details, including the effective date and preparation steps in a future communication.\n\nQuestions? Open a case via Salesforce Help with #IPChangeGovCloud in the subject.",
+        "createdAt": "2026-10-29T22:49:46.551Z",
+        "updatedAt": "2026-10-29T22:49:46.555Z"
+      },
+      {
+        "id": 20303779,
+        "type": "scheduled",
+        "message": "This maintenance has been scheduled.",
+        "createdAt": "2026-10-22T05:14:47.984Z",
+        "updatedAt": "2026-10-22T05:14:47.997Z"
+      }
+    ]
+  },
+  {
+    "id": 20150992,
+    "message": {
+      "maintenanceType": "release",
+      "eventStatus": "rescheduled",
+      "availability": "available"
+    },
+    "externalId": "a3GEE000000TDmp2AG",
+    "name": "Winter '27 Major Release",
+    "externalMaintenanceType": "",
+    "substrate": "Hyperforce Core",
+    "releaseType": "Major",
+    "type": "release",
+    "plannedStartTime": "2026-10-03T05:00:00.000Z",
+    "plannedEndTime": "2026-10-03T05:30:00.000Z",
+    "additionalInformation": "This Trust post is a duplicate of 20156100.",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Rescheduled",
+    "createdAt": "2026-03-14T00:40:17.904Z",
+    "updatedAt": "2026-10-03T05:32:45.550Z",
+    "instanceKeys": [
+      "USA1158"
+    ],
+    "serviceKeys": [
+      "coreService"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": []
+  },
+  {
+    "id": 20173261,
+    "message": {
+      "maintenanceType": "release",
+      "availability": "storefrontDowntimeShouldNotExceed15MinutesActiveJobsAndReplicationsWillBeInterruptedDuringThisMaintenance",
+      "eventStatus": "confirmed"
+    },
+    "externalId": "a3GEE0000008v2j2AA",
+    "name": "26.10 B2C Commerce GA - Thursday October 29, 2026",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "release",
+    "plannedStartTime": "2026-10-29T01:00:00.000Z",
+    "plannedEndTime": "2026-10-29T06:00:00.000Z",
+    "additionalInformation": "26.10 B2C Commerce GA - Thursday October 29, 2026\\n\n\\n\nSalesforce B2C Commerce GA is scheduled to be deployed to Primary Instance Group (PIG).\\n\nAll impacted instances will be restarted when the deployment is done.\\n\n\\n\nYou may review the Salesforce B2C Commerce Release Notes for this version on the Salesforce Help site under Docs > B2C Commerce Release Notes.\\n\nLinks to the full year release schedule and an overview of the B2C Commerce Release policies can also be found here.\\n\n\\n\n\\n\nIf you have any further questions, please contact your local representative or Salesforce Commerce Cloud Support via the Support Community.\\n\n\\n\nEnvironment\\n\nPrimary Instance Group (PIG)\\n\n\\n\nTime: 0200 - 0700 (Local POD Time)\\n\n\\n\nImpact\\n\nTypically should not exceed 15 minutes of downtime. All PIG instances will be restarted as part of the update. Active jobs and replications will be interrupted.\\nWe make our best effort to minimize downtime through this process, however, other factors such as your customizations, data shape, size of your production realm or content of the release may also influence deployment times.",
+    "isCore": true,
+    "affectsAll": false,
+    "status": "Confirmed",
+    "createdAt": "2026-10-05T21:34:51.021Z",
+    "updatedAt": "2026-10-05T21:34:51.472Z",
+    "instanceKeys": [
+      "POD240"
+    ],
+    "serviceKeys": [
+      "B2CCore"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": [
+      {
+        "id": 20301035,
+        "type": "scheduled",
+        "message": "This maintenance is scheduled.",
+        "createdAt": "2026-10-05T21:34:51.464Z",
+        "updatedAt": "2026-10-05T21:34:51.468Z"
+      }
+    ]
+  },
+  {
+    "id": 20162961,
+    "message": {
+      "maintenanceType": "scheduledMaintenance",
+      "availability": "unavailable",
+      "eventStatus": "planned"
+    },
+    "externalId": "",
+    "name": "MuleSoft Scheduled Maintenance",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "maintenance",
+    "plannedStartTime": "2026-11-01T01:00:00.000Z",
+    "plannedEndTime": "2026-11-01T06:00:00.000Z",
+    "additionalInformation": "MuleSoft will be undergoing general maintenance during this time. \\n \\n \n\nObject Store v2: \\n\nUsers will be temporarily unable to create, modify, or delete partitions and key-value pairs. Viewing existing resources will continue to work. \\n \\n\n\nMQ: \\n\nUsers will be temporarily unable to create, modify, or delete queues, exchanges, or bindings. Viewing existing resources, message browsing, purging messages from a queue, and all client application management (create/delete/regenerate credentials) will continue to work as before. No impact to message send/receive or other MQ services. \\n \\n\n\nAccess Management: \\n\nDuring planned maintenance, customers may briefly experience a delay before recently updated access-management information is reflected. This can include changes to user access, permissions, team membership, environments, or organization settings. Normal behavior resumes after maintenance completes. \\n \\n\n\nAPI Manager: \\n\nAll management capabilities for managed and self-managed Flex Gateways will be impacted. Customers will be unable to create or start new Flex Gateways and replicas, list existing Gateways, deploy or modify APIs on existing Gateways. However, all currently running Standalone and Managed Flex Gateways and their APIs will continue to operate normally. \\n \\n\n\nComposer: \\n\nThe Composer domain may become completely unreachable or temporarily inaccessible. Users will be unable to access the MuleSoft Composer UI and the log in page. Existing active flow runtimes and background executions will remain unaffected and continue running normally. \\n \\n\n",
+    "isCore": false,
+    "affectsAll": false,
+    "status": "Confirmed",
+    "createdAt": "2026-07-28T19:28:58.547Z",
+    "updatedAt": "2026-10-30T19:51:53.977Z",
+    "instanceKeys": [
+      "ANYPOINTAUTOMATIONSUITE-US",
+      "ANYPOINTMANAGEMENTCENTER-US",
+      "ANYPOINTMQ-US",
+      "ANYPOINTOBSERVABILITYSUITE-US",
+      "ANYPOINTPARTNERMANAGERV2-US",
+      "ANYPOINTSECURITY-US",
+      "COMMUNITIES&ENGAGEMENTS-US",
+      "DATAGRAPH-US",
+      "DATALOADER-US",
+      "DESIGNCENTER-US",
+      "DOCUMENTATION-US",
+      "HELPCENTER-US",
+      "OBJECTSTOREV2-US",
+      "RUNTIMEPLANE-US",
+      "RUNTIMESERVICES-US"
+    ],
+    "serviceKeys": [
+      "APIManager",
+      "AccessManagement",
+      "AnypointMQ-Admin-us-east-1",
+      "AnypointMQ-Broker-us-east-1",
+      "AnypointMQ-Stats-us-east-1",
+      "Composer",
+      "ObjectStorev2-Service-us-east-1",
+      "ObjectStorev2-Stats-us-east-1"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": [
+      {
+        "id": 20303774,
+        "type": "scheduled",
+        "message": "This maintenance has been scheduled.",
+        "createdAt": "2026-10-21T21:13:24.228Z",
+        "updatedAt": "2026-10-21T21:13:24.232Z"
+      },
+      {
+        "id": 20282250,
+        "type": "scheduled",
+        "message": "This maintenance has been scheduled.",
+        "createdAt": "2026-07-28T19:28:58.605Z",
+        "updatedAt": "2026-07-28T19:28:58.609Z"
+      }
+    ]
+  },
+  {
+    "id": 20162963,
+    "message": {
+      "maintenanceType": "scheduledMaintenance",
+      "availability": "unavailable",
+      "eventStatus": "planned"
+    },
+    "externalId": "",
+    "name": "MuleSoft Scheduled Maintenance",
+    "externalMaintenanceType": null,
+    "substrate": null,
+    "releaseType": null,
+    "type": "maintenance",
+    "plannedStartTime": "2026-11-01T01:00:00.000Z",
+    "plannedEndTime": "2026-11-01T06:00:00.000Z",
+    "additionalInformation": "* Heads up this maintenance window will happen on a Saturday evening instead of our regular cadence on Tuesday evening *\\n \\n \n\nMuleSoft will be undergoing general maintenance during this time. \\n \\n \n\nClassic Monitoring Experience will be unavailable. Anypoint Monitoring Agent customers will not be able to install the Anypoint Monitoring agent on new or existing Hybrid Runtime Servers. \\n \\n\n\nNew Mule app deployments, Mule app restarts, and Private Space deployments may be unavailable.",
+    "isCore": false,
+    "affectsAll": false,
+    "status": "Confirmed",
+    "createdAt": "2026-07-28T19:31:25.564Z",
+    "updatedAt": "2026-10-30T19:52:31.942Z",
+    "instanceKeys": [
+      "ANYPOINTMANAGEMENTCENTER-GOV",
+      "ANYPOINTMQ-GOV",
+      "ANYPOINTOBSERVABILITYSUITE-GOV",
+      "COMMUNITIES&ENGAGEMENTS-GOV",
+      "DESIGNCENTER-GOV",
+      "DOCUMENTATION-GOV",
+      "HELPCENTER-GOV",
+      "OBJECTSTOREV2-GOV",
+      "RUNTIMEPLANE-GOV",
+      "RUNTIMESERVICES-GOV"
+    ],
+    "serviceKeys": [
+      "CloudHub10Applications-US-GOV-WEST-1",
+      "CloudHub10ApplicationsUSG-W1"
+    ],
+    "MaintenanceImpacts": [],
+    "MaintenanceEvents": [
+      {
+        "id": 20303775,
+        "type": "scheduled",
+        "message": "This maintenance has been scheduled.",
+        "createdAt": "2026-10-21T21:15:39.182Z",
+        "updatedAt": "2026-10-21T21:15:39.187Z"
+      },
+      {
+        "id": 20282252,
+        "type": "scheduled",
+        "message": "This maintenance has been scheduled.",
+        "createdAt": "2026-07-28T19:31:25.607Z",
+        "updatedAt": "2026-07-28T19:31:25.611Z"
+      }
+    ]
+  }
+]

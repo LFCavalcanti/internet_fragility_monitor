@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
-import type { DeclaredStatus, MaintenancePhase, ProblemStatus } from "../types";
+import type { FeedContent, FeedReader } from "../read-policy";
+import type { DeclaredStatus, MaintenancePhase, ProblemStatus, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
 
 /** "maintenance" não conta aqui: Maintenance vem das manutenções em andamento, não do indicador. */
@@ -75,6 +75,6 @@ function toFeedContent(summary: Summary): FeedContent {
  * `scheduled_maintenances` traz manutenções, cada uma com a fase declarada.
  */
 export const statuspageReader: FeedReader = {
-    address: catalogUrl => `${catalogUrl}/api/v2/summary.json`,
-    read: body => toFeedContent(summarySchema.parse(JSON.parse(body))),
+    addresses: catalogUrl => [`${catalogUrl}/api/v2/summary.json`],
+    read: ([body]) => toFeedContent(summarySchema.parse(JSON.parse(body))),
 };

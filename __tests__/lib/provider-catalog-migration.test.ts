@@ -18,9 +18,9 @@ const CATALOG = [
     { id: "vercel", name: "Vercel", major: false, feed: { family: "statuspage", url: "https://www.vercel-status.com", active: true }, probes: ["https://www.vercel-status.com", "https://vercel.com/login"] },
     { id: "github", name: "GitHub", major: false, feed: { family: "statuspage", url: "https://www.githubstatus.com", active: true }, probes: ["https://www.githubstatus.com", "https://github.com/login"] },
     { id: "jira", name: "Jira", major: false, feed: { family: "statuspage", url: "https://jira-software.status.atlassian.com", active: true }, probes: ["https://jira-software.status.atlassian.com", "https://id.atlassian.com/login"] },
-    { id: "ibm-cloud", name: "IBM Cloud", major: false, feed: { family: "ibm-rss", url: "https://cloud.ibm.com/status/api/notifications/feed.rss", active: false }, probes: ["https://cloud.ibm.com/status", "https://cloud.ibm.com/login"] },
+    { id: "ibm-cloud", name: "IBM Cloud", major: false, feed: { family: "ibm-rss", url: "https://cloud.ibm.com/status/api/notifications/feed.rss", active: true }, probes: ["https://cloud.ibm.com/status", "https://cloud.ibm.com/login"] },
     { id: "digital-ocean", name: "DigitalOcean", major: false, feed: { family: "statuspage", url: "https://status.digitalocean.com", active: true }, probes: ["https://status.digitalocean.com", "https://cloud.digitalocean.com/login"] },
-    { id: "salesforce", name: "Salesforce", major: false, feed: { family: "salesforce", url: "https://api.status.salesforce.com/v1", active: false }, probes: ["https://status.salesforce.com", "https://login.salesforce.com"] },
+    { id: "salesforce", name: "Salesforce", major: false, feed: { family: "salesforce", url: "https://api.status.salesforce.com/v1", active: true }, probes: ["https://status.salesforce.com", "https://login.salesforce.com"] },
     { id: "oracle-cloud", name: "Oracle Cloud", major: false, feed: null, probes: ["https://ocistatus.oraclecloud.com", "https://www.oracle.com/cloud/sign-in.html"] },
     { id: "hostinger", name: "Hostinger", major: false, feed: { family: "statuspage", url: "https://statuspage.hostinger.com", active: true }, probes: ["https://statuspage.hostinger.com", "https://hpanel.hostinger.com"] },
     { id: "heroku", name: "Heroku", major: false, feed: { family: "heroku", url: "https://status.heroku.com/api/v4/current-status", active: true }, probes: ["https://status.heroku.com", "https://id.heroku.com/login"] },
@@ -65,7 +65,7 @@ describe("migration de carga do Provider Catalog", () => {
         });
     });
 
-    it("grava os Feeds de cada Provider com família e URL, e os de Salesforce e IBM inativos", async () => {
+    it("deixa os Feeds de cada Provider com família e URL, todos ativos depois da 0005", async () => {
         const { db } = await createMigratedDb();
 
         const feeds = await db.select().from(providerSources).where(eq(providerSources.kind, "feed")).all();
@@ -74,7 +74,32 @@ describe("migration de carga do Provider Catalog", () => {
         expect(feeds.map(f => ({ providerId: f.providerId, family: f.family, url: f.url, active: f.active })))
             .toEqual(expect.arrayContaining(expected.map(e => expect.objectContaining(e))));
         expect(feeds).toHaveLength(12);
-        expect(feeds.filter(f => !f.active).map(f => f.providerId).sort()).toEqual(["ibm-cloud", "salesforce"]);
+        expect(feeds.every(f => f.active)).toBe(true);
+    });
+
+    it("a carga deixa só os Feeds de Salesforce e IBM inativos, e a 0005 ativa os dois sem mexer no resto", async () => {
+        const { db, migrateRest } = await createMigratedDb({ upTo: "0004_provider_catalog_load" });
+        const sources = () => db.select().from(providerSources).all();
+        const before = await sources();
+        expect(before.filter(s => !s.active).map(s => s.id).sort()).toEqual(["ibm-cloud-feed", "salesforce-feed"]);
+
+        await migrateRest();
+
+        const after = await sources();
+        expect(after.filter(s => !s.active)).toEqual([]);
+        const asActive = before.map(s => ({ ...s, active: true }));
+        expect(after).toEqual(expect.arrayContaining(asActive));
+        expect(after).toHaveLength(before.length);
+    });
+
+    it("na 0005, um Feed que foi desativado por outro motivo continua fora: só os dois Feeds mudam", async () => {
+        const { client, db, migrateRest } = await createMigratedDb({ upTo: "0004_provider_catalog_load" });
+        await client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'heroku-feed'");
+
+        await migrateRest();
+
+        const inactive = await db.select().from(providerSources).where(eq(providerSources.active, false)).all();
+        expect(inactive.map(s => s.id)).toEqual(["heroku-feed"]);
     });
 
     it("usa só famílias de Feed conhecidas pelo código", async () => {

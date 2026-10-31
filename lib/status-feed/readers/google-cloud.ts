@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { isClosed } from "../../incident-status";
-import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
+import type { FeedContent, FeedReader } from "../read-policy";
+import type { PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
+import { declaredByOpenProblems, problemPhase } from "./problem-state";
 
 const incidentsSchema = z.array(
     z.object({
@@ -21,7 +22,7 @@ type GoogleIncident = z.output<typeof incidentsSchema>[number];
 function toIncident(incident: GoogleIncident, address: string): PublishedIncident {
     return {
         kind: "problem",
-        status: incident.end ? "resolved" : "investigating",
+        status: problemPhase(Boolean(incident.end)),
         externalId: incident.id,
         title: `${incident.service_name}: ${incident.external_desc}`,
         description: incident.updates?.[0]?.text || incident.external_desc,
@@ -35,10 +36,10 @@ function toIncident(incident: GoogleIncident, address: string): PublishedInciden
 
 function toFeedContent(incidents: GoogleIncident[], address: string): FeedContent {
     const published = incidents.map(incident => toIncident(incident, address));
-    return { declared: published.some(i => !isClosed(i)) ? "degraded" : "operational", incidents: published };
+    return { declared: declaredByOpenProblems(published), incidents: published };
 }
 
 /** Leitor do Google Cloud (incidents.json): a lista traz também os encerrados, com a hora de fim em `end`. */
 export const googleCloudReader: FeedReader = {
-    read: (body, address) => toFeedContent(incidentsSchema.parse(JSON.parse(body)), address),
+    read: ([body], [address]) => toFeedContent(incidentsSchema.parse(JSON.parse(body)), address),
 };

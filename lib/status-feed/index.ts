@@ -10,22 +10,23 @@ import { awsRssReader } from "./readers/aws-rss";
 import { azureRssReader } from "./readers/azure-rss";
 import { googleCloudReader } from "./readers/google-cloud";
 import { herokuReader } from "./readers/heroku";
+import { ibmRssReader } from "./readers/ibm-rss";
+import { salesforceReader } from "./readers/salesforce";
 import { statuspageReader } from "./readers/statuspage";
 import type { ReadIncident, StatusResult } from "./types";
 
 /** Resultado de ler um Provider num Poll. */
 type ProviderReading = StatusResult<ReadIncident>;
 
-/**
- * Leitor de cada família de Feed. Salesforce e RSS da IBM ainda não têm leitor (Ticket 11):
- * um Feed ativo delas vira Feed não lido.
- */
-const FEED_READERS: Partial<Record<FeedFamily, FeedReader>> = {
+/** Leitor de cada família de Feed. */
+const FEED_READERS: Record<FeedFamily, FeedReader> = {
     statuspage: statuspageReader,
     "aws-rss": awsRssReader,
     "azure-rss": azureRssReader,
     "google-cloud": googleCloudReader,
     heroku: herokuReader,
+    salesforce: salesforceReader,
+    "ibm-rss": ibmRssReader,
 };
 
 function unreachableResult(providerId: string): ProviderReading {

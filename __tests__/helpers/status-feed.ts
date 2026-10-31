@@ -23,6 +23,7 @@ export function healthyResponse(url: string): Response {
     if (url.includes('/api/v4/current-status')) {
         return Response.json({ status: [{ system: 'Apps', status: 'green' }], incidents: [], scheduled: [] });
     }
+    if (url.startsWith('https://api.status.salesforce.com/v1/')) return Response.json([]);
     if (url.endsWith('.rss') || url.endsWith('/feed/')) {
         return new Response('<?xml version="1.0"?><rss version="2.0"><channel><title>Status</title></channel></rss>');
     }

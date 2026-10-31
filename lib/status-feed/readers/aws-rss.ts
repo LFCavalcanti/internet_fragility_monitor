@@ -1,5 +1,6 @@
-import { isClosed } from "../../incident-status";
-import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
+import type { FeedContent, FeedReader } from "../read-policy";
+import type { PublishedIncident } from "../types";
+import { declaredByOpenProblems, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 /** `guid` da AWS: `https://status.aws.amazon.com/#<evento>_<instante da atualização>`. */
@@ -50,7 +51,7 @@ function toIncident(externalId: string, updates: RssItem[]): PublishedIncident {
 
     return {
         kind: "problem",
-        status: resolved ? "resolved" : "investigating",
+        status: problemPhase(resolved),
         externalId,
         title: latest.title,
         description: latest.description,
@@ -65,7 +66,7 @@ function toFeedContent(items: RssItem[]): FeedContent {
     const chronological = [...items].sort((a, b) => a.pubDate.getTime() - b.pubDate.getTime());
     const incidents = [...byEvent(chronological)].map(([event, updates]) => toIncident(event, updates));
 
-    return { declared: incidents.some(i => !isClosed(i)) ? "degraded" : "operational", incidents };
+    return { declared: declaredByOpenProblems(incidents), incidents };
 }
 
 /**
@@ -73,5 +74,5 @@ function toFeedContent(items: RssItem[]): FeedContent {
  * `guid` antes do instante. Não há encerramento por silêncio: o evento fica ativo até a AWS marcá-lo como resolvido.
  */
 export const awsRssReader: FeedReader = {
-    read: body => toFeedContent(parseRssItems(body)),
+    read: ([body]) => toFeedContent(parseRssItems(body)),
 };

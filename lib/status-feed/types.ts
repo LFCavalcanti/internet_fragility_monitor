@@ -48,8 +48,11 @@ export interface MaintenanceIncident extends IncidentBase {
 
 export type IncidentData = ProblemIncident | MaintenanceIncident;
 
+/** Um Incident como o Feed o publica, com o id que o Feed dá a ele. A Provider Source é posta pela política de leitura. */
+export type PublishedIncident = IncidentData & { externalId: string };
+
 /**
  * Incident lido de um Feed, com a identidade: a Provider Source de origem e o id que o Feed dá a ele.
  * Os Incidents vindos do banco são `IncidentData`, sem esses campos, até o Ticket 14 gravá-los.
  */
-export type ReadIncident = IncidentData & { sourceId: string; externalId: string };
+export type ReadIncident = PublishedIncident & { sourceId: string };

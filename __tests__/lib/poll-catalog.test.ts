@@ -102,10 +102,24 @@ describe("Poll guiado pelo Provider Catalog", () => {
     });
 
     it("um Feed inativo não é lido", async () => {
+        await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id IN ('salesforce-feed', 'ibm-cloud-feed')");
+
         await poll();
 
-        expect(fetchedUrls()).not.toContain("https://api.status.salesforce.com/v1");
+        expect(fetchedUrls().filter(url => url.startsWith("https://api.status.salesforce.com/"))).toEqual([]);
         expect(fetchedUrls()).not.toContain("https://cloud.ibm.com/status/api/notifications/feed.rss");
+    });
+
+    it("Salesforce e IBM são lidas pelos Feeds, sem a marca de \"só acesso\", e a Oracle segue só com Probes", async () => {
+        const results = await poll();
+
+        expect(fetchedUrls()).toContain("https://api.status.salesforce.com/v1/incidents/active");
+        expect(fetchedUrls()).toContain("https://cloud.ibm.com/status/api/notifications/feed.rss");
+        for (const id of ["salesforce", "ibm-cloud"]) {
+            expect(results.find(r => r.providerId === id)).toMatchObject({ status: "operational", incidents: [] });
+            expect(results.find(r => r.providerId === id)?.accessOnly).toBeFalsy();
+        }
+        expect(results.find(r => r.providerId === "oracle-cloud")?.accessOnly).toBe(true);
     });
 
     it("um Feed de família desconhecida vira Feed não lido, com registro no log, sem derrubar o Poll", async () => {
@@ -213,7 +227,9 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
 });
 
 describe("Probes de Providers sem Feed ativo", () => {
-    it("Oracle, Salesforce e IBM rodam os Probes da status page e do login e ficam Operational quando respondem", async () => {
+    it("Providers sem Feed ativo rodam os Probes da status page e do login e ficam Operational quando respondem", async () => {
+        await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id IN ('salesforce-feed', 'ibm-cloud-feed')");
+
         const results = await poll();
 
         expect(fetchedUrls()).toEqual(

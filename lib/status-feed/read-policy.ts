@@ -1,20 +1,18 @@
 /**
  * Política de leitura: o único lugar que busca uma Provider Source na rede. Vale para Feeds e Probes:
  * timeout, tratamento de falha e registro da duração e do resultado no log. A duração nunca entra no resultado.
+ * Os textos de um Incident lido respeitam os limites de gravação (`INCIDENT_TITLE_MAX` e `INCIDENT_DESCRIPTION_MAX`).
  * Uma leitura nunca rejeita: a falha de uma fonte não afeta as outras, nem as do mesmo Provider.
  * Termos conforme GLOSSARY.md.
  */
 import type { ProviderSource } from "../schema";
 import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "../validation";
-import type { DeclaredStatus, IncidentData, ReadIncident } from "./types";
+import type { DeclaredStatus, PublishedIncident, ReadIncident } from "./types";
 
 /** Quanto uma leitura espera, do pedido ao fim do conteúdo, antes de contar como falha. */
 export const READ_TIMEOUT_MS = 10_000;
 
 type ReadableSource = Pick<ProviderSource, "id" | "url">;
-
-/** Um Incident como o Feed o publica, com o id que o Feed dá a ele. A Provider Source é posta pela política. */
-export type PublishedIncident = IncidentData & { externalId: string };
 
 export interface FeedContent {
     declared: DeclaredStatus;
@@ -27,12 +25,15 @@ export type FeedResult = { read: true; declared: DeclaredStatus; incidents: Read
 /**
  * Leitor de uma família de Feed: só interpreta o conteúdo que a política já obteve, sem nada de rede.
  * `read` valida o conteúdo (schema do Zod) e lança quando ele está fora do formato: o Feed fica não lido.
- * `address` é o endereço de onde o conteúdo veio, para resolver os links relativos que o Feed publica.
+ * Recebe um corpo por endereço, na mesma ordem. O endereço serve para resolver os links relativos que o Feed publica.
  */
 export interface FeedReader {
-    /** Endereço a buscar a partir da URL do catálogo. Sem ele, busca a própria URL. */
-    address?(catalogUrl: string): string;
-    read(body: string, address: string): FeedContent;
+    /**
+     * Endereços a buscar a partir da URL do catálogo. Sem ele, busca a própria URL. Um Feed em mais de um endereço
+     * é uma fonte só: um timeout para todos, e o Feed só conta como lido com todos.
+     */
+    addresses?(catalogUrl: string): string[];
+    read(bodies: string[], addresses: string[]): FeedContent;
 }
 
 /** Executa uma leitura dentro do timeout, registrando duração e resultado. Devolve null quando ela falha. */
@@ -52,6 +53,8 @@ async function applyReadPolicy<T>(source: ReadableSource, read: (signal: AbortSi
         return null;
     } finally {
         clearTimeout(timeout);
+        // Cancela o que ainda corre quando um dos endereços de um Feed falha antes dos outros.
+        controller.abort();
     }
 }
 
@@ -64,13 +67,18 @@ function withinRecordLimits(incident: PublishedIncident): PublishedIncident {
     };
 }
 
+async function fetchBody(address: string, signal: AbortSignal): Promise<string> {
+    const response = await fetch(address, { cache: "no-store", signal });
+    if (!response.ok) throw new Error(`resposta HTTP ${response.status} em ${address}`);
+    return response.text();
+}
+
 /** Lê um Feed: resposta fora de 2xx, timeout, erro de rede e conteúdo fora do formato resultam em Feed não lido. */
 export async function readFeed(source: ReadableSource, reader: FeedReader): Promise<FeedResult> {
-    const address = reader.address?.(source.url) ?? source.url;
+    const addresses = reader.addresses?.(source.url) ?? [source.url];
     const content = await applyReadPolicy(source, async signal => {
-        const response = await fetch(address, { cache: "no-store", signal });
-        if (!response.ok) throw new Error(`resposta HTTP ${response.status}`);
-        return reader.read(await response.text(), address);
+        const bodies = await Promise.all(addresses.map(address => fetchBody(address, signal)));
+        return reader.read(bodies, addresses);
     });
     if (!content) return { read: false };
 

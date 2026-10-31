@@ -202,11 +202,16 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         return decideProviderStatus(toProviderStatusInput((await snapshotOf(providerId)).result, now));
     }
 
-    it("Oracle, Salesforce e IBM, sem Feed ativo, ficam Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {
-        for (const id of ["oracle-cloud", "salesforce", "ibm-cloud"]) {
-            await checkedAgo(id, "operational");
-            expect(await decisionFor(id)).toMatchObject({ status: "operational", accessOnly: true });
-        }
+    it("a Oracle, sem Feed ativo, fica Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {
+        await checkedAgo("oracle-cloud", "operational");
+
+        expect(await decisionFor("oracle-cloud")).toMatchObject({ status: "operational", accessOnly: true });
+    });
+
+    it.each(["salesforce", "ibm-cloud"])("%s, com o Feed ativo, perde a marca de \"só acesso\" e mostra o que o Feed declara", async id => {
+        await checkedAgo(id, "degraded");
+
+        expect(await decisionFor(id)).toMatchObject({ status: "degraded", accessOnly: false });
     });
 
     it("sem resposta de nenhum Probe, o Provider só com Probes fica Unreachable", async () => {
@@ -218,19 +223,19 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
     it.each(["degraded", "outage"])(
         "um Provider só com Probes nunca aparece em %s, mesmo com uma leitura antiga dessas gravada",
         async status => {
-            await checkedAgo("salesforce", status);
+            await checkedAgo("oracle-cloud", status);
 
-            expect(await decisionFor("salesforce")).toMatchObject({ status: "operational", accessOnly: true });
+            expect(await decisionFor("oracle-cloud")).toMatchObject({ status: "operational", accessOnly: true });
         },
     );
 
     it("um Provider só com Probes nunca aparece em Maintenance, mesmo com manutenção em andamento gravada", async () => {
-        await checkedAgo("ibm-cloud", "operational");
+        await checkedAgo("oracle-cloud", "operational");
         await current.client.execute(
-            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'ibm-cloud', 'Old maintenance', 'in_progress', 'maintenance')",
+            "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'oracle-cloud', 'Old maintenance', 'in_progress', 'maintenance')",
         );
 
-        expect((await decisionFor("ibm-cloud")).status).toBe("operational");
+        expect((await decisionFor("oracle-cloud")).status).toBe("operational");
     });
 
     it("um Provider com Feed ativo continua decidido pelo Feed, sem a marca", async () => {

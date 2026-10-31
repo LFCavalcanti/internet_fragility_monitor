@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type { FeedContent, FeedReader, PublishedIncident } from "../read-policy";
-import type { DeclaredStatus } from "../types";
+import type { FeedContent, FeedReader } from "../read-policy";
+import type { DeclaredStatus, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
+import { problemPhase } from "./problem-state";
 
 const COLOR_STATUS = {
     green: "operational",
@@ -47,7 +48,7 @@ function toProblem(item: Item): PublishedIncident {
     return {
         ...commonFields(item),
         kind: "problem",
-        status: resolved ? "resolved" : "investigating",
+        status: problemPhase(resolved),
         resolvedAt: resolved ? item.resolved_at ?? undefined : undefined,
     };
 }
@@ -81,5 +82,5 @@ function toFeedContent(current: CurrentStatus): FeedContent {
  * manutenções. A fase de um problema não vem numa lista fechada (`open` em andamento, `resolved` no fim).
  */
 export const herokuReader: FeedReader = {
-    read: body => toFeedContent(currentStatusSchema.parse(JSON.parse(body))),
+    read: ([body]) => toFeedContent(currentStatusSchema.parse(JSON.parse(body))),
 };

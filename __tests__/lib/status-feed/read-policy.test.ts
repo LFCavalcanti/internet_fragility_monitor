@@ -11,7 +11,7 @@ const FEED = { id: 'acme-feed', url: 'https://status.acme.test/feed' };
 const PROBE = { id: 'acme-login', url: 'https://login.acme.test' };
 
 const reader: FeedReader = {
-    read: body => ({
+    read: ([body]) => ({
         declared: 'degraded',
         incidents: [{ kind: 'problem', status: 'investigating', title: body, createdAt: new Date(0), externalId: 'x1' }],
     }),
@@ -123,9 +123,51 @@ describe('leitura de um Feed', () => {
         stubNetwork(async () => new Response('x'));
         const read = vi.fn(reader.read);
 
-        await readFeed(FEED, { address: url => `${url}/v2`, read });
+        await readFeed(FEED, { addresses: url => [`${url}/v2`], read });
 
-        expect(read).toHaveBeenCalledWith('x', `${FEED.url}/v2`);
+        expect(read).toHaveBeenCalledWith(['x'], [`${FEED.url}/v2`]);
+    });
+
+    describe('Feed em dois endereços', () => {
+        const twoAddresses: FeedReader = {
+            addresses: url => [`${url}/a`, `${url}/b`],
+            read: bodies => ({
+                declared: 'operational',
+                incidents: bodies.map(body => ({
+                    kind: 'problem',
+                    status: 'investigating',
+                    title: body,
+                    createdAt: new Date(0),
+                    externalId: body,
+                })),
+            }),
+        };
+
+        it('o leitor recebe um corpo por endereço, na mesma ordem', async () => {
+            stubNetwork(async url => new Response(String(url).slice(-1)));
+
+            const reading = await readFeed(FEED, twoAddresses);
+
+            expect(reading).toMatchObject({ read: true, incidents: [{ title: 'a' }, { title: 'b' }] });
+        });
+
+        it('um endereço que falha deixa o Feed não lido e cancela o outro, sem esperar o timeout', async () => {
+            stubNetwork(async (url, init) =>
+                String(url).endsWith('/a') ? new Response('erro', { status: 503 }) : hang(url, init),
+            );
+
+            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false });
+        });
+
+        it('o timeout vale para os dois endereços juntos', async () => {
+            vi.useFakeTimers();
+            stubNetwork(hang);
+
+            const reading = readFeed(FEED, twoAddresses);
+            await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+
+            expect(await reading).toEqual({ read: false });
+        });
     });
 
     it('um texto maior do que a gravação aceita chega cortado, em vez de derrubar o Poll', async () => {
