@@ -7,10 +7,11 @@ const GUID = /#(.+)_\d+$/;
 
 /**
  * O RSS não tem campo de fase: a AWS marca o fim no texto da última atualização. Títulos antigos trazem
- * "[RESOLVED]"; os atuais (fixture de 30/10/2026) terminam a descrição com "the service is operating normally".
+ * "[RESOLVED]"; os atuais (fixture de 30/10/2026) fecham a descrição com "the service is operating normally".
+ * A marca vale só na última frase: antes dela, o texto narra a recuperação de partes do evento.
  */
 const RESOLVED_TITLE = /\bresolved\b/i;
-const RESOLVED_DESCRIPTION = /\bservices? (?:is|are) operating normally\.?\s*$/i;
+const RESOLVED_CLOSING = /\bissues? (?:is|are|has been|have been) resolved\b|(?<!\bother )\bservices? (?:is|are)(?: now)? operating normally\b/i;
 
 function eventOf(item: RssItem): string {
     const event = item.guid?.match(GUID)?.[1];
@@ -18,8 +19,14 @@ function eventOf(item: RssItem): string {
     return event;
 }
 
+/** A última frase do texto, sem links nem marcação. */
+function closingSentence(description: string): string {
+    const text = description.replace(/<a\b[\s\S]*?<\/a>/gi, " ").replace(/<[^>]*>/g, " ").trim();
+    return text.split(/(?<=[.!?])\s+/).at(-1) ?? "";
+}
+
 function isResolved(update: RssItem): boolean {
-    return RESOLVED_TITLE.test(update.title) || RESOLVED_DESCRIPTION.test(update.description ?? "");
+    return RESOLVED_TITLE.test(update.title) || RESOLVED_CLOSING.test(closingSentence(update.description ?? ""));
 }
 
 function byEvent(items: RssItem[]): Map<string, RssItem[]> {

@@ -57,3 +57,5 @@
 **Observado, fica para o Ticket 14:** na AWS, os dois eventos do Oriente Médio têm o mesmo título, e na Heroku as manutenções também. A gravação ainda casa pelo título; os itens estão em `ISSUES_ANNOTATION.md`.
 
 **Esquema e migrations:** nenhuma.
+
+- **30/10/2026, code review do Ticket 10 (orquestrador):** dois defeitos na marca de fim da AWS, corrigidos com teste: "All other services are operating normally." encerrava o evento, e "The issue has been resolved.", "All services are now operating normally." e a frase certa seguida de `<a>` não encerravam. A marca agora vale só na última frase, sem links. Pendentes para o usuário, em `ISSUES_ANNOTATION.md` 1.1: qual data o card mostra para o evento da AWS (início ou última atualização, como dizia a decisão de 28/10) e se vermelho só em Tools chega a Outage na Heroku. Divergência de textos, sem efeito no código: o `GLOSSARY.md` diz que o id nunca é o título, e `spec-status-feed.md` permite o título quando o Feed não publica id, caso da Azure sem `guid`.

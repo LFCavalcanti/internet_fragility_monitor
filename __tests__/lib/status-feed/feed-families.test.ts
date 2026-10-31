@@ -172,6 +172,32 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
         expect((await readProvider('aws')).status).toBe('degraded');
     });
 
+    it.each([
+        'The issue has been resolved.',
+        'All services are now operating normally.',
+        'The issue is resolved and the service is operating normally. <a href="https://health.aws.amazon.com/">Details</a>',
+    ])('a marca de fim vale no fecho da descrição: %s', async description => {
+        respondWith(FEED_URLS.aws, awsRss([{ event: 'ec2-us-east-1', title: 'Service impact: Errors', at: start, description }]));
+
+        expect((await readProvider('aws')).status).toBe('operational');
+    });
+
+    it('o fecho que fala dos outros serviços não encerra o evento', async () => {
+        respondWith(
+            FEED_URLS.aws,
+            awsRss([
+                {
+                    event: 'ec2-us-east-1',
+                    title: 'Service impact: Errors',
+                    at: start,
+                    description: 'EC2 is still impaired. All other services are operating normally.',
+                },
+            ]),
+        );
+
+        expect((await readProvider('aws')).status).toBe('degraded');
+    });
+
     it('um evento novo no mesmo serviço e região começa depois do último resolvido', async () => {
         const reopened = hoursBefore(start, 1);
         respondWith(
