@@ -35,8 +35,26 @@ export const hang = (_url: unknown, init?: RequestInit) =>
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
     });
 
+/** `summary.json` da Cloudflare com tudo funcionando: o leitor dela exige o grupo de serviços e os sete Core Services. */
+const HEALTHY_CLOUDFLARE_SUMMARY = {
+    status: { indicator: 'none' },
+    components: [
+        { id: 'services', name: 'Cloudflare Sites and Services', status: 'operational', group: true, group_id: null },
+        ...['CDN/Cache', 'Firewall', 'Bot Management', 'Authoritative DNS', 'Recursive DNS', 'Network', 'Workers'].map(name => ({
+            id: name,
+            name,
+            status: 'operational',
+            group: false,
+            group_id: 'services',
+        })),
+    ],
+    incidents: [],
+    scheduled_maintenances: [],
+};
+
 /** Resposta de cada Feed real do catálogo com tudo funcionando; qualquer outra URL é um Probe que responde 200. */
 export function healthyResponse(url: string): Response {
+    if (url === 'https://www.cloudflarestatus.com/api/v2/summary.json') return Response.json(HEALTHY_CLOUDFLARE_SUMMARY);
     if (url.endsWith('/api/v2/summary.json')) {
         return Response.json({ status: { indicator: 'none' }, incidents: [], scheduled_maintenances: [] });
     }

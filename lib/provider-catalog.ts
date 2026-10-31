@@ -5,12 +5,14 @@
  */
 
 /**
- * Famílias de Feed conhecidas pelo código: Statuspage.io, RSS da AWS, RSS da Azure, Google Cloud, Heroku,
- * Salesforce e RSS da IBM. RSS da AWS e da Azure são formatos diferentes: na AWS cada atualização é um item, e o
- * `guid` traz o evento e o instante; na Azure cada item é um evento, e o `guid` é um slug.
+ * Famílias de Feed conhecidas pelo código: Statuspage.io, Cloudflare, RSS da AWS, RSS da Azure, Google Cloud, Heroku,
+ * Salesforce e RSS da IBM. A Cloudflare publica no formato da Statuspage.io, mas o estado dela vem dos Core Services.
+ * RSS da AWS e da Azure são formatos diferentes: na AWS cada atualização é um item, e o `guid` traz o evento e o
+ * instante; na Azure cada item é um evento, e o `guid` é um slug.
  */
 export const FEED_FAMILIES = [
     "statuspage",
+    "cloudflare",
     "aws-rss",
     "azure-rss",
     "google-cloud",

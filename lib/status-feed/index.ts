@@ -10,6 +10,7 @@ import type { ProviderReading, SourcedFeedReading } from "./provider-reading";
 import { readFeed, readProbe, type FeedReader } from "./read-policy";
 import { awsRssReader } from "./readers/aws-rss";
 import { azureRssReader } from "./readers/azure-rss";
+import { cloudflareReader } from "./readers/cloudflare";
 import { googleCloudReader } from "./readers/google-cloud";
 import { herokuReader } from "./readers/heroku";
 import { ibmRssReader } from "./readers/ibm-rss";
@@ -20,6 +21,7 @@ import type { ReadIncident } from "./types";
 /** Leitor de cada família de Feed. */
 const FEED_READERS: Record<FeedFamily, FeedReader> = {
     statuspage: statuspageReader,
+    cloudflare: cloudflareReader,
     "aws-rss": awsRssReader,
     "azure-rss": azureRssReader,
     "google-cloud": googleCloudReader,

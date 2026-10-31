@@ -57,6 +57,7 @@ function routeOracleProbes(handler: FetchHandler) {
 }
 
 const statuspageFixture = (name: string) => feedFixture("statuspage", name);
+const cloudflareFixture = () => feedFixture("cloudflare", "major-data-centers-only.json");
 
 const CLOUDFLARE_FEED = "https://www.cloudflarestatus.com";
 const HOSTINGER_FEED = "https://statuspage.hostinger.com";
@@ -203,7 +204,7 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
     });
 
     it("as 25 manutenções reais da Cloudflare, com 22 títulos, gravam 25 linhas, e o Poll seguinte não cria nem junta nenhuma", async () => {
-        route(CLOUDFLARE_FEED, async () => new Response(statuspageFixture("cloudflare-major.json")));
+        route(CLOUDFLARE_FEED, async () => new Response(cloudflareFixture()));
         const maintenances = () =>
             current.client.execute("SELECT count(*) AS n, count(DISTINCT external_id) AS ids FROM incidents WHERE provider_id = 'cloudflare' AND kind = 'maintenance'");
 
@@ -243,13 +244,16 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
     });
 
     it("os payloads reais gravados atravessam o Poll até o banco, com estado e Incidents", async () => {
-        route(CLOUDFLARE_FEED, async () => new Response(statuspageFixture("cloudflare-major.json")));
+        route(CLOUDFLARE_FEED, async () => new Response(cloudflareFixture()));
         route(HOSTINGER_FEED, async () => new Response(statuspageFixture("hostinger-incident.json")));
+        route(GITHUB_FEED, async () => new Response(statuspageFixture("cloudflare-major.json")));
 
         const results = await poll();
 
         expect(results.find(r => r.providerId === "cloudflare")?.incidents.every(i => i.sourceId === "cloudflare-feed")).toBe(true);
-        expect(await statusChecks("cloudflare")).toEqual(["outage"]);
+        // Mesmo indicador `major`: a Cloudflare ignora o estado geral, e o outro Provider da família continua seguindo.
+        expect(await statusChecks("cloudflare")).toEqual(["operational"]);
+        expect(await statusChecks("github")).toEqual(["outage"]);
         expect(await statusChecks("hostinger")).toEqual(["operational"]);
         const rows = await current.client.execute(
             "SELECT kind, status FROM incidents WHERE provider_id = 'hostinger' AND title LIKE 'PHP Security Update%'",

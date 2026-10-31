@@ -14,7 +14,7 @@ const CATALOG = [
     { id: "aws", name: "AWS", major: true, feed: { family: "aws-rss", url: "https://status.aws.amazon.com/rss/all.rss", active: true }, probes: ["https://health.aws.amazon.com/health/status", "https://console.aws.amazon.com"] },
     { id: "google-cloud", name: "Google Cloud", major: true, feed: { family: "google-cloud", url: "https://status.cloud.google.com/incidents.json", active: true }, probes: ["https://status.cloud.google.com", "https://console.cloud.google.com"] },
     { id: "azure", name: "Azure", major: true, feed: { family: "azure-rss", url: "https://azure.status.microsoft/en-us/status/feed/", active: true }, probes: ["https://azure.status.microsoft/en-us/status", "https://portal.azure.com"] },
-    { id: "cloudflare", name: "Cloudflare", major: true, feed: { family: "statuspage", url: "https://www.cloudflarestatus.com", active: true }, probes: ["https://www.cloudflarestatus.com", "https://dash.cloudflare.com"] },
+    { id: "cloudflare", name: "Cloudflare", major: true, feed: { family: "cloudflare", url: "https://www.cloudflarestatus.com", active: true }, probes: ["https://www.cloudflarestatus.com", "https://dash.cloudflare.com"] },
     { id: "vercel", name: "Vercel", major: false, feed: { family: "statuspage", url: "https://www.vercel-status.com", active: true }, probes: ["https://www.vercel-status.com", "https://vercel.com/login"] },
     { id: "github", name: "GitHub", major: false, feed: { family: "statuspage", url: "https://www.githubstatus.com", active: true }, probes: ["https://www.githubstatus.com", "https://github.com/login"] },
     { id: "jira", name: "Jira", major: false, feed: { family: "statuspage", url: "https://jira-software.status.atlassian.com", active: true }, probes: ["https://jira-software.status.atlassian.com", "https://id.atlassian.com/login"] },
@@ -87,7 +87,8 @@ describe("migration de carga do Provider Catalog", () => {
 
         const after = await sources();
         expect(after.filter(s => !s.active)).toEqual([]);
-        const asActive = before.map(s => ({ ...s, active: true }));
+        // A família do Feed da Cloudflare muda depois, na 0010, que tem teste próprio.
+        const asActive = before.map(s => ({ ...s, active: true, family: s.id === "cloudflare-feed" ? "cloudflare" : s.family }));
         expect(after).toEqual(expect.arrayContaining(asActive));
         expect(after).toHaveLength(before.length);
     });
@@ -114,7 +115,19 @@ describe("migration de carga do Provider Catalog", () => {
         const github = (await catalog()).find(p => p.id === "github");
         expect(github).toMatchObject({ url: "https://github.com", statusPageUrl: "https://www.githubstatus.com" });
         expect(await catalog()).toEqual(providersBefore.map(p => (p.id === "github" ? { ...p, url: "https://github.com" } : p)));
-        expect(await sources()).toEqual(sourcesBefore);
+        const sourcesAfter = await sources();
+        expect(sourcesAfter.filter(s => s.id !== "cloudflare-feed")).toEqual(sourcesBefore.filter(s => s.id !== "cloudflare-feed"));
+    });
+
+    it("a 0010 troca só a família do Feed da Cloudflare: os outros Providers da família Statuspage.io ficam", async () => {
+        const { db, migrateRest } = await createMigratedDb({ upTo: "0009_github_site_url" });
+        const sources = () => db.select().from(providerSources).orderBy(asc(providerSources.id)).all();
+        const before = await sources();
+        expect(before.find(s => s.id === "cloudflare-feed")?.family).toBe("statuspage");
+
+        await migrateRest();
+
+        expect(await sources()).toEqual(before.map(s => (s.id === "cloudflare-feed" ? { ...s, family: "cloudflare" } : s)));
     });
 
     it("usa só famílias de Feed conhecidas pelo código", async () => {
@@ -123,7 +136,7 @@ describe("migration de carga do Provider Catalog", () => {
         const feeds = await db.select().from(providerSources).where(eq(providerSources.kind, "feed")).all();
 
         expect([...FEED_FAMILIES].sort()).toEqual(
-            ["aws-rss", "azure-rss", "google-cloud", "heroku", "ibm-rss", "salesforce", "statuspage"],
+            ["aws-rss", "azure-rss", "cloudflare", "google-cloud", "heroku", "ibm-rss", "salesforce", "statuspage"],
         );
         for (const f of feeds) expect(isFeedFamily(f.family)).toBe(true);
     });

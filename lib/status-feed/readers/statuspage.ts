@@ -33,17 +33,18 @@ const itemFields = {
     incident_updates: z.array(z.object({ body: z.string().nullish() })).nullish(),
 };
 
-const summarySchema = z.object({
-    status: z.object({ indicator }),
+const generalStatusSchema = z.object({ status: z.object({ indicator }) });
+
+const summaryItemsSchema = z.object({
     incidents: z.array(z.object({ ...itemFields, status: problemStatus })),
     scheduled_maintenances: z.array(
         z.object({ ...itemFields, status: maintenancePhase, scheduled_for: feedDate.nullish() }),
     ),
 });
 
-type Summary = z.output<typeof summarySchema>;
+type SummaryItems = z.output<typeof summaryItemsSchema>;
 
-function commonFields(item: Summary["incidents"][number] | Summary["scheduled_maintenances"][number]) {
+function commonFields(item: SummaryItems["incidents"][number] | SummaryItems["scheduled_maintenances"][number]) {
     return {
         externalId: item.id,
         title: item.name,
@@ -54,11 +55,16 @@ function commonFields(item: Summary["incidents"][number] | Summary["scheduled_ma
     };
 }
 
-function toFeedContent(summary: Summary): FeedContent {
-    const problems = summary.incidents.map(
+/**
+ * Os Incidents de um `summary.json`. A classificação vem do próprio Feed: a lista `incidents` traz problemas e a lista
+ * `scheduled_maintenances` traz manutenções, cada uma com a fase declarada. Lança com o conteúdo fora do formato.
+ */
+export function summaryIncidents(summary: unknown): PublishedIncident[] {
+    const { incidents, scheduled_maintenances } = summaryItemsSchema.parse(summary);
+    const problems = incidents.map(
         (item): PublishedIncident => ({ kind: "problem", status: item.status, ...commonFields(item) }),
     );
-    const maintenances = summary.scheduled_maintenances.map(
+    const maintenances = scheduled_maintenances.map(
         (item): PublishedIncident => ({
             kind: "maintenance",
             status: item.status,
@@ -66,17 +72,17 @@ function toFeedContent(summary: Summary): FeedContent {
             ...commonFields(item),
         }),
     );
-
-    const incidents = [...problems, ...maintenances];
-    return { declared: withOngoingMaintenance(INDICATOR_STATUS[summary.status.indicator], incidents), incidents };
+    return [...problems, ...maintenances];
 }
 
-/**
- * Leitor da família Statuspage.io (summary.json).
- * A classificação vem do próprio Feed: a lista `incidents` traz problemas e a lista
- * `scheduled_maintenances` traz manutenções, cada uma com a fase declarada.
- */
+function toFeedContent(summary: unknown): FeedContent {
+    const { status } = generalStatusSchema.parse(summary);
+    const incidents = summaryIncidents(summary);
+    return { declared: withOngoingMaintenance(INDICATOR_STATUS[status.indicator], incidents), incidents };
+}
+
+/** Leitor da família Statuspage.io (summary.json): o estado declarado segue o indicador geral do Provider. */
 export const statuspageReader: FeedReader = {
     addresses: catalogUrl => [`${catalogUrl}/api/v2/summary.json`],
-    read: ([body]) => toFeedContent(summarySchema.parse(JSON.parse(body))),
+    read: ([body]) => toFeedContent(JSON.parse(body)),
 };

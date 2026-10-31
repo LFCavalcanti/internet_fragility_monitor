@@ -2,6 +2,7 @@
 /**
  * Família Statuspage.io lida pela política de leitura, com a rede simulada.
  * As fixtures são payloads reais gravados (coleta nos Comments do Ticket 09); só `components` foi retirado.
+ * `cloudflare-major.json` é de quando a Cloudflare era desta família: hoje vale como exemplo do formato com indicador `major`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFeed } from '@/lib/status-feed/read-policy';
@@ -11,7 +12,7 @@ import { feedFixture } from '../../helpers/status-feed';
 
 const fixture = (name: string): string => feedFixture('statuspage', name);
 
-const CLOUDFLARE = { id: 'cloudflare-feed', url: 'https://www.cloudflarestatus.com' };
+const GITHUB = { id: 'github-feed', url: 'https://www.githubstatus.com' };
 const HOSTINGER = { id: 'hostinger-feed', url: 'https://statuspage.hostinger.com' };
 const POLL_AT = new Date('2026-10-31T00:48:00Z');
 
@@ -21,7 +22,7 @@ function respondWith(body: string, init?: ResponseInit) {
     return fetchMock;
 }
 
-async function read(body: string, source = CLOUDFLARE) {
+async function read(body: string, source = GITHUB) {
     respondWith(body);
     const reading = await readFeed(source, statuspageReader, POLL_AT);
     if (!reading.read) throw new Error('Feed não lido');
@@ -48,7 +49,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('payload real da Cloudflare: indicador major e manutenções agendadas', () => {
+describe('payload real com indicador major e manutenções agendadas: o Provider segue o indicador geral', () => {
     it('declara Outage e traz as 25 manutenções agendadas como manutenção, sem problema inventado', async () => {
         const reading = await read(fixture('cloudflare-major.json'));
 
@@ -61,7 +62,7 @@ describe('payload real da Cloudflare: indicador major e manutenções agendadas'
         const reading = await read(fixture('cloudflare-major.json'));
 
         expect(reading.incidents[0]).toMatchObject({
-            sourceId: 'cloudflare-feed',
+            sourceId: 'github-feed',
             externalId: 'jj0q4l1v75m8',
             kind: 'maintenance',
             status: 'scheduled',
@@ -228,7 +229,6 @@ describe('classificação pela estrutura do Feed', () => {
 
 describe('endereço do Feed', () => {
     it.each([
-        ['https://www.cloudflarestatus.com', 'https://www.cloudflarestatus.com/api/v2/summary.json'],
         ['https://www.githubstatus.com', 'https://www.githubstatus.com/api/v2/summary.json'],
         ['https://www.vercel-status.com', 'https://www.vercel-status.com/api/v2/summary.json'],
     ])('a URL do catálogo %s é lida em summary.json', async (url, expected) => {
@@ -258,9 +258,9 @@ describe('conteúdo fora do formato vira Feed não lido, com registro no log', (
     ])('%s', async (_case, body) => {
         respondWith(body);
 
-        const reading = await readFeed(CLOUDFLARE, statuspageReader, POLL_AT);
+        const reading = await readFeed(GITHUB, statuspageReader, POLL_AT);
 
         expect(reading).toEqual({ read: false, answered: true, gotHttpResponse: true });
-        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('cloudflare-feed'), expect.anything());
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('github-feed'), expect.anything());
     });
 });

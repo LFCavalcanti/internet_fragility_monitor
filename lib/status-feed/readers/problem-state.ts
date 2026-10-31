@@ -20,7 +20,7 @@ export function withOngoingMaintenance(declared: DeclaredStatus, incidents: Publ
 }
 
 /** A referência é a última atualização publicada e, sem ela, a criação. Uma atualização nova faz o Incident voltar a contar. */
-function isDormant(incident: PublishedIncident, pollAt: Date): boolean {
+export function isDormant(incident: PublishedIncident, pollAt: Date): boolean {
     const lastNews = incident.updatedAt ?? incident.createdAt;
     return pollAt.getTime() - lastNews.getTime() > DORMANT_AFTER_MS;
 }
