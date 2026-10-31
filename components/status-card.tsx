@@ -47,6 +47,8 @@ export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, n
     const { icon: StatusIcon, className: statusColor } = STATUS_ICON[displayStatus];
     // Unreachable descreve a leitura, não o Provider: card cinza e neutro, sem último status conhecido.
     const unreachable = displayStatus === "unreachable";
+    // Down é o pior caso: a cor mais forte da página, acima do vermelho de Outage.
+    const down = displayStatus === "down";
 
     // Recent Incidents já vêm decididos e ordenados pelo módulo: o card só exibe.
     const recentIncidents = decision.incidents;
@@ -58,6 +60,7 @@ export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, n
             className={cn(
                 "w-full hover:shadow-lg transition-shadow duration-200 overflow-hidden flex flex-col h-full border-primary/20 bg-card/50 backdrop-blur-sm rounded-none",
                 unreachable && "grayscale border-muted bg-muted/30",
+                down && "border-2 border-red-700 bg-red-950/40",
             )}
         >
             <CardHeader className="flex flex-row p-0 bg-primary/5 backdrop-blur-xl border-b border-white/10 space-y-0 h-20">
@@ -112,6 +115,7 @@ export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, n
                         {unreachable && (
                             <p className="text-xs text-muted-foreground mt-1">Não foi possível ler a status page</p>
                         )}
+                        {down && <p className="text-xs font-medium mt-1">Sem resposta da status page nem do serviço</p>}
                         {decision.accessOnly && (
                             // Provider só com Probes: o estado vem só da verificação de acesso.
                             <p className="text-xs text-muted-foreground mt-1">verificação de acesso, sem feed de status</p>

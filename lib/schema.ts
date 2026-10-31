@@ -1,6 +1,7 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { SourceKind } from "./provider-catalog";
+import type { DeclaredStatus } from "./status-feed/types";
 
 /** Tipo de serviço de um Provider no catálogo. */
 export type ProviderType = "cloud" | "cdn" | "paas" | "saas" | "hosting";
@@ -59,13 +60,29 @@ export const incidents = sqliteTable("incidents", {
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),
 }, table => [uniqueIndex("incidents_source_external_unique").on(table.sourceId, table.externalId)]);
 
+/** Um Feed lido num Poll: a Provider Source e o que ela declarou, ou `null` se ficou sem leitura. */
+export interface RecordedFeed {
+    sourceId: string;
+    declared: DeclaredStatus | null;
+}
+
+/**
+ * Uma leitura por Provider em cada Poll. As linhas gravadas antes dela são uma por Feed, sem `feeds`, e não dizem se
+ * a fonte respondeu: Probes de um Provider com Feed nem eram gravados. Por isso o padrão de `no_source_answered` é
+ * falso, e uma linha antiga nunca conta para Down.
+ */
 export const statusChecks = sqliteTable("status_checks", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     providerId: text("provider_id").references(() => providers.id).notNull(),
-    status: text("status").notNull(), // 'operational', 'degraded', 'outage', 'unreachable' (falha de leitura)
+    // Pior estado entre os Feeds lidos ('operational', 'degraded', 'outage') ou 'unreachable' sem Feed lido.
+    // Provider só com Probes: 'operational' com algum Probe de pé. Down não é gravado: depende do Poll anterior.
+    status: text("status").notNull(),
     responseTime: integer("response_time"),
     checkedAt: integer("checked_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
-});
+    noSourceAnswered: integer("no_source_answered", { mode: "boolean" }).notNull().default(false), // nem Feeds, nem Probes
+    // Os Feeds ativos no Poll, na ordem do catálogo. Lista vazia: o Provider foi lido só por Probes.
+    feeds: text("feeds", { mode: "json" }).$type<RecordedFeed[]>(),
+}, table => [index("status_checks_provider_checked_at").on(table.providerId, table.checkedAt)]);
 
 export type Provider = typeof providers.$inferSelect;
 

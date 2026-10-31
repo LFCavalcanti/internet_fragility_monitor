@@ -107,21 +107,19 @@ describe("readSnapshot lê o Provider Catalog", () => {
 
     it("traz as leituras de cada Feed do último Poll, na ordem gravada, e nenhuma de um Poll anterior", async () => {
         const checkedAt = Math.floor(now.getTime() / 1000) - 60;
-        const check = (status: string, at: number) =>
+        const check = (status: string, at: number, feeds: unknown[]) =>
             current.client.execute({
-                sql: "INSERT INTO status_checks (provider_id, status, checked_at) VALUES ('github', ?, ?)",
-                args: [status, at],
+                sql: "INSERT INTO status_checks (provider_id, status, checked_at, feeds) VALUES ('github', ?, ?, ?)",
+                args: [status, at, JSON.stringify(feeds)],
             });
-        await check("outage", checkedAt - 300);
-        await check("outage", checkedAt - 300);
-        await check("degraded", checkedAt);
-        await check("unreachable", checkedAt);
+        await check("outage", checkedAt - 300, [{ sourceId: "github-feed", declared: "outage" }, { sourceId: "second", declared: "outage" }]);
+        await check("degraded", checkedAt, [{ sourceId: "github-feed", declared: "degraded" }, { sourceId: "second", declared: null }]);
 
         const { reading, lastUpdated } = await snapshotOf("github");
 
         expect(reading.feeds).toEqual([
             { read: true, declared: "degraded", incidents: [] },
-            { read: false, incidents: [] },
+            { read: false, answered: true, incidents: [] },
         ]);
         expect(lastUpdated).toEqual(new Date(checkedAt * 1000));
     });
@@ -283,6 +281,16 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
             args: [providerId, status, Math.floor(now.getTime() / 1000) - 60],
         });
 
+    /** A leitura de um Poll com dois Feeds, cada um com o que declarou, ou `null` sem leitura. */
+    const checkedTwoFeeds = (providerId: string, status: string, declared: (string | null)[]) =>
+        current.client.execute({
+            sql: "INSERT INTO status_checks (provider_id, status, checked_at, feeds) VALUES (?, ?, ?, ?)",
+            args: [
+                providerId, status, Math.floor(now.getTime() / 1000) - 60,
+                JSON.stringify(declared.map((d, i) => ({ sourceId: `${providerId}-${i}`, declared: d }))),
+            ],
+        });
+
     it("a Oracle, sem Feed ativo, fica Operational com a marca de \"só acesso\" quando um Probe respondeu", async () => {
         await checkedAgo("oracle-cloud", "operational");
 
@@ -332,8 +340,7 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
     });
 
     it("com dois Feeds lidos e manutenção em andamento gravada, o estado sai igual ao de cada Feed com os seus Incidents", async () => {
-        await checkedAgo("cloudflare", "operational");
-        await checkedAgo("cloudflare", "operational");
+        await checkedTwoFeeds("cloudflare", "operational", ["operational", "operational"]);
         await current.client.execute(
             "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
         );
@@ -341,19 +348,20 @@ describe("Snapshot de Provider só com Probes vai ao módulo de Provider Status"
         expect((await decisionFor("cloudflare")).status).toBe("maintenance");
     });
 
-    it("manutenção em andamento gravada não esconde o Degraded de outro Feed lido, em qualquer ordem", async () => {
+    it.each([
+        [["operational", "degraded"]],
+        [["degraded", "operational"]],
+    ])("manutenção em andamento gravada não esconde o Degraded de outro Feed lido, em qualquer ordem: %j", async declared => {
         await current.client.execute(
             "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('m-1', 'cloudflare', 'Network upgrade', 'in_progress', 'maintenance')",
         );
-        await checkedAgo("cloudflare", "operational");
-        await checkedAgo("cloudflare", "degraded");
+        await checkedTwoFeeds("cloudflare", "degraded", declared);
 
         expect((await decisionFor("cloudflare")).status).toBe("degraded");
     });
 
     it("quando nenhum Feed foi lido, os Incidents gravados continuam no card", async () => {
-        await checkedAgo("cloudflare", "unreachable");
-        await checkedAgo("cloudflare", "unreachable");
+        await checkedTwoFeeds("cloudflare", "unreachable", [null, null]);
         await insertIncident({ providerId: "cloudflare", title: "Open issue", status: "identified", createdAt: hoursBefore(now, 1) });
 
         const decision = await decisionFor("cloudflare");

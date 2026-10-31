@@ -31,7 +31,8 @@ export type SourceKind = "feed" | "probe";
 
 /**
  * Marca de "só acesso": o Provider não tem Feed ativo e é lido só por Probes. É a única regra de
- * "Provider sem Feed": o Poll e a leitura do Snapshot a aplicam às fontes ativas do Provider, e o resto lê a marca.
+ * "Provider sem Feed": o Poll a aplica às fontes ativas do Provider e grava os Feeds lidos, de onde a leitura do
+ * Snapshot tira a marca.
  */
 export function isAccessOnly(sources: readonly { kind: SourceKind }[]): boolean {
     return !sources.some(s => s.kind === "feed");

@@ -3,7 +3,7 @@
  * espera. A regra de descarte do Poll mora aqui, sem nada de rede, porque só depende dessas leituras.
  * Termos conforme GLOSSARY.md.
  */
-import { feedAnswered, type ProviderStatusInput, type FeedReading } from "../provider-status";
+import { sourcesUnanswered, type ProviderStatusInput, type FeedReading } from "../provider-status";
 import type { IncidentData } from "./types";
 
 /** A leitura de um Feed num Poll, com a Provider Source lida: um Feed lido e sem Incidents também diz qual Feed foi. */
@@ -22,6 +22,5 @@ export interface ProviderReading<I extends IncidentData = IncidentData>
  * Sem nenhuma fonte ativa, não houve o que responder, e isso não é falha do monitor.
  */
 export function noSourceAnswered(readings: readonly ProviderReading[]): boolean {
-    const answers = readings.flatMap(r => [...r.feeds.map(feedAnswered), ...r.probes]);
-    return answers.length > 0 && !answers.some(Boolean);
+    return sourcesUnanswered(readings.flatMap(r => r.feeds), readings.flatMap(r => r.probes));
 }

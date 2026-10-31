@@ -19,11 +19,11 @@ export type ProviderStatus =
  * Um Feed não lido pode trazer os Incidents já gravados dele: entram nos Recent Incidents,
  * mas não decidem o estado nem a Upcoming Maintenance, que seriam dado velho tomado por atual.
  * `answered` diz se a fonte respondeu mesmo sem poder ser lida (conteúdo fora do formato, por exemplo), o que
- * impede Down; quem veio de uma leitura gravada não sabe, e sem o campo conta como sem resposta.
+ * impede Down. É obrigatório: um campo esquecido não pode virar um Down falso.
  */
 export type FeedReading<I extends IncidentData = IncidentData> =
     | { read: true; declared: DeclaredStatus; incidents: I[] }
-    | { read: false; answered?: boolean; incidents?: I[] };
+    | { read: false; answered: boolean; incidents?: I[] };
 
 export interface ProviderStatusInput {
     /**
@@ -96,6 +96,15 @@ export function feedAnswered(feed: FeedReading): boolean {
     return feed.read || feed.answered === true;
 }
 
+/**
+ * Havia fontes e nenhuma respondeu, nem Feeds nem Probes: a base de Down. Sem nenhuma fonte, não houve o que responder.
+ * Vale para um Provider e, com as fontes de todos, para o Poll inteiro.
+ */
+export function sourcesUnanswered(feeds: readonly FeedReading[], probes: readonly boolean[]): boolean {
+    const answers = [...feeds.map(feedAnswered), ...probes];
+    return answers.length > 0 && !answers.some(Boolean);
+}
+
 function partialReadingOf(feeds: FeedReading[]): PartialReadingMark | null {
     const unread = feeds.filter(f => !f.read).length;
     return unread > 0 && unread < feeds.length ? { unread, total: feeds.length } : null;
@@ -140,7 +149,7 @@ function decideStatus({
     if (probes.some(Boolean)) {
         return accessOnly ? "operational" : "unreachable";
     }
-    return previousPollUnanswered && !feeds.some(feedAnswered) ? "down" : "unreachable";
+    return previousPollUnanswered && sourcesUnanswered(feeds, probes) ? "down" : "unreachable";
 }
 
 /**

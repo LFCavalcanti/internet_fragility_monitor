@@ -211,6 +211,48 @@ describe('StatusCard', () => {
         });
     });
 
+    describe('Down', () => {
+        it('card com a cor mais forte da página e "Sem resposta da status page nem do serviço"', () => {
+            const { container } = renderCard({ status: 'down' });
+
+            expect(screen.getByText('Sem resposta da status page nem do serviço')).toBeInTheDocument();
+            expect(screen.getByRole('img', { name: 'down' })).toHaveClass('text-red-700');
+            const card = container.firstElementChild;
+            expect(card).toHaveAttribute('data-status', 'down');
+            expect(card).toHaveClass('border-red-700');
+            expect(card).not.toHaveClass('grayscale');
+        });
+
+        it('os outros estados não usam o texto nem a cor de Down', () => {
+            const { container } = renderCard({ status: 'outage' });
+
+            expect(screen.queryByText('Sem resposta da status page nem do serviço')).not.toBeInTheDocument();
+            expect(container.firstElementChild).not.toHaveClass('border-red-700');
+        });
+
+        it('não usa o texto de Unreachable', () => {
+            renderCard({ status: 'down' });
+
+            expect(screen.queryByText('Não foi possível ler a status page')).not.toBeInTheDocument();
+        });
+
+        it('continua mostrando os Recent Incidents gravados', () => {
+            renderCard({
+                status: 'down',
+                incidents: [{ kind: 'problem', title: 'Elevated errors', status: 'identified', createdAt: hoursBefore(now, 2) }],
+            });
+
+            expect(screen.getByText('Elevated errors')).toBeInTheDocument();
+        });
+
+        it('Provider só com Probes em Down mantém a marca "verificação de acesso, sem feed de status"', () => {
+            renderCard({ status: 'down', accessOnly: true });
+
+            expect(screen.getByText('Sem resposta da status page nem do serviço')).toBeInTheDocument();
+            expect(screen.getByText('verificação de acesso, sem feed de status')).toBeInTheDocument();
+        });
+    });
+
     it('renders external link to status page', () => {
         renderCard();
         const link = screen.getByTitle('Visit Status Page');

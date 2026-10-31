@@ -287,7 +287,7 @@ describe("Provider com vários Feeds (catálogo montado no teste)", () => {
         await poll();
 
         expect(fetchedUrls()).toContain(`${SECOND_FEED}/api/v2/summary.json`);
-        expect(await statusChecks("github")).toEqual(["operational", "operational"]);
+        expect(await statusChecks("github")).toEqual(["operational"]);
         expect(await githubDecision()).toMatchObject({ status: "operational", partialReading: null });
     });
 
@@ -310,7 +310,7 @@ describe("Provider com vários Feeds (catálogo montado no teste)", () => {
 
         await poll();
 
-        expect(await statusChecks("github")).toEqual(["degraded", "unreachable"]);
+        expect(await statusChecks("github")).toEqual(["degraded"]);
         expect(await githubDecision()).toMatchObject({ status: "degraded", partialReading: { unread: 1, total: 2 } });
     });
 
@@ -544,6 +544,134 @@ describe("Poll sem resposta de nenhuma fonte é descartado", () => {
 
         expect(console.error).not.toHaveBeenCalledWith(discarded);
         expect(await totalChecks()).toBe(0);
+    });
+});
+
+describe("Down: da rede ao Snapshot", () => {
+    const AWS_FEED = FEED_URLS.aws;
+    const AWS_SOURCES = [AWS_FEED, "https://health.aws.amazon.com/health/status", "https://console.aws.amazon.com"];
+
+    const silence = async () => { throw new TypeError("fetch failed"); };
+    const silenceAws = () => AWS_SOURCES.forEach(url => route(url, silence));
+    const everySourceSilent = () => fetchMock.mockImplementation(silence);
+    const networkBack = () => fetchMock.mockImplementation(async url => healthyResponse(String(url)));
+
+    async function decisionOf(providerId: string) {
+        const now = new Date();
+        const { providers } = await readSnapshot(current.db, now);
+        const entry = providers.find(e => e.provider.id === providerId)!;
+        return decideProviderStatus({ ...entry.reading, now });
+    }
+
+    it("Feed e Probes calados por dois Polls: Unreachable no primeiro, Down no segundo, e os outros Providers seguem", async () => {
+        silenceAws();
+
+        await runPoll(current.db);
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+
+        await runPoll(current.db);
+        expect((await decisionOf("aws")).status).toBe("down");
+        expect((await decisionOf("github")).status).toBe("operational");
+    });
+
+    it("num Provider com Feed, os Probes contam: Feed calado com Probe de pé segue Unreachable no segundo Poll", async () => {
+        route(AWS_FEED, silence);
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+    });
+
+    it("Feed com 200 fora do formato e Probes calados: respondeu, então não é Down", async () => {
+        silenceAws();
+        route(AWS_FEED, async () => new Response("<html>não é o formato</html>"));
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+    });
+
+    it("um Poll com resposta entre os dois zera a contagem", async () => {
+        silenceAws();
+        await runPoll(current.db);
+
+        networkBack();
+        await runPoll(current.db);
+
+        silenceAws();
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+    });
+
+    it("Provider só com Probes calados por dois Polls é Down, com a marca de \"só acesso\"", async () => {
+        routeOracleProbes(silence);
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect(await decisionOf("oracle-cloud")).toMatchObject({ status: "down", accessOnly: true });
+    });
+
+    it("Feed de família desconhecida conta como sem resposta: com os Probes calados, Down no segundo Poll", async () => {
+        await current.client.execute("UPDATE provider_sources SET family = 'atom-v9' WHERE id = 'aws-feed'");
+        AWS_SOURCES.slice(1).forEach(url => route(url, silence));
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("down");
+    });
+
+    it("Feed de família desconhecida com Probe de pé não é Down", async () => {
+        await current.client.execute("UPDATE provider_sources SET family = 'atom-v9' WHERE id = 'aws-feed'");
+
+        await runPoll(current.db);
+        await runPoll(current.db);
+
+        expect((await decisionOf("aws")).status).toBe("unreachable");
+    });
+
+    describe("um Poll descartado não existe: não conta nem zera", () => {
+        it("calado, Poll descartado, calado: os dois Polls gravados são seguidos, e o Provider fica Down", async () => {
+            silenceAws();
+            await runPoll(current.db);
+
+            everySourceSilent();
+            await runPoll(current.db);
+            expect((await decisionOf("aws")).status).toBe("unreachable");
+
+            networkBack();
+            silenceAws();
+            await runPoll(current.db);
+
+            expect((await decisionOf("aws")).status).toBe("down");
+        });
+
+        it("respondeu, Poll descartado, calado: um Poll descartado não vira o primeiro sem resposta", async () => {
+            await runPoll(current.db);
+
+            everySourceSilent();
+            await runPoll(current.db);
+
+            networkBack();
+            silenceAws();
+            await runPoll(current.db);
+
+            expect((await decisionOf("aws")).status).toBe("unreachable");
+        });
+
+        it("a falha do próprio monitor, sozinha, não põe ninguém em Down, por mais Polls que descarte", async () => {
+            await runPoll(current.db);
+
+            everySourceSilent();
+            await runPoll(current.db);
+            await runPoll(current.db);
+
+            expect((await decisionOf("aws")).status).toBe("operational");
+        });
     });
 });
 

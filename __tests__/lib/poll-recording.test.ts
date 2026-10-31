@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createMigratedDb, type MigratedDb } from "../helpers/migrated-db";
 import { readSnapshot, recordPoll } from "@/lib/poll-recording";
 import { INCIDENT_DESCRIPTION_MAX, INCIDENT_TITLE_MAX } from "@/lib/incident-status";
+import { DOWN_TEXT, decideInternetHealth } from "@/lib/internet-health";
 import { decideProviderStatus } from "@/lib/provider-status";
 import type { ProviderReading } from "@/lib/status-feed/provider-reading";
 import type { DeclaredStatus, PublishedIncident, ReadIncident } from "@/lib/status-feed/types";
@@ -32,7 +33,7 @@ const readFrom = (sourceId: string, incidents: PublishedIncident[] = [], declare
     incidents: incidents.map((incident): ReadIncident => ({ ...incident, sourceId })),
 });
 
-const unreadFrom = (sourceId: string) => ({ sourceId, read: false as const });
+const unreadFrom = (sourceId: string) => ({ sourceId, read: false as const, answered: false });
 
 type Reading = ProviderReading<ReadIncident>;
 
@@ -71,6 +72,9 @@ const incidentsOf = (providerId: string) =>
 
 const checksOf = async (providerId: string) =>
     (await rows(`SELECT status FROM status_checks WHERE provider_id = '${providerId}' ORDER BY id`)).map(r => r.status);
+
+const recordedFeedsOf = async (providerId: string) =>
+    JSON.parse(String((await rows(`SELECT feeds FROM status_checks WHERE provider_id = '${providerId}'`))[0].feeds));
 
 /** Linha antiga, sem fonte e sem id: como o banco chega ao primeiro Poll depois da migration da identidade. */
 async function seedOldRow(overrides: Record<string, unknown> = {}) {
@@ -116,15 +120,38 @@ describe("gravar um Poll: leituras", () => {
         expect(await rows("SELECT DISTINCT checked_at FROM status_checks")).toHaveLength(1);
     });
 
-    it("grava uma linha por Feed, com o não lido como unreachable", async () => {
+    it("grava uma leitura por Provider, com o pior estado lido e o que cada Feed declarou, ou nada se ficou sem leitura", async () => {
+        await addSecondGithubFeed();
+
         await recordPoll(current.db, [
             feedsOf("github", readFrom("github-feed", [], "degraded"), unreadFrom("github-feed-2")),
         ], at);
 
-        expect(await checksOf("github")).toEqual(["degraded", "unreachable"]);
+        expect(await checksOf("github")).toEqual(["degraded"]);
+        expect(await recordedFeedsOf("github")).toEqual([
+            { sourceId: "github-feed", declared: "degraded" },
+            { sourceId: "github-feed-2", declared: null },
+        ]);
     });
 
-    it("Provider só com Probes grava uma leitura só: operational com algum Probe de pé, unreachable sem nenhum", async () => {
+    it("o pior estado sai de todos os Feeds lidos, em qualquer ordem", async () => {
+        await recordPoll(current.db, [
+            feedsOf("github", readFrom("github-feed", [], "operational"), readFrom("github-feed-2", [], "outage")),
+            feedsOf("aws", readFrom("aws-feed", [], "outage"), readFrom("aws-feed-2", [], "degraded")),
+        ], at);
+
+
+        expect(await checksOf("github")).toEqual(["outage"]);
+        expect(await checksOf("aws")).toEqual(["outage"]);
+    });
+
+    it("nenhum Feed lido grava unreachable", async () => {
+        await recordPoll(current.db, [feedsOf("github", unreadFrom("github-feed"), unreadFrom("github-feed-2"))], at);
+
+        expect(await checksOf("github")).toEqual(["unreachable"]);
+    });
+
+    it("Provider só com Probes grava uma leitura só: operational com algum Probe de pé, unreachable sem nenhum, e nenhum Feed", async () => {
         await recordPoll(current.db, [
             { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [false, true] },
             { providerId: "salesforce", accessOnly: true, feeds: [], probes: [false, false] },
@@ -132,6 +159,21 @@ describe("gravar um Poll: leituras", () => {
 
         expect(await checksOf("oracle-cloud")).toEqual(["operational"]);
         expect(await checksOf("salesforce")).toEqual(["unreachable"]);
+        expect(await recordedFeedsOf("oracle-cloud")).toEqual([]);
+    });
+
+    it.each<[string, Pick<Reading, "accessOnly" | "feeds" | "probes">, number]>([
+        ["Feed e Probes calados", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: [false, false] }, 1],
+        ["Feed lido", { accessOnly: false, feeds: [readFrom("aws-feed")], probes: [false, false] }, 0],
+        ["Feed não lido com um Probe de pé", { accessOnly: false, feeds: [unreadFrom("aws-feed")], probes: [false, true] }, 0],
+        ["Feed que respondeu fora do formato", { accessOnly: false, feeds: [{ ...unreadFrom("aws-feed"), answered: true }], probes: [false] }, 0],
+        ["Provider só com Probes calados", { accessOnly: true, feeds: [], probes: [false, false] }, 1],
+        ["Provider só com Probes, um de pé", { accessOnly: true, feeds: [], probes: [true, false] }, 0],
+        ["Provider sem nenhuma fonte: não houve o que responder", { accessOnly: true, feeds: [], probes: [] }, 0],
+    ])("guarda se nenhuma fonte respondeu: %s", async (_case, reading, expected) => {
+        await recordPoll(current.db, [{ providerId: "aws", ...reading }], at);
+
+        expect((await rows("SELECT no_source_answered FROM status_checks"))[0].no_source_answered).toBe(expected);
     });
 
     it("um Poll sem nenhum Provider não grava nada e não falha", async () => {
@@ -924,6 +966,240 @@ describe("ler o Snapshot: cada Incident fica no seu Feed", () => {
         await recordPoll(current.db, [feedRead("github")], at);
 
         expect((await decisionOf("github")).incidents.map(i => i.title)).toEqual(["Network upgrade"]);
+    });
+});
+
+describe("Down: nenhuma fonte respondeu por dois Polls seguidos", () => {
+    const later = new Date(at.getTime() + 300_000);
+    const latest = new Date(at.getTime() + 600_000);
+
+    const entryOf = async (providerId: string, clock: Date) =>
+        (await readSnapshot(current.db, clock)).providers.find(e => e.provider.id === providerId)!;
+    const decisionOf = async (providerId: string, clock = latest) =>
+        decideProviderStatus({ ...(await entryOf(providerId, clock)).reading, now: clock });
+
+    const silent = (providerId: string): Reading => ({
+        providerId, accessOnly: false, feeds: [unreadFrom(feedOf(providerId))], probes: [false, false],
+    });
+    const silentProbes = (providerId: string): Reading => ({ providerId, accessOnly: true, feeds: [], probes: [false, false] });
+
+    it("o primeiro Poll sem resposta é Unreachable, e a leitura informa que o anterior respondeu", async () => {
+        await recordPoll(current.db, [feedRead("aws")], earlier);
+        await recordPoll(current.db, [silent("aws")], at);
+
+        expect((await entryOf("aws", at)).reading.previousPollUnanswered).toBe(false);
+        expect((await decisionOf("aws", at)).status).toBe("unreachable");
+    });
+
+    it("sem Poll anterior gravado, o primeiro Poll sem resposta é Unreachable", async () => {
+        await recordPoll(current.db, [silent("aws")], at);
+
+        expect((await decisionOf("aws", at)).status).toBe("unreachable");
+    });
+
+    it("o segundo Poll seguido sem resposta é informado, e o Provider fica Down", async () => {
+        await recordPoll(current.db, [silent("aws")], earlier);
+        await recordPoll(current.db, [silent("aws")], at);
+
+        expect((await entryOf("aws", at)).reading.previousPollUnanswered).toBe(true);
+        expect((await decisionOf("aws", at)).status).toBe("down");
+    });
+
+    it("segue Down enquanto nenhuma fonte responder", async () => {
+        await recordPoll(current.db, [silent("aws")], earlier);
+        await recordPoll(current.db, [silent("aws")], at);
+        await recordPoll(current.db, [silent("aws")], later);
+
+        expect((await decisionOf("aws", later)).status).toBe("down");
+    });
+
+    it("um Poll com resposta entre os dois zera a contagem", async () => {
+        await recordPoll(current.db, [silent("aws")], earlier);
+        await recordPoll(current.db, [feedRead("aws")], at);
+        await recordPoll(current.db, [silent("aws")], later);
+
+        expect((await entryOf("aws", later)).reading.previousPollUnanswered).toBe(false);
+        expect((await decisionOf("aws", later)).status).toBe("unreachable");
+    });
+
+    it.each<[string, Pick<Reading, "feeds" | "probes">]>([
+        ["só um Probe", { feeds: [unreadFrom("aws-feed")], probes: [true, false] }],
+        ["o Feed, com conteúdo fora do formato", { feeds: [{ ...unreadFrom("aws-feed"), answered: true }], probes: [false, false] }],
+    ])("responder não é ser lido: %s entre os dois Polls também zera a contagem", async (_case, answered) => {
+        await recordPoll(current.db, [silent("aws")], earlier);
+        await recordPoll(current.db, [{ providerId: "aws", accessOnly: false, ...answered }], at);
+
+        expect((await decisionOf("aws", at)).status).toBe("unreachable");
+
+        await recordPoll(current.db, [silent("aws")], later);
+
+        expect((await decisionOf("aws", later)).status).toBe("unreachable");
+    });
+
+    it("num Provider com Feed, o Feed sem resposta com Probe de pé nunca é Down, por mais Polls que passem", async () => {
+        const feedSilent: Reading = { ...silent("aws"), probes: [true, true] };
+        await recordPoll(current.db, [feedSilent], earlier);
+        await recordPoll(current.db, [feedSilent], at);
+        await recordPoll(current.db, [feedSilent], later);
+
+        expect((await decisionOf("aws", later)).status).toBe("unreachable");
+    });
+
+    it("o Feed lido de novo tira o Provider de Down no mesmo Poll", async () => {
+        await recordPoll(current.db, [silent("aws")], earlier);
+        await recordPoll(current.db, [silent("aws")], at);
+        await recordPoll(current.db, [feedRead("aws", [], "degraded")], later);
+
+        expect((await decisionOf("aws", later)).status).toBe("degraded");
+    });
+
+    it("Provider só com Probes: Unreachable no primeiro, Down no segundo, Operational quando um Probe volta, sempre com a marca", async () => {
+        const { db } = current;
+        await recordPoll(db, [silentProbes("oracle-cloud")], earlier);
+        expect(await decisionOf("oracle-cloud", earlier)).toMatchObject({ status: "unreachable", accessOnly: true });
+
+        await recordPoll(db, [silentProbes("oracle-cloud")], at);
+        expect(await decisionOf("oracle-cloud", at)).toMatchObject({ status: "down", accessOnly: true });
+
+        await recordPoll(db, [{ ...silentProbes("oracle-cloud"), probes: [false, true] }], later);
+        expect(await decisionOf("oracle-cloud", later)).toMatchObject({ status: "operational", accessOnly: true });
+    });
+
+    it("um Provider sem nenhuma fonte ativa nunca é Down", async () => {
+        const noSources: Reading = { providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [] };
+        await recordPoll(current.db, [silentProbes("oracle-cloud")], earlier);
+        await recordPoll(current.db, [noSources], at);
+        await recordPoll(current.db, [noSources], later);
+
+        expect(await decisionOf("oracle-cloud", later)).toMatchObject({ status: "unreachable", accessOnly: true });
+    });
+
+    it("o Poll anterior sem resposta não basta: um Provider que ficou sem fontes neste Poll não é Down", async () => {
+        await recordPoll(current.db, [silentProbes("oracle-cloud")], at);
+        await recordPoll(current.db, [{ providerId: "oracle-cloud", accessOnly: true, feeds: [], probes: [] }], later);
+
+        expect((await decisionOf("oracle-cloud", later)).status).toBe("unreachable");
+    });
+
+    it("com vários Feeds, basta um responder para não contar, mesmo sem ser lido", async () => {
+        await addSecondGithubFeed();
+        const allSilent = feedsOf("github", unreadFrom("github-feed"), unreadFrom("github-feed-2"));
+        await recordPoll(current.db, [allSilent], earlier);
+        await recordPoll(current.db, [feedsOf("github", unreadFrom("github-feed"), { ...unreadFrom("github-feed-2"), answered: true })], at);
+
+        expect(await decisionOf("github", at)).toMatchObject({ status: "unreachable", partialReading: null });
+
+        await recordPoll(current.db, [allSilent], later);
+        await recordPoll(current.db, [allSilent], latest);
+
+        expect(await decisionOf("github", latest)).toMatchObject({ status: "down", partialReading: null });
+    });
+
+    it("cada Provider conta os seus Polls", async () => {
+        await recordPoll(current.db, [silent("aws"), silent("azure"), feedRead("github")], earlier);
+        await recordPoll(current.db, [silent("aws"), feedRead("azure"), silent("github")], at);
+
+        expect((await decisionOf("aws", at)).status).toBe("down");
+        expect((await decisionOf("azure", at)).status).toBe("operational");
+        expect((await decisionOf("github", at)).status).toBe("unreachable");
+    });
+
+    it("dois Polls na mesma hora (mesmo segundo) contam como dois", async () => {
+        await recordPoll(current.db, [silent("aws")], at);
+        await recordPoll(current.db, [silent("aws")], at);
+
+        expect((await decisionOf("aws", at)).status).toBe("down");
+    });
+
+    it("os Incidents gravados de um Provider em Down seguem como estão e na lista do card", async () => {
+        await recordPoll(current.db, [feedRead("aws", [problem("Open issue")])], earlier);
+        await recordPoll(current.db, [silent("aws")], at);
+        await recordPoll(current.db, [silent("aws")], later);
+
+        const decision = await decisionOf("aws", later);
+
+        expect(decision.status).toBe("down");
+        expect(decision.incidents.map(i => i.title)).toEqual(["Open issue"]);
+        expect((await incidentsOf("aws"))[0]).toMatchObject({ status: "investigating", resolved_at: null });
+    });
+
+    describe("no hero", () => {
+        async function hero(clock: Date) {
+            const { providers, lastPollAt } = await readSnapshot(current.db, clock);
+            const statuses = providers.map(entry => ({ ...entry, decision: decideProviderStatus({ ...entry.reading, now: clock }) }));
+            return decideInternetHealth({ providers: statuses, lastPollAt, now: clock });
+        }
+
+        it("Down de Major Provider deixa o hero Critical, com o destaque de Down", async () => {
+            await recordPoll(current.db, [silent("aws")], earlier);
+            await recordPoll(current.db, [silent("aws")], at);
+
+            expect(await hero(at)).toMatchObject({
+                status: "Critical",
+                highlight: { type: "down", providerName: "AWS", description: DOWN_TEXT },
+            });
+        });
+
+        it("Unreachable de Major Provider, no primeiro Poll, não conta", async () => {
+            await recordPoll(current.db, [silent("aws")], at);
+
+            expect((await hero(at)).status).toBe("Healthy");
+        });
+
+        it("Down isolado de um Provider pequeno deixa o hero Unstable, com o destaque de Down", async () => {
+            await recordPoll(current.db, [silent("heroku")], earlier);
+            await recordPoll(current.db, [silent("heroku")], at);
+
+            expect(await hero(at)).toMatchObject({ status: "Unstable", highlight: { type: "down", providerName: "Heroku" } });
+        });
+    });
+});
+
+describe("a leitura gravada vale pelo que foi lido, mesmo que o catálogo mude antes do Poll seguinte", () => {
+    const decisionOf = async (providerId: string) => {
+        const { reading } = (await readSnapshot(current.db, at)).providers.find(e => e.provider.id === providerId)!;
+        return decideProviderStatus({ ...reading, now: at });
+    };
+
+    it("um \"operational\" dos Probes não é lido como Feed quando um Feed é ativado", async () => {
+        await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'salesforce-feed'");
+        await recordPoll(current.db, [{ providerId: "salesforce", accessOnly: true, feeds: [], probes: [true] }], earlier);
+
+        await current.client.execute("UPDATE provider_sources SET active = 1 WHERE id = 'salesforce-feed'");
+
+        expect(await decisionOf("salesforce")).toMatchObject({ status: "operational", accessOnly: true });
+    });
+
+    it("o estado declarado por um Feed continua Feed quando ele é desativado", async () => {
+        await recordPoll(current.db, [feedRead("heroku", [], "degraded")], earlier);
+
+        await current.client.execute("UPDATE provider_sources SET active = 0 WHERE id = 'heroku-feed'");
+
+        expect(await decisionOf("heroku")).toMatchObject({ status: "degraded", accessOnly: false });
+    });
+
+    it("com um Feed a mais no catálogo, cada Incident segue no seu Feed e a contagem da Partial Reading não muda", async () => {
+        const inProgress = maintenance("Network upgrade", { externalId: "m", status: "in_progress" });
+        await recordPoll(current.db, [feedRead("github", [inProgress])], earlier);
+
+        await addSecondGithubFeed();
+
+        expect(await decisionOf("github")).toMatchObject({ status: "maintenance", partialReading: null });
+    });
+
+    it("um Feed não lido continua não lido quando outro Feed entra no catálogo: o Incident dele não decide", async () => {
+        await addSecondGithubFeed();
+        const inProgress = maintenance("Network upgrade", { externalId: "m", status: "in_progress" });
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), readFrom("github-feed-2", [inProgress]))], earlier);
+        await recordPoll(current.db, [feedsOf("github", readFrom("github-feed"), unreadFrom("github-feed-2"))], at);
+
+        await current.client.execute(
+            "INSERT INTO provider_sources (id, provider_id, kind, family, url, label) VALUES ('github-feed-3', 'github', 'feed', 'statuspage', 'https://third.example.test', 'feed')",
+        );
+
+        const decision = await decisionOf("github");
+        expect(decision).toMatchObject({ status: "operational", partialReading: { unread: 1, total: 2 } });
+        expect(decision.incidents.map(i => i.title)).toEqual(["Network upgrade"]);
     });
 });
 

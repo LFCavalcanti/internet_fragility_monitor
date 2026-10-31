@@ -4,7 +4,8 @@
  * leitura mora nas tabelas não sai deste módulo.
  * Termos conforme GLOSSARY.md.
  */
-import { and, asc, desc, eq, gte, max, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import type { Database } from "./db";
 import {
@@ -16,12 +17,19 @@ import {
     isClosed,
     isRecentlyResolved,
 } from "./incident-status";
-import { groupByProvider, isAccessOnly } from "./provider-catalog";
-import { readIncidentsOf, type ProviderStatusInput } from "./provider-status";
+import { groupByProvider } from "./provider-catalog";
+import { readIncidentsOf, sourcesUnanswered, type ProviderStatusInput } from "./provider-status";
 import { incidents, providers, providerSources, statusChecks } from "./schema";
-import type { Incident, Provider, ProviderSource } from "./schema";
+import type { Incident, Provider, ProviderSource, RecordedFeed } from "./schema";
 import type { ProviderReading } from "./status-feed/provider-reading";
-import type { IncidentData, MaintenancePhase, ProblemStatus, ReadIncident, ReadingStatus } from "./status-feed/types";
+import type {
+    DeclaredStatus,
+    IncidentData,
+    MaintenancePhase,
+    ProblemStatus,
+    ReadIncident,
+    ReadingStatus,
+} from "./status-feed/types";
 
 /** O que um Poll lê: os Providers ativos do Provider Catalog e os Provider Sources ativos deles. */
 export interface ActiveCatalog {
@@ -107,7 +115,7 @@ const recordableReading = z.object({
 /** Um valor fora do vocabulário do domínio não chega ao banco: o Poll inteiro é recusado. */
 function assertRecordable(reading: ProviderReading) {
     const checked = recordableReading.safeParse({
-        readings: toRecordedReadings(reading),
+        readings: reading.feeds.map(f => (f.read ? f.declared : "unreachable")),
         incidents: readIncidentsOf(reading.feeds),
     });
     if (!checked.success) {
@@ -115,15 +123,24 @@ function assertRecordable(reading: ProviderReading) {
     }
 }
 
+/** Do pior para o melhor. Sem Feed lido, nenhum deles vale, e a leitura é "unreachable". */
+const DECLARED_WORST_FIRST: DeclaredStatus[] = ["outage", "degraded", "operational"];
+
 /**
- * O que um Poll grava de um Provider em `status_checks`: uma linha por Feed, com o estado declarado ou "unreachable",
- * o que preserva a Partial Reading sem coluna nova. Provider só com Probes: uma linha só, Operational quando algum
- * Probe respondeu. Os Probes de um Provider com Feed não são gravados: até o Ticket 15 eles não mudam nada, porque
- * Unreachable vale com ou sem resposta deles.
+ * A linha que um Poll grava de um Provider em `status_checks`. O pior estado lido basta para o vence-o-pior da leitura:
+ * manutenção em andamento só vale quando o pior é "operational", e aí todos os Feeds lidos são "operational".
+ * `feeds` guarda o resto, quais Feeds foram lidos neste Poll, e é a origem da leitura: lista vazia, lida por Probes.
  */
-function toRecordedReadings({ accessOnly, feeds, probes }: ProviderReading): ReadingStatus[] {
-    if (accessOnly) return [probes.some(Boolean) ? "operational" : "unreachable"];
-    return feeds.map(f => (f.read ? f.declared : "unreachable"));
+function toRecordedReading({ feeds, probes }: ProviderReading) {
+    const recordedFeeds = feeds.map((f): RecordedFeed => ({ sourceId: f.sourceId, declared: f.read ? f.declared : null }));
+    const declared = recordedFeeds.map(f => f.declared);
+    const readByProbes = feeds.length === 0 && probes.some(Boolean);
+
+    return {
+        status: readByProbes ? "operational" : DECLARED_WORST_FIRST.find(s => declared.includes(s)) ?? "unreachable",
+        noSourceAnswered: sourcesUnanswered(feeds, probes),
+        feeds: recordedFeeds,
+    };
 }
 
 function scheduledForOf(incident: IncidentData): Date | null {
@@ -244,9 +261,7 @@ async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderRea
 export async function recordPoll(db: Database, readings: readonly ProviderReading<ReadIncident>[], at: Date = new Date()): Promise<void> {
     readings.forEach(assertRecordable);
 
-    const checks = readings.flatMap(reading =>
-        toRecordedReadings(reading).map(status => ({ providerId: reading.providerId, status, checkedAt: at })),
-    );
+    const checks = readings.map(reading => ({ providerId: reading.providerId, ...toRecordedReading(reading), checkedAt: at }));
 
     await db.transaction(async tx => {
         if (checks.length > 0) await tx.insert(statusChecks).values(checks);
@@ -258,20 +273,34 @@ export async function recordPoll(db: Database, readings: readonly ProviderReadin
 // Ler o Snapshot
 // ============================================================================
 
-/** As linhas do último Poll de cada Provider: uma por Feed, todas com a mesma hora, na ordem de gravação. */
+/**
+ * As duas leituras mais novas de cada Provider ativo, numa consulta só, da mais nova para a mais antiga: o último Poll
+ * gravado e o anterior. Um Poll descartado não grava nada, então não conta nem zera: os Polls vizinhos são seguidos.
+ * O custo depende do número de Providers, não do tamanho do histórico, por duas peças: o índice por Provider e hora, e
+ * o CROSS JOIN, que no SQLite fixa `providers` por fora. Com um JOIN comum, o planejador varre `status_checks` inteira.
+ */
 function latestChecks(db: Database) {
-    const latest = db
-        .select({ providerId: statusChecks.providerId, checkedAt: max(statusChecks.checkedAt).as("latest_checked_at") })
-        .from(statusChecks)
-        .groupBy(statusChecks.providerId)
-        .as("latest");
+    const recent = alias(statusChecks, "recent");
+    const twoNewest = db.select({ id: recent.id }).from(recent)
+        .where(eq(recent.providerId, providers.id))
+        .orderBy(desc(recent.checkedAt), desc(recent.id))
+        .limit(2);
 
     return db
-        .select({ providerId: statusChecks.providerId, status: statusChecks.status, checkedAt: statusChecks.checkedAt })
-        .from(statusChecks)
-        .innerJoin(latest, and(eq(statusChecks.providerId, latest.providerId), eq(statusChecks.checkedAt, latest.checkedAt)))
-        .orderBy(asc(statusChecks.id));
+        .select({
+            providerId: statusChecks.providerId,
+            status: statusChecks.status,
+            noSourceAnswered: statusChecks.noSourceAnswered,
+            feeds: statusChecks.feeds,
+            checkedAt: statusChecks.checkedAt,
+        })
+        .from(providers)
+        .crossJoin(statusChecks)
+        .where(and(eq(providers.active, true), inArray(statusChecks.id, twoNewest)))
+        .orderBy(desc(statusChecks.checkedAt), desc(statusChecks.id));
 }
+
+type RecordedCheck = Awaited<ReturnType<typeof latestChecks>>[number];
 
 /**
  * Os Incidents que podem entrar no Snapshot, do mais novo para o mais antigo: todos os abertos e os encerrados dentro
@@ -319,52 +348,73 @@ function toIncidentData(row: Incident): IncidentData {
 }
 
 /**
- * Remonta a entrada do módulo de Provider Status a partir das linhas do último Poll.
- * Provider com Feed: cada Feed vai lido, com o estado declarado, ou não lido, levando os seus Incidents: os de um Feed
- * não lido entram na lista, mas não decidem o estado nem a Upcoming Maintenance.
- * A n-ésima linha do Poll é o n-ésimo Feed ativo, porque o Poll grava os Feeds na ordem do catálogo. Sem Feed certo
- * (linha antiga, Feed desativado, ou catálogo mudado depois do Poll), o Incident vai no primeiro Feed não lido, onde
- * não decide nada, ou no primeiro Feed se todos foram lidos.
- * Provider só com Probes: nenhum Feed, e a leitura gravada diz só se algum Probe respondeu. Um estado declarado
- * gravado antes (de quando havia Feed) não conta: só um Feed declara Degraded, Outage ou Maintenance.
- * O Poll anterior sem resposta, que habilita Down, chega com o Ticket 15.
+ * Os Feeds do último Poll: os que ele gravou, porque a leitura vale pelo que foi lido, mesmo que o catálogo mude antes
+ * do Poll seguinte. A linha antiga não os guarda, e o Provider sem leitura gravada vem Operational: valem os Feeds
+ * ativos do catálogo, todos com o estado da linha.
+ */
+function recordedFeedsOf(latest: RecordedCheck | undefined, catalogFeedIds: string[]): RecordedFeed[] {
+    if (latest?.feeds) return latest.feeds;
+    const status = (latest?.status ?? "operational") as ReadingStatus;
+    return catalogFeedIds.map(sourceId => ({ sourceId, declared: status === "unreachable" ? null : status }));
+}
+
+/**
+ * O que a leitura gravada diz dos Probes de um Provider só com Probes. Um estado declarado gravado antes (de quando
+ * havia Feed) conta só como "algum Probe respondeu": só um Feed declara Degraded, Outage ou Maintenance.
+ * Sem resposta de fato, a linha diz; "unreachable" sem a indicação é linha antiga ou Provider sem fontes, e não conta.
+ */
+function recordedProbes(latest: RecordedCheck | undefined): boolean[] {
+    if (latest?.noSourceAnswered) return [false];
+    return latest?.status === "unreachable" ? [] : [true];
+}
+
+/**
+ * Remonta a entrada do módulo de Provider Status a partir das duas últimas leituras gravadas.
+ * Provider com Feed: cada Feed vai lido, com o estado da gravação, ou não lido, levando os seus Incidents: os de um
+ * Feed não lido entram na lista, mas não decidem o estado nem a Upcoming Maintenance. Sem Feed certo (linha antiga,
+ * Feed fora do Poll), o Incident vai no primeiro Feed não lido, onde não decide nada, ou no primeiro Feed se todos
+ * foram lidos. A linha guarda a resposta por Provider, não por fonte: os Probes de um Provider com Feed não voltam, e
+ * a resposta deles vale como a do Feed não lido, o que dá a mesma decisão.
  */
 function toStatusInput(
-    accessOnly: boolean,
-    recorded: ReadingStatus[],
-    feedIds: string[],
+    latest: RecordedCheck | undefined,
+    previous: RecordedCheck | undefined,
+    catalogFeedIds: string[],
     incidentRows: Incident[],
 ): SnapshotEntry["reading"] {
-    const base = { previousPollUnanswered: false };
-    if (accessOnly) {
-        return { ...base, accessOnly, feeds: [], probes: recorded.map(r => r !== "unreachable") };
+    const feeds = recordedFeedsOf(latest, catalogFeedIds);
+    const previousPollUnanswered = previous?.noSourceAnswered ?? false;
+
+    if (feeds.length === 0) {
+        return { accessOnly: true, feeds: [], probes: recordedProbes(latest), previousPollUnanswered };
     }
 
-    const linesMatchFeeds = recorded.length === feedIds.length;
-    const withoutFeed = Math.max(0, recorded.indexOf("unreachable"));
-    const incidentsByLine = recorded.map((): IncidentData[] => []);
+    const feedIds = feeds.map(f => f.sourceId);
+    const withoutFeed = Math.max(0, feeds.findIndex(f => f.declared === null));
+    const incidentsByFeed = feeds.map((): IncidentData[] => []);
     for (const row of incidentRows) {
-        const line = linesMatchFeeds && row.sourceId ? feedIds.indexOf(row.sourceId) : -1;
-        incidentsByLine[line >= 0 ? line : withoutFeed].push(toIncidentData(row));
+        const feed = row.sourceId ? feedIds.indexOf(row.sourceId) : -1;
+        incidentsByFeed[feed >= 0 ? feed : withoutFeed].push(toIncidentData(row));
     }
 
     return {
-        ...base,
-        accessOnly,
-        feeds: recorded.map((status, line) =>
-            status === "unreachable"
-                ? { read: false, incidents: incidentsByLine[line] }
-                : { read: true, declared: status, incidents: incidentsByLine[line] },
+        accessOnly: false,
+        feeds: feeds.map(({ declared }, i) =>
+            declared === null
+                ? { read: false, answered: !latest?.noSourceAnswered, incidents: incidentsByFeed[i] }
+                : { read: true, declared, incidents: incidentsByFeed[i] },
         ),
         probes: [],
+        previousPollUnanswered,
     };
 }
 
 /**
  * Lê o Snapshot guiado pelo Provider Catalog: os Providers ativos, na ordem de exibição, cada um com a leitura do
- * último Poll e os Incidents que o módulo de Provider Status pode exibir ou contar: todos os abertos, sem corte por
- * quantidade, e os problemas resolvidos dentro da janela de Recent Incident. Manutenção completed nunca vem.
- * Provider sem leitura gravada vem Operational. `now` é o mesmo relógio que a página passa ao módulo.
+ * último Poll, a indicação de que o Poll anterior ficou sem resposta e os Incidents que o módulo de Provider Status
+ * pode exibir ou contar: todos os abertos, sem corte por quantidade, e os problemas resolvidos dentro da janela de
+ * Recent Incident. Manutenção completed nunca vem. Provider sem leitura gravada vem Operational.
+ * `now` é o mesmo relógio que a página passa ao módulo.
  *
  * Um número fixo de consultas, num `batch`: a leitura inteira vê um só instante do banco, nunca a metade de um Poll.
  */
@@ -381,7 +431,7 @@ export async function readSnapshot(db: Database, now: Date): Promise<Snapshot> {
     const recorded = groupByProvider(incidentRows);
 
     const entries = providerRows.map((provider): SnapshotEntry => {
-        const latest = checks.get(provider.id) ?? [];
+        const [latest, previous] = checks.get(provider.id) ?? [];
         const sourcesOfProvider = sources.get(provider.id) ?? [];
         const incidentRows = (recorded.get(provider.id) ?? []).filter(row => {
             const incident = toIncidentData(row);
@@ -391,12 +441,12 @@ export async function readSnapshot(db: Database, now: Date): Promise<Snapshot> {
         return {
             provider: toSnapshotProvider(provider),
             reading: toStatusInput(
-                isAccessOnly(sourcesOfProvider),
-                latest.length > 0 ? latest.map(c => c.status as ReadingStatus) : ["operational"],
+                latest,
+                previous,
                 sourcesOfProvider.filter(s => s.kind === "feed").map(s => s.id),
                 incidentRows,
             ),
-            lastUpdated: latest[0]?.checkedAt ?? undefined,
+            lastUpdated: latest?.checkedAt ?? undefined,
         };
     });
 

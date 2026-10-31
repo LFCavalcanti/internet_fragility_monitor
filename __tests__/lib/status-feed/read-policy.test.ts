@@ -158,12 +158,35 @@ describe('leitura de um Feed', () => {
             expect(reading).toMatchObject({ read: true, incidents: [{ title: 'a' }, { title: 'b' }] });
         });
 
-        it('um endereço que falha deixa o Feed não lido e cancela o outro, sem esperar o timeout', async () => {
+        it('um endereço que falha deixa o Feed não lido, e o outro corre até o timeout: um 503 rápido não cala a fonte', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
             stubNetwork(async (url, init) =>
                 String(url).endsWith('/a') ? new Response('erro', { status: 503 }) : hang(url, init),
             );
+            let reading: unknown;
 
-            expect(await readFeed(FEED, twoAddresses)).toEqual({ read: false, answered: false });
+            const pending = readFeed(FEED, twoAddresses).then(r => (reading = r));
+
+            await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS - 1);
+            expect(reading).toBeUndefined();
+
+            await vi.advanceTimersByTimeAsync(1);
+            await pending;
+            expect(reading).toEqual({ read: false, answered: false });
+        });
+
+        it('um 503 rápido num endereço não impede o outro de responder depois: a fonte respondeu', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            stubNetwork(async url => {
+                if (String(url).endsWith('/a')) return new Response('erro', { status: 503 });
+                await new Promise(resolve => setTimeout(resolve, 1_000));
+                return new Response('ok');
+            });
+
+            const reading = readFeed(FEED, twoAddresses);
+            await vi.advanceTimersByTimeAsync(1_000);
+
+            expect(await reading).toEqual({ read: false, answered: true });
         });
 
         it('um endereço respondeu e o outro falhou: o Feed fica não lido, mas a fonte respondeu', async () => {

@@ -28,7 +28,8 @@ export interface FeedContent {
 export interface FeedReader {
     /**
      * Endereços a buscar a partir da URL do catálogo. Sem ele, busca a própria URL. Um Feed em mais de um endereço
-     * é uma fonte só: um timeout para todos, e o Feed só conta como lido com todos.
+     * é uma fonte só: um timeout para todos, e o Feed só conta como lido com todos. Basta um responder para a fonte
+     * ter respondido.
      */
     addresses?(catalogUrl: string): string[];
     read(bodies: string[], addresses: string[]): FeedContent;
@@ -51,8 +52,6 @@ async function applyReadPolicy<T>(source: ReadableSource, read: (signal: AbortSi
         return null;
     } finally {
         clearTimeout(timeout);
-        // Cancela o que ainda corre quando um dos endereços de um Feed falha antes dos outros.
-        controller.abort();
     }
 }
 
@@ -76,7 +75,9 @@ const isAnswer = (response: Response) => response.status < 500;
 /**
  * Lê um Feed: resposta fora de 2xx, timeout, erro de rede e conteúdo fora do formato resultam em Feed não lido.
  * Ler é mais do que responder: um Feed com 200 fora do formato ou com 404 fica não lido, mas a fonte respondeu
- * (`answered`), pela mesma regra dos Probes. Num Feed em mais de um endereço, basta um responder.
+ * (`answered`), pela mesma regra dos Probes. Num Feed em mais de um endereço, basta um responder: por isso a falha de
+ * um não cancela os outros, que correm até o timeout. Um 503 rápido não pode calar um endereço que ia responder,
+ * porque "sem resposta" é a base de Down.
  */
 export async function readFeed(source: ReadableSource, reader: FeedReader): Promise<FeedReading<ReadIncident>> {
     const addresses = reader.addresses?.(source.url) ?? [source.url];
@@ -90,7 +91,11 @@ export async function readFeed(source: ReadableSource, reader: FeedReader): Prom
     };
 
     const content = await applyReadPolicy(source, async signal => {
-        const bodies = await Promise.all(addresses.map(address => fetchBody(address, signal)));
+        const fetched = await Promise.allSettled(addresses.map(address => fetchBody(address, signal)));
+        const bodies = fetched.map(result => {
+            if (result.status === "rejected") throw result.reason;
+            return result.value;
+        });
         const read = reader.read(bodies, addresses);
         assertTitled(read);
         return read;
