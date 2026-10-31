@@ -20,9 +20,14 @@ export function withOngoingMaintenance(declared: DeclaredStatus, incidents: Publ
 }
 
 /** A referência é a última atualização publicada e, sem ela, a criação. Uma atualização nova faz o Incident voltar a contar. */
-export function isDormant(incident: PublishedIncident, pollAt: Date): boolean {
+function isDormant(incident: PublishedIncident, pollAt: Date): boolean {
     const lastNews = incident.updatedAt ?? incident.createdAt;
     return pollAt.getTime() - lastNews.getTime() > DORMANT_AFTER_MS;
+}
+
+/** Problema aberto que conta para o estado: um Dormant Incident continua na lista, mas não conta. */
+export function isCountingProblem(incident: PublishedIncident, pollAt: Date): boolean {
+    return incident.kind === "problem" && !isClosed(incident) && !isDormant(incident, pollAt);
 }
 
 /**
@@ -36,7 +41,7 @@ export function declaredByActiveIncidents(
     pollAt: Date,
     severityOf: (problem: PublishedIncident) => ProblemSeverity = () => "degraded",
 ): DeclaredStatus {
-    const counting = incidents.filter(incident => !isDormant(incident, pollAt));
-    const severities = counting.filter(incident => incident.kind === "problem" && !isClosed(incident)).map(severityOf);
-    return withOngoingMaintenance(worstDeclared(severities) ?? "operational", counting);
+    const severities = incidents.filter(incident => isCountingProblem(incident, pollAt)).map(severityOf);
+    const notDormant = incidents.filter(incident => !isDormant(incident, pollAt));
+    return withOngoingMaintenance(worstDeclared(severities) ?? "operational", notDormant);
 }

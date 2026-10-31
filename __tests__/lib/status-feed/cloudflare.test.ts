@@ -275,6 +275,21 @@ describe('Core Service marcado em falha, sem Incident', () => {
         expect(reading.declared).toBe('degraded');
     });
 
+    it.each([
+        ['none', 'major_outage', 'outage'],
+        ['maintenance', 'partial_outage', 'outage'],
+        ['none', 'degraded_performance', 'degraded'],
+    ])('um Incident %s, que não muda o estado, não tira o Core Service em %s da regra', async (impact, status, declared) => {
+        const reading = await read(
+            summaryWith({
+                components: withComponentStatus({ 'CDN/Cache': status }),
+                incidents: [openIncident(impact, [CDN])],
+            }),
+        );
+
+        expect(reading.declared).toBe(declared);
+    });
+
     it('um Incident encerrado no Core Service não o tira da regra', async () => {
         const reading = await read(
             summaryWith({

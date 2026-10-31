@@ -17,7 +17,7 @@ Um endereço de onde o monitor lê algo sobre um Provider. É um Feed ou um Prob
 _Avoid_: endpoint, origin, fonte de dados
 
 **Core Service**:
-Um serviço de um Provider do qual sites de terceiros dependem para continuar no ar, como o CDN da Cloudflare. Num Provider com Core Services, o estado geral que ele publica não vale: o Provider Status vem dos Incidents, conforme atinjam ou não esses serviços. Hoje só a Cloudflare tem Core Services.
+Um serviço de um Provider do qual sites de terceiros dependem para continuar no ar, como o CDN da Cloudflare. Num Provider com Core Services, o estado geral que ele publica não vale: o Provider Status vem dos Incidents, conforme atinjam ou não esses serviços, e dos próprios serviços marcados em falha. Hoje só a Cloudflare tem Core Services.
 _Avoid_: critical service, main service
 
 **Feed**:

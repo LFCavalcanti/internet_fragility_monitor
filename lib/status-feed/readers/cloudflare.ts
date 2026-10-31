@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { isClosed } from "../../incident-status";
 import { worstDeclared } from "../../provider-status";
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
-import { declaredByActiveIncidents, isDormant, type ProblemSeverity } from "./problem-state";
+import { declaredByActiveIncidents, isCountingProblem, type ProblemSeverity } from "./problem-state";
 import { statuspageReader, summaryIncidents } from "./statuspage";
 
 /** Os serviços de que sites de terceiros dependem, pelo nome publicado no Feed. Nenhum componente se chama "WAF". */
@@ -89,14 +88,16 @@ function toFeedContent(body: string, pollAt: Date): FeedContent {
 
     const severityOf = new Map(summary.incidents.map(i => [i.id, SEVERITY[i.impact][reachOf(i.components)]]));
     const maintenanceOnService = new Set(summary.scheduled_maintenances.filter(m => reachOf(m.components) !== "data-center").map(m => m.id));
-    const changesState = ({ kind, externalId }: PublishedIncident) =>
+    const countsForStatus = ({ kind, externalId }: PublishedIncident) =>
         kind === "problem" ? severityOf.get(externalId) !== undefined : maintenanceOnService.has(externalId);
-    const declaredByIncidents = declaredByActiveIncidents(incidents.filter(changesState), pollAt, problem => severityOf.get(problem.externalId)!);
+    const counted = incidents.filter(countsForStatus);
+    const declaredByIncidents = declaredByActiveIncidents(counted, pollAt, problem => severityOf.get(problem.externalId)!);
 
-    // Um Core Service com Incident ativo segue a tabela: o que está marcado nele só conta enquanto o Incident não sai.
-    const activeProblems = new Set(incidents.filter(i => i.kind === "problem" && !isClosed(i) && !isDormant(i, pollAt)).map(i => i.externalId));
-    const withIncident = summary.incidents.filter(i => activeProblems.has(i.id)).flatMap(i => i.components.filter(isCoreService).map(c => c.name));
-    const declaredByCoreServices = coreServices.filter(s => !withIncident.includes(s.name)).flatMap(s => CORE_SERVICE_SEVERITY[s.status] ?? []);
+    // Um Core Service com um Incident que conta segue a tabela. Um Incident que a tabela diz que não muda o estado não
+    // o tira da regra: o que está marcado nele continua valendo.
+    const countingProblems = new Set(counted.filter(i => isCountingProblem(i, pollAt)).map(i => i.externalId));
+    const coveredByTable = summary.incidents.filter(i => countingProblems.has(i.id)).flatMap(i => i.components.filter(isCoreService).map(c => c.name));
+    const declaredByCoreServices = coreServices.filter(s => !coveredByTable.includes(s.name)).flatMap(s => CORE_SERVICE_SEVERITY[s.status] ?? []);
 
     return { declared: worstDeclared([declaredByIncidents, ...declaredByCoreServices]) ?? "operational", incidents };
 }
