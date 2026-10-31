@@ -374,7 +374,8 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
             ),
         );
 
-        expect(await readProvider('azure')).toMatchObject({
+        // Relógio perto da data do item: encerrado, e não Dormant, é o motivo de não contar.
+        expect(await readProvider('azure', new Date('2024-12-27T12:00:00Z'))).toMatchObject({
             status: 'operational',
             incidents: [expect.objectContaining({ status: 'resolved' })],
         });
