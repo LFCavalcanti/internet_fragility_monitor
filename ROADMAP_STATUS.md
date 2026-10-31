@@ -19,6 +19,7 @@ Mantido pelo orquestrador (a sessão principal, na `main`). Agentes de ticket n�
 | 11 | [Feeds reais da Salesforce e da IBM](.scratch/internet-fragility-monitor/issues/11-salesforce-and-ibm-real-feeds.md) | `d706d3d` |
 | 12 | [Probes para todos, vários Feeds e falha do monitor](.scratch/internet-fragility-monitor/issues/12-probes-for-all-multiple-feeds-monitor-failure.md) | `5536aa8` |
 | 13 | [Módulo de Poll Recording contra SQLite real](.scratch/internet-fragility-monitor/issues/13-poll-recording-module-real-sqlite.md) | `52653a2` |
+| 14 | [Identidade do Incident pela fonte](.scratch/internet-fragility-monitor/issues/14-incident-identity-by-source.md) | `75c7b99` |
 
 ## 2. Ciclo atual: revisão de arquitetura (tickets 02–17)
 
@@ -38,7 +39,7 @@ Origem: `arvore-de-decisoes-2026-10-26-arquitetura.md` e as cinco specs em `.scr
 | ~~11~~ | ~~Feeds reais da Salesforce e da IBM~~ **(esquema)** | status-feed | T3 | 09, 10 |
 | ~~12~~ | ~~Probes para todos, vários Feeds e falha do monitor~~ | status-feed | T3 | 10, 11 |
 | ~~13~~ | ~~Módulo de Poll Recording contra SQLite real~~ | poll-recording | T4 | 12 |
-| 14 | Identidade do Incident pela fonte **(esquema)** | poll-recording | T4 | 13 |
+| ~~14~~ | ~~Identidade do Incident pela fonte~~ **(esquema)** | poll-recording | T4 | 13 |
 | 15 | Down de ponta a ponta **(esquema)** | poll-recording | T4 | 14 |
 | 16 | Retenção e limpeza do esquema **(esquema)** | poll-recording | T4 | 15 |
 | 17 | Política de Poll Schedule | poll-schedule | T5 | 06, 13 |
@@ -52,7 +53,7 @@ Dentro de uma trilha a execução é **sequencial**, porque os tickets mexem nos
 | **T1 – Card e leitores** | ~~02~~ → ~~03~~ → ~~04~~ | leitores de status, card do Provider, módulo de Provider Status, leitura do Snapshot |
 | **T2 – Visão geral** | ~~05~~ → ~~06~~ | página, hero, módulo de Internet Health |
 | **T3 – Catálogo e Status Feed** | ~~07~~ → ~~08~~ → ~~09~~ → ~~10~~ → ~~11~~ → ~~12~~ | esquema do catálogo, leitores e registro de famílias, ponto de entrada do Poll |
-| **T4 – Persistência** | ~~13~~ → 14 → 15 → 16 | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
+| **T4 – Persistência** | ~~13~~ → ~~14~~ → 15 → 16 | gravação do Poll, leitura do Snapshot, esquema de Incidents e leituras |
 | **T5 – Agendamento** | 17 | agendador, inicialização, atualização automática da página |
 
 ### Por que há pouco paralelismo neste ciclo
@@ -82,7 +83,7 @@ Uma onda só começa quando os tickets da onda anterior de que ela depende estã
 | 8 | ~~**11**~~ (esquema) | T3 |
 | 9 | ~~**12**~~ | T3 |
 | 10 | ~~**13**~~ | T4 |
-| 11 | **14** (esquema), **17** | T4, T5 |
+| 11 | ~~**14**~~ (esquema), **17** | T4, T5 |
 | 12 | **15** (esquema) | T4 |
 | 13 | **16** (esquema) | T4 |
 
@@ -100,12 +101,13 @@ No fim de cada onda, o orquestrador roda a suíte completa, o typecheck, o lint 
 - **Onda 8 (fechada, 31/10/2026):** Ticket 11, commit `d706d3d`. Migration `0005_activate_salesforce_ibm_feeds` (dados); `_journal.json` linear, aplicada numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Agente sem travas (cerca de 22 min). Na `main` antes da correção: 366 testes, tsc limpo, lint sem erro novo (6 erros já existentes). Code review: categoria desconhecida da IBM, item sem `guid` e lista da Salesforce no limite, corrigidos no `fix(feed)` seguinte a este ticket. Próxima: onda 9 (12).
 - **Onda 9 (fechada, 31/10/2026):** Ticket 12, commit `5536aa8`, sem migrations. Agente sem travas (cerca de 14 min). Na `main`: 405 testes, tsc limpo, lint sem erro novo (6 erros já existentes). Code review sem defeito que aconteça com o catálogo atual; achados distribuídos aos Tickets 13, 14 e 15 nos Comments do 12. O 13 mantém uma linha por Feed; o 15 passa para uma leitura por Provider. Próxima: onda 10 (13).
 - **Onda 10 (fechada, 31/10/2026):** Ticket 13, commit `52653a2`, sem migrations. A primeira tentativa morreu quando a máquina desligou, em 4 minutos e só com leituras: nada a recuperar, worktree removido e agente relançado do zero com o mesmo prompt (cerca de 14 min, sem travas). Na `main`: 403 testes, tsc limpo, lint com 0 erros (os 6 antigos sumiram) e 3 avisos antigos. Code review: um defeito, Incident com título em branco recusava o Poll de todos os Providers, corrigido em `bd55c08`; aquele Feed agora fica não lido. No mesmo commit, `runPoll` e títulos de teste pelo glossário e tipos sem uso apagados. Depois da correção: 405 testes. Próxima: onda 11 (14). O 17, planejado junto do 14, fica fora desta rodada a pedido do usuário (até o 16).
+- **Onda 11 (14 fechado, 31/10/2026; 17 em aberto):** Ticket 14, commit `75c7b99`. Migration `0006_incident_identity` (esquema); `_journal.json` linear, aplicada numa cópia do `sqlite.db`, `drizzle-kit check` sem problemas, `sqlite.db` local migrado. Agente sem travas (cerca de 14 min). Na `main`: 454 testes, tsc limpo, lint com 0 erros e 3 avisos antigos. Code review sem defeito bloqueante; termos do glossário nos testes e log de encerramento em `997681b`. Decisão pendente para o usuário em `ISSUES_ANNOTATION.md` 1.1: recorrência na AWS e na Azure apaga a ocorrência anterior do registro. Próxima: onda 12 (15).
 
 ### Onde paramos (31/10/2026)
 
-Tudo integrado na `main` até o Ticket 13. Ondas 1–10 fechadas, com code review feito em todas.
+Tudo integrado na `main` até o Ticket 14. Ondas 1–10 fechadas e o 14 da onda 11, com code review feito em todas.
 
-Próximo passo: **onda 11, Ticket 14** (identidade do Incident pela fonte).
+Próximo passo: **onda 12, Ticket 15** (Down de ponta a ponta).
 
 Decisões de produto e ações do usuário pendentes: ver `ISSUES_ANNOTATION.md` na raiz (nada bloqueado por elas).
 
