@@ -17,15 +17,18 @@ import { decideProviderStatus } from '@/lib/provider-status';
 
 let current: MigratedDb;
 
-const readAll = async () => readAllProviders(await readActiveCatalog(current.db), new Date());
+/** Relógio fixo: a regra de Dormant Incident não pode depender da data em que o teste roda. */
+const POLL_AT = new Date('2026-10-31T12:00:00Z');
+
+const readAll = async (pollAt = POLL_AT) => readAllProviders(await readActiveCatalog(current.db), pollAt);
 
 type Network = (url: string, init?: RequestInit) => Promise<Response>;
 
 const answers = new Map<string, Network>();
 const respondWith = (feedUrl: string, body: string) => answers.set(feedUrl, async () => new Response(body));
 
-async function readProvider(providerId: string) {
-    const results = await readAll();
+async function readProvider(providerId: string, pollAt = POLL_AT) {
+    const results = await readAll(pollAt);
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
     return outcomeOf(result);
@@ -90,14 +93,21 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
         });
     });
 
-    it('payload real: os eventos do Oriente Médio seguem ativos meses depois, sem encerramento por silêncio', async () => {
-        const { status, incidents } = await readProvider('aws');
+    it('payload real em 31/10/2026: os eventos do Oriente Médio seguem ativos e listados, sem contar para o estado', async () => {
+        const reading = await readProvider('aws', new Date('2026-10-31T00:00:00Z'));
 
-        expect(status).toBe('degraded');
-        expect(incidents.filter(i => i.status === 'investigating').map(i => i.externalId).sort()).toEqual([
+        expect(reading.status).toBe('operational');
+        expect(reading.feeds).toMatchObject([{ read: true, declared: 'operational' }]);
+        expect(reading.incidents.filter(i => i.status === 'investigating').map(i => i.externalId).sort()).toEqual([
             'multipleservices-me-central-1',
             'multipleservices-me-south-1',
         ]);
+    });
+
+    it('payload real: os eventos do Oriente Médio contavam até 30 dias depois da última atualização', async () => {
+        const { status } = await readProvider('aws', new Date('2026-10-01T00:00:00Z'));
+
+        expect(status).toBe('degraded');
     });
 
     it('payload real: o evento que a AWS marcou como resolvido fecha na data da última atualização', async () => {
@@ -121,7 +131,7 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
         expect(rows.rows[2].resolved_at).toBe(Date.parse('2026-10-30T01:28:38Z') / 1000);
     });
 
-    const start = new Date('2026-10-01T10:00:00Z');
+    const start = new Date('2026-10-20T10:00:00Z');
 
     it('um evento encerrado não mantém o Provider degradado', async () => {
         respondWith(
@@ -234,8 +244,7 @@ describe('RSS da AWS: cada atualização é um item, e o Incident é o evento', 
     });
 
     it('Incident ativo há 30 horas vem na leitura e mantém o Provider degradado', async () => {
-        const now = new Date();
-        respondWith(FEED_URLS.aws, awsRss([{ event: 'rds-us-east-1', title: 'Increased Error Rates', at: hoursBefore(now, 30) }]));
+        respondWith(FEED_URLS.aws, awsRss([{ event: 'rds-us-east-1', title: 'Increased Error Rates', at: hoursBefore(POLL_AT, 30) }]));
 
         const { status, incidents } = await readProvider('aws');
 
@@ -254,7 +263,7 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
     it('payload real com Incident ativo: degrada, com o guid como id e a fonte de origem', async () => {
         respondWith(FEED_URLS.azure, feedFixture('azure-rss', 'active-incident-2024-12-27.xml'));
 
-        const { status, incidents } = await readProvider('azure');
+        const { status, incidents } = await readProvider('azure', new Date('2024-12-27T12:00:00Z'));
 
         expect(status).toBe('degraded');
         expect(incidents).toHaveLength(1);
@@ -293,7 +302,7 @@ describe('RSS da Azure: um item por evento, com slug no guid', () => {
     });
 
     it('Incident ativo há 30 horas vem na leitura e mantém o Provider degradado', async () => {
-        const at = hoursBefore(new Date(), 30).toUTCString();
+        const at = hoursBefore(POLL_AT, 30).toUTCString();
         respondWith(FEED_URLS.azure, azureRss(`<item><guid>a</guid><title>Increased Error Rates</title><pubDate>${at}</pubDate></item>`));
 
         const { status, incidents } = await readProvider('azure');
@@ -325,7 +334,7 @@ describe('Google Cloud', () => {
     });
 
     it('Incident ativo há 30 horas vem na leitura e degrada; o resolvido traz a hora de resolução', async () => {
-        const now = new Date();
+        const now = POLL_AT;
         const begin = hoursBefore(now, 30);
         const end = hoursBefore(now, 2);
         respondWith(

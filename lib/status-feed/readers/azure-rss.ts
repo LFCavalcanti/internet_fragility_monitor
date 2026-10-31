@@ -1,6 +1,6 @@
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
-import { declaredByOpenProblems, problemPhase } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 const RESOLVED = /\bresolved\b/i;
@@ -19,9 +19,9 @@ function toIncident(item: RssItem): PublishedIncident {
     };
 }
 
-function toFeedContent(items: RssItem[]): FeedContent {
+function toFeedContent(items: RssItem[], pollAt: Date): FeedContent {
     const incidents = items.map(toIncident);
-    return { declared: declaredByOpenProblems(incidents), incidents };
+    return { declared: declaredByActiveIncidents(incidents, pollAt), incidents };
 }
 
 /**
@@ -29,5 +29,5 @@ function toFeedContent(items: RssItem[]): FeedContent {
  * O Feed só lista o que está em andamento: fica vazio quando não há Incidents.
  */
 export const azureRssReader: FeedReader = {
-    read: ([body]) => toFeedContent(parseRssItems(body)),
+    read: ([body], _addresses, pollAt) => toFeedContent(parseRssItems(body), pollAt),
 };

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
-import { declaredByOpenProblems, problemPhase } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 
 const incidentsSchema = z.array(
     z.object({
@@ -34,12 +34,12 @@ function toIncident(incident: GoogleIncident, address: string): PublishedInciden
     };
 }
 
-function toFeedContent(incidents: GoogleIncident[], address: string): FeedContent {
+function toFeedContent(incidents: GoogleIncident[], address: string, pollAt: Date): FeedContent {
     const published = incidents.map(incident => toIncident(incident, address));
-    return { declared: declaredByOpenProblems(published), incidents: published };
+    return { declared: declaredByActiveIncidents(published, pollAt), incidents: published };
 }
 
 /** Leitor do Google Cloud (incidents.json): a lista traz também os encerrados, com a hora de fim em `end`. */
 export const googleCloudReader: FeedReader = {
-    read: ([body], [address]) => toFeedContent(incidentsSchema.parse(JSON.parse(body)), address),
+    read: ([body], [address], pollAt) => toFeedContent(incidentsSchema.parse(JSON.parse(body)), address, pollAt),
 };

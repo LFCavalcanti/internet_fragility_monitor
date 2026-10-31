@@ -15,7 +15,13 @@ import type { ReadIncident } from '@/lib/status-feed/types';
 
 let current: MigratedDb;
 
-const readAll = async (pollAt = new Date()) => readAllProviders(await readActiveCatalog(current.db), pollAt);
+/** Relógio fixo: a regra de Dormant Incident não pode depender da data em que o teste roda. */
+const POLL_AT = new Date('2026-10-31T12:00:00Z');
+
+/** Hora da captura real de 2020 da IBM. */
+const IBM_CAPTURE_AT = new Date('2020-09-26T12:00:00Z');
+
+const readAll = async (pollAt = POLL_AT) => readAllProviders(await readActiveCatalog(current.db), pollAt);
 
 async function snapshotEntry(providerId: string) {
     const now = new Date();
@@ -31,8 +37,8 @@ const respondWith = (prefix: string, body: string) => routes.unshift([prefix, as
 const salesforceIncidents = () => JSON.parse(feedFixture('salesforce', 'incidents-active.json'));
 const salesforceMaintenances = () => JSON.parse(feedFixture('salesforce', 'maintenances.json'));
 
-async function readProvider(providerId: string) {
-    const results = await readAll();
+async function readProvider(providerId: string, pollAt = POLL_AT) {
+    const results = await readAll(pollAt);
     const result = results.find(r => r.providerId === providerId);
     if (!result) throw new Error(`${providerId} fora do Poll`);
     return outcomeOf(result);
@@ -370,7 +376,7 @@ describe('RSS da IBM: só `incident` e `maintenance` são Incidents', () => {
     it('captura real: manutenção cancelada não é lida, e a manutenção em andamento declara Maintenance, sem degradar o Provider', async () => {
         respondWith(FEED_URLS.ibm, feedFixture('ibm-rss', 'incidents-and-maintenance-2020-09-26.xml'));
 
-        const { feeds, incidents } = await readProvider('ibm-cloud');
+        const { feeds, incidents } = await readProvider('ibm-cloud', IBM_CAPTURE_AT);
 
         expect(feeds).toMatchObject([{ read: true, declared: 'maintenance' }]);
         expect(incidents.map(i => i.title).join()).not.toContain('Maintenance for Internet Services');

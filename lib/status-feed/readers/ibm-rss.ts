@@ -1,7 +1,7 @@
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
-import { declaredByOpenProblems, problemPhase } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 /**
@@ -75,9 +75,9 @@ function toIncidents(item: RssItem): PublishedIncident[] {
     throw new Error(`categoria desconhecida no Feed da IBM: ${item.category.join(", ")}`);
 }
 
-function toFeedContent(items: RssItem[]): FeedContent {
+function toFeedContent(items: RssItem[], pollAt: Date): FeedContent {
     const incidents = items.flatMap(toIncidents);
-    return { declared: declaredByOpenProblems(incidents), incidents };
+    return { declared: declaredByActiveIncidents(incidents, pollAt), incidents };
 }
 
 /**
@@ -85,5 +85,5 @@ function toFeedContent(items: RssItem[]): FeedContent {
  * manutenções. O `guid` é o id; sem ele, o título sem a fase.
  */
 export const ibmRssReader: FeedReader = {
-    read: ([body]) => toFeedContent(parseRssItems(body)),
+    read: ([body], _addresses, pollAt) => toFeedContent(parseRssItems(body), pollAt),
 };

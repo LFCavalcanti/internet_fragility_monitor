@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { FeedContent, FeedReader } from "../read-policy";
-import type { DeclaredStatus, MaintenancePhase, PublishedIncident } from "../types";
+import type { MaintenancePhase, PublishedIncident } from "../types";
 import { feedDate } from "./feed-date";
-import { problemPhase, withOngoingMaintenance } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 
 /**
  * O Feed guarda cerca de 18 mil manutenções, uma por instância, entre 30 dias atrás e um ano à frente, e entrega no
@@ -98,20 +98,20 @@ function toMaintenance(maintenance: Maintenance): PublishedIncident[] {
     ];
 }
 
-/** O pior impacto aberto. Incidente ativo sem impacto aberto continua sendo problema parcial. */
-function declaredStatus(incidents: Incident[]): DeclaredStatus {
-    if (incidents.length === 0) return "operational";
-    const open = incidents.flatMap(i => i.IncidentImpacts).filter(impact => !impact.endTime);
-    return open.some(impact => impact.severity === "major") ? "outage" : "degraded";
+/** Um impacto `major` aberto é Outage. Incidente ativo sem impacto aberto continua sendo problema parcial. */
+function hasOpenMajorImpact(incident: Incident): boolean {
+    return incident.IncidentImpacts.some(impact => !impact.endTime && impact.severity === "major");
 }
 
-function toFeedContent(incidents: Incident[], maintenances: Maintenance[]): FeedContent {
+function toFeedContent(incidents: Incident[], maintenances: Maintenance[], pollAt: Date): FeedContent {
     if (maintenances.length >= MAINTENANCE_LIMIT) {
         console.warn(`Feed da Salesforce: a lista de manutenções parou no limite de ${MAINTENANCE_LIMIT} itens; as seguintes não foram lidas.`);
     }
 
     const published = [...incidents.map(toProblem), ...maintenances.flatMap(toMaintenance)];
-    return { declared: withOngoingMaintenance(declaredStatus(incidents), published), incidents: published };
+    const outages = new Set(incidents.filter(hasOpenMajorImpact).map(incident => String(incident.id)));
+    const declared = declaredByActiveIncidents(published, pollAt, problem => (outages.has(problem.externalId) ? "outage" : "degraded"));
+    return { declared, incidents: published };
 }
 
 /**
@@ -128,6 +128,6 @@ export const salesforceReader: FeedReader = {
         });
         return [`${catalogUrl}/incidents/active`, `${catalogUrl}/maintenances?${query}`];
     },
-    read: ([incidents, maintenances]) =>
-        toFeedContent(incidentsSchema.parse(JSON.parse(incidents)), maintenancesSchema.parse(JSON.parse(maintenances))),
+    read: ([incidents, maintenances], _addresses, pollAt) =>
+        toFeedContent(incidentsSchema.parse(JSON.parse(incidents)), maintenancesSchema.parse(JSON.parse(maintenances)), pollAt),
 };

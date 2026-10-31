@@ -1,6 +1,6 @@
 import type { FeedContent, FeedReader } from "../read-policy";
 import type { PublishedIncident } from "../types";
-import { declaredByOpenProblems, problemPhase } from "./problem-state";
+import { declaredByActiveIncidents, problemPhase } from "./problem-state";
 import { parseRssItems, type RssItem } from "./rss";
 
 /** `guid` da AWS: `https://status.aws.amazon.com/#<evento>_<instante da atualização>`. */
@@ -62,11 +62,11 @@ function toIncident(externalId: string, updates: RssItem[]): PublishedIncident {
     };
 }
 
-function toFeedContent(items: RssItem[]): FeedContent {
+function toFeedContent(items: RssItem[], pollAt: Date): FeedContent {
     const chronological = [...items].sort((a, b) => a.pubDate.getTime() - b.pubDate.getTime());
     const incidents = [...byEvent(chronological)].map(([event, updates]) => toIncident(event, updates));
 
-    return { declared: declaredByOpenProblems(incidents), incidents };
+    return { declared: declaredByActiveIncidents(incidents, pollAt), incidents };
 }
 
 /**
@@ -74,5 +74,5 @@ function toFeedContent(items: RssItem[]): FeedContent {
  * `guid` antes do instante. Não há encerramento por silêncio: o evento fica ativo até a AWS marcá-lo como resolvido.
  */
 export const awsRssReader: FeedReader = {
-    read: ([body]) => toFeedContent(parseRssItems(body)),
+    read: ([body], _addresses, pollAt) => toFeedContent(parseRssItems(body), pollAt),
 };
