@@ -241,11 +241,4 @@ describe('decideInternetHealth: Stale Snapshot', () => {
 
         expect(health).toEqual({ status: 'Stale', lastPollAt: null });
     });
-
-    it('o limite acompanha a cadência: com ciclo de 7 minutos, 21 minutos mantém o Internet Health e 22 viram neutro', () => {
-        const cadenceMs = 7 * 60 * 1000;
-
-        expect(decideInternetHealth({ providers: critical, lastPollAt: minutesAgo(21), now, cadenceMs }).status).toBe('Critical');
-        expect(decideInternetHealth({ providers: critical, lastPollAt: minutesAgo(22), now, cadenceMs }).status).toBe('Stale');
-    });
 });

@@ -2,7 +2,7 @@ import cron from "node-cron";
 import type { Database } from "./db";
 import { runPoll } from "./poll";
 import { readSnapshot } from "./poll-recording";
-import { createPollSchedule, type PollSchedule } from "./poll-schedule";
+import { POLL_CADENCE_MS, createPollSchedule, type PollSchedule } from "./poll-schedule";
 
 const MINUTE_MS = 60 * 1000;
 
@@ -26,10 +26,14 @@ let pollSchedule: PollSchedule | undefined;
 
 /** Adaptador da política de Poll Schedule: o `node-cron` só dispara, e a política decide. */
 export function initCron(db: Database): Promise<void> {
+    // Fora da promessa, de propósito: uma cadência inválida derruba o `register`, que o Next espera, e o servidor não
+    // sobe. Dentro dela, o erro ficaria solto e o monitor seguiria no ar, sem Poll nenhum.
+    const expression = cronExpressionFor(POLL_CADENCE_MS);
+
     pollSchedule ??= createPollSchedule({
         clock: () => new Date(),
-        schedule: (cadenceMs, fire) => {
-            cron.schedule(cronExpressionFor(cadenceMs), fire);
+        schedule: (_, fire) => {
+            cron.schedule(expression, fire);
         },
         poll: () => runPoll(db),
         readLastPollAt: async () => (await readSnapshot(db, new Date())).lastPollAt,

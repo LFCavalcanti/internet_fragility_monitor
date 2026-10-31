@@ -67,6 +67,20 @@ describe('agendamento do Poll', () => {
         expect(mockSchedule).toHaveBeenCalledWith('*/5 * * * *', expect.any(Function));
     });
 
+    it('com uma cadência que o node-cron não expressa, a subida falha na hora, sem Poll nem agendamento', async () => {
+        vi.doMock('@/lib/poll-schedule', async importOriginal => ({
+            ...(await importOriginal<typeof import('@/lib/poll-schedule')>()),
+            POLL_CADENCE_MS: 7 * MINUTE,
+        }));
+        const { initCron } = await loadCron();
+
+        expect(() => initCron(current.db)).toThrow(/cadência/i);
+
+        vi.doUnmock('@/lib/poll-schedule');
+        expect(mockSchedule).not.toHaveBeenCalled();
+        expect(await checksCount()).toBe(0);
+    });
+
     it('inicializa uma vez só', async () => {
         const { initCron } = await loadCron();
 

@@ -5,7 +5,7 @@
  * Termos conforme GLOSSARY.md.
  */
 
-/** Cadência dos Polls: o ciclo. A página e o agendador leem este valor. */
+/** Cadência dos Polls: o ciclo. A página e o agendador leem este valor. Precisa ser um divisor de 60 minutos (`lib/cron.ts`). */
 export const POLL_CADENCE_MS = 5 * 60 * 1000;
 
 /** Um Snapshot fica Stale depois de mais de três ciclos de Poll. */

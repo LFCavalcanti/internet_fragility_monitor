@@ -25,8 +25,6 @@ export interface InternetHealthInput {
     lastPollAt: Date | null;
     /** Relógio: a hora em que o Snapshot é apresentado. */
     now: Date;
-    /** Cadência dos Polls; sem ela, vale a da política de Poll Schedule. */
-    cadenceMs?: number;
 }
 
 /** Destaque do hero: um Provider com o Incident principal, ou a menção a vários Providers. */
@@ -69,10 +67,9 @@ export function decideInternetHealth({
     providers,
     lastPollAt,
     now,
-    cadenceMs,
 }: InternetHealthInput): HeroState {
     // Um Stale Snapshot não pode ser apresentado como o estado atual: vence qualquer faixa, inclusive Critical.
-    if (isStaleSnapshot(lastPollAt, now, cadenceMs)) {
+    if (isStaleSnapshot(lastPollAt, now)) {
         return { status: "Stale", lastPollAt };
     }
 
