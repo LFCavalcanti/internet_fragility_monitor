@@ -106,26 +106,37 @@ describe('StatusCard', () => {
         expect(screen.queryByRole('link', { name: /upcoming/ })).not.toBeInTheDocument();
     });
 
-    it('Provider só com Probes mostra a marca "verificação de acesso, sem feed de status" junto do estado', () => {
+    it('Provider só com Probes mostra a marca "Access check only, no status feed" junto do estado', () => {
         renderCard({ status: 'operational', accessOnly: true });
         expect(screen.getByText('operational')).toBeInTheDocument();
-        expect(screen.getByText('verificação de acesso, sem feed de status')).toBeInTheDocument();
+        expect(screen.getByText('Access check only, no status feed')).toBeInTheDocument();
     });
 
     it('Provider com Feed não mostra a marca de "só acesso"', () => {
         renderCard({ status: 'operational' });
-        expect(screen.queryByText(/verificação de acesso/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Access check only/)).not.toBeInTheDocument();
     });
 
-    it('Partial Reading mostra a marca "1 de 2 feeds sem leitura" junto do estado', () => {
+    it('Partial Reading mostra a marca "1 of 2 feeds unread" junto do estado', () => {
         renderCard({ status: 'degraded', partialReading: { unread: 1, total: 2 } });
         expect(screen.getByText('degraded')).toBeInTheDocument();
-        expect(screen.getByText('1 de 2 feeds sem leitura')).toBeInTheDocument();
+        expect(screen.getByText('1 of 2 feeds unread')).toBeInTheDocument();
     });
 
     it('sem Partial Reading não há marca', () => {
         renderCard({ status: 'operational' });
-        expect(screen.queryByText(/sem leitura/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/feeds unread/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+        ['Unreachable', { status: 'unreachable' }],
+        ['Down, só com Probes', { status: 'down', accessOnly: true }],
+        ['Partial Reading', { status: 'degraded', partialReading: { unread: 1, total: 2 } }],
+    ] as const)('nenhum texto em português na tela: %s', (_, decision) => {
+        const { container } = renderCard(decision);
+        expect(container).not.toHaveTextContent(
+            /Não foi possível|Sem resposta|verificação de acesso|feeds sem leitura|status page nem|\d de \d/,
+        );
     });
 
     it('sem Upcoming Maintenance não há linha', () => {
@@ -167,10 +178,10 @@ describe('StatusCard', () => {
     });
 
     describe('Unreachable', () => {
-        it('card cinza e neutro com "Não foi possível ler a status page"', () => {
+        it(`card cinza e neutro com "Couldn't read the status page"`, () => {
             const { container } = renderCard({ status: 'unreachable' });
 
-            expect(screen.getByText('Não foi possível ler a status page')).toBeInTheDocument();
+            expect(screen.getByText("Couldn't read the status page")).toBeInTheDocument();
             expect(screen.getByRole('img', { name: 'unreachable' })).toHaveClass('text-muted-foreground');
             const card = container.firstElementChild;
             expect(card).toHaveAttribute('data-status', 'unreachable');
@@ -204,18 +215,50 @@ describe('StatusCard', () => {
             expect(screen.getByText('about 2 hours ago')).toBeInTheDocument();
         });
 
+        it('com Incidents, avisa que eles vêm da última leitura', () => {
+            renderCard({
+                status: 'unreachable',
+                incidents: [{
+                    kind: 'problem',
+                    title: 'Elevated errors',
+                    status: 'identified',
+                    createdAt: hoursBefore(now, 2),
+                }],
+            });
+            expect(screen.getByText('These Incidents come from the last reading and may be out of date.')).toBeInTheDocument();
+        });
+
+        it('sem Incidents, não há aviso', () => {
+            renderCard({ status: 'unreachable' });
+            expect(screen.queryByText(/last reading/)).not.toBeInTheDocument();
+        });
+
+        it('um card lido normalmente, com Incidents, não mostra o aviso', () => {
+            renderCard({
+                status: 'degraded',
+                incidents: [{
+                    kind: 'problem',
+                    title: 'Elevated errors',
+                    status: 'identified',
+                    createdAt: hoursBefore(now, 2),
+                }],
+            });
+            expect(screen.getByText('Elevated errors')).toBeInTheDocument();
+            expect(screen.queryByText(/last reading/)).not.toBeInTheDocument();
+        });
+
         it('os outros estados não usam o texto nem o cinza de Unreachable', () => {
             const { container } = renderCard({ status: 'outage' });
-            expect(screen.queryByText('Não foi possível ler a status page')).not.toBeInTheDocument();
+            expect(screen.queryByText("Couldn't read the status page")).not.toBeInTheDocument();
             expect(container.firstElementChild).not.toHaveClass('grayscale');
         });
     });
 
     describe('Down', () => {
-        it('card com a cor mais forte da página e "Sem resposta da status page nem do serviço"', () => {
+        it('card com a cor mais forte da página e "No response from the status page or the service"', () => {
             const { container } = renderCard({ status: 'down' });
 
-            expect(screen.getByText('Sem resposta da status page nem do serviço')).toBeInTheDocument();
+            expect(screen.getByText('No response from the status page or the service')).toBeInTheDocument();
             expect(screen.getByRole('img', { name: 'down' })).toHaveClass('text-red-700');
             const card = container.firstElementChild;
             expect(card).toHaveAttribute('data-status', 'down');
@@ -226,14 +269,14 @@ describe('StatusCard', () => {
         it('os outros estados não usam o texto nem a cor de Down', () => {
             const { container } = renderCard({ status: 'outage' });
 
-            expect(screen.queryByText('Sem resposta da status page nem do serviço')).not.toBeInTheDocument();
+            expect(screen.queryByText('No response from the status page or the service')).not.toBeInTheDocument();
             expect(container.firstElementChild).not.toHaveClass('border-red-700');
         });
 
         it('não usa o texto de Unreachable', () => {
             renderCard({ status: 'down' });
 
-            expect(screen.queryByText('Não foi possível ler a status page')).not.toBeInTheDocument();
+            expect(screen.queryByText("Couldn't read the status page")).not.toBeInTheDocument();
         });
 
         it('continua mostrando os Recent Incidents gravados', () => {
@@ -245,11 +288,11 @@ describe('StatusCard', () => {
             expect(screen.getByText('Elevated errors')).toBeInTheDocument();
         });
 
-        it('Provider só com Probes em Down mantém a marca "verificação de acesso, sem feed de status"', () => {
+        it('Provider só com Probes em Down mantém a marca "Access check only, no status feed"', () => {
             renderCard({ status: 'down', accessOnly: true });
 
-            expect(screen.getByText('Sem resposta da status page nem do serviço')).toBeInTheDocument();
-            expect(screen.getByText('verificação de acesso, sem feed de status')).toBeInTheDocument();
+            expect(screen.getByText('No response from the status page or the service')).toBeInTheDocument();
+            expect(screen.getByText('Access check only, no status feed')).toBeInTheDocument();
         });
     });
 

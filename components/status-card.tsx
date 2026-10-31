@@ -113,17 +113,17 @@ export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, n
                             {displayStatus}
                         </div>
                         {unreachable && (
-                            <p className="text-xs text-muted-foreground mt-1">Não foi possível ler a status page</p>
+                            <p className="text-xs text-muted-foreground mt-1">Couldn&apos;t read the status page</p>
                         )}
-                        {down && <p className="text-xs font-medium mt-1">Sem resposta da status page nem do serviço</p>}
+                        {down && <p className="text-xs font-medium mt-1">No response from the status page or the service</p>}
                         {decision.accessOnly && (
                             // Provider só com Probes: o estado vem só da verificação de acesso.
-                            <p className="text-xs text-muted-foreground mt-1">verificação de acesso, sem feed de status</p>
+                            <p className="text-xs text-muted-foreground mt-1">Access check only, no status feed</p>
                         )}
                         {decision.partialReading && (
                             // Partial Reading: o estado vem só dos Feeds lidos, e a lacuna fica visível.
                             <p className="text-xs text-muted-foreground mt-1">
-                                {decision.partialReading.unread} de {decision.partialReading.total} feeds sem leitura
+                                {decision.partialReading.unread} of {decision.partialReading.total} feeds unread
                             </p>
                         )}
                         {lastUpdated && (
@@ -154,6 +154,12 @@ export function StatusCard({ name, logo, statusPageUrl, lastUpdated, decision, n
                 {recentIncidents.length > 0 && (
                     <div className="space-y-2 border-t pt-3 mt-auto">
                         <p className="text-xs font-semibold text-muted-foreground">Recent Incidents</p>
+                        {unreachable && (
+                            // Sem Feed lido, a lista traz a última fase gravada: não pode parecer atual.
+                            <p className="text-[10px] text-muted-foreground">
+                                These Incidents come from the last reading and may be out of date.
+                            </p>
+                        )}
                         {recentIncidents.map((inc, i) => (
                             <div key={i} className="text-xs pl-2 border-l-2 border-primary/50 py-0.5">
                                 <p className="font-medium truncate">{inc.title}</p>
