@@ -5,9 +5,8 @@
  */
 import type { ActiveCatalog } from "../poll-recording";
 import { groupByProvider, isAccessOnly, isFeedFamily, type FeedFamily } from "../provider-catalog";
-import type { FeedReading } from "../provider-status";
 import type { ProviderSource } from "../schema";
-import type { ProviderReading } from "./provider-reading";
+import type { ProviderReading, SourcedFeedReading } from "./provider-reading";
 import { readFeed, readProbe, type FeedReader } from "./read-policy";
 import { awsRssReader } from "./readers/aws-rss";
 import { azureRssReader } from "./readers/azure-rss";
@@ -29,14 +28,14 @@ const FEED_READERS: Record<FeedFamily, FeedReader> = {
     "ibm-rss": ibmRssReader,
 };
 
-async function readFeedSource(feed: ProviderSource): Promise<FeedReading<ReadIncident>> {
+async function readFeedSource(feed: ProviderSource): Promise<SourcedFeedReading<ReadIncident>> {
     const reader = isFeedFamily(feed.family) ? FEED_READERS[feed.family] : undefined;
     if (!reader) {
         // Feed não lido, sem ir à rede: o Poll segue com os demais.
         console.error(`Feed ${feed.id} de ${feed.providerId} não lido: a família "${feed.family}" não tem leitor no código`);
-        return { read: false, answered: false };
+        return { sourceId: feed.id, read: false, answered: false };
     }
-    return readFeed(feed, reader);
+    return { sourceId: feed.id, ...(await readFeed(feed, reader)) };
 }
 
 /** Lê um Provider por todas as fontes ativas dele, ao mesmo tempo: cada uma tem o próprio timeout. */

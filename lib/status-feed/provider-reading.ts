@@ -6,11 +6,14 @@
 import { feedAnswered, type ProviderStatusInput, type FeedReading } from "../provider-status";
 import type { IncidentData } from "./types";
 
+/** A leitura de um Feed num Poll, com a Provider Source lida: um Feed lido e sem Incidents também diz qual Feed foi. */
+export type SourcedFeedReading<I extends IncidentData = IncidentData> = FeedReading<I> & { sourceId: string };
+
 export interface ProviderReading<I extends IncidentData = IncidentData>
     extends Pick<ProviderStatusInput, "accessOnly" | "probes"> {
     providerId: string;
-    /** A leitura de cada Feed ativo do Provider. */
-    feeds: FeedReading<I>[];
+    /** A leitura de cada Feed ativo do Provider, na ordem do catálogo. */
+    feeds: SourcedFeedReading<I>[];
 }
 
 /**

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { SourceKind } from "./provider-catalog";
 
@@ -36,9 +36,15 @@ export const providerSources = sqliteTable("provider_sources", {
     active: integer("active", { mode: "boolean" }).notNull().default(true),
 });
 
+/**
+ * Um Incident é identificado pelo par Feed e id publicado por ele. As linhas gravadas antes dessa identidade não têm
+ * nenhum dos dois: anuláveis, várias convivem, porque o SQLite não compara NULL num índice único.
+ */
 export const incidents = sqliteTable("incidents", {
     id: text("id").primaryKey(),
     providerId: text("provider_id").references(() => providers.id).notNull(),
+    sourceId: text("source_id").references(() => providerSources.id),
+    externalId: text("external_id"),
     title: text("title").notNull(),
     description: text("description"),
     // problem: 'investigating', 'identified', 'monitoring', 'resolved'
@@ -51,7 +57,7 @@ export const incidents = sqliteTable("incidents", {
     createdAt: integer("created_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`CURRENT_TIMESTAMP`),
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),
-});
+}, table => [uniqueIndex("incidents_source_external_unique").on(table.sourceId, table.externalId)]);
 
 export const statusChecks = sqliteTable("status_checks", {
     id: integer("id").primaryKey({ autoIncrement: true }),

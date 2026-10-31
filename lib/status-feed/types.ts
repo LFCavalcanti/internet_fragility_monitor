@@ -41,6 +41,6 @@ export type PublishedIncident = IncidentData & { externalId: string };
 
 /**
  * Incident lido de um Feed, com a identidade: a Provider Source de origem e o id que o Feed dá a ele.
- * Os Incidents vindos do banco são `IncidentData`, sem esses campos, até o Ticket 14 gravá-los.
+ * A identidade só importa para gravar: os Incidents do Snapshot são `IncidentData`.
  */
 export type ReadIncident = PublishedIncident & { sourceId: string };

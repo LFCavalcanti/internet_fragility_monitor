@@ -21,7 +21,7 @@ import { readIncidentsOf, type ProviderStatusInput } from "./provider-status";
 import { incidents, providers, providerSources, statusChecks } from "./schema";
 import type { Incident, Provider, ProviderSource } from "./schema";
 import type { ProviderReading } from "./status-feed/provider-reading";
-import type { IncidentData, MaintenancePhase, ProblemStatus, ReadingStatus } from "./status-feed/types";
+import type { IncidentData, MaintenancePhase, ProblemStatus, ReadIncident, ReadingStatus } from "./status-feed/types";
 
 /** O que um Poll lê: os Providers ativos do Provider Catalog e os Provider Sources ativos deles. */
 export interface ActiveCatalog {
@@ -130,73 +130,104 @@ function scheduledForOf(incident: IncidentData): Date | null {
     return incident.kind === "maintenance" ? incident.scheduledFor ?? null : null;
 }
 
-function sameInstant(a: Date | null, b: Date | null): boolean {
-    return (a?.getTime() ?? null) === (b?.getTime() ?? null);
+/** A identidade de um Incident como chave de índice em memória: a Provider Source e o id publicado por ela. */
+function identityOf({ sourceId, externalId }: Pick<Incident, "sourceId" | "externalId">): string {
+    return `${sourceId}\0${externalId}`;
+}
+
+/** Linha gravada antes da identidade: sem fonte e sem id. A passagem única dá fim a todas as abertas. */
+const isOldRow = (row: Incident) => row.sourceId === null;
+
+/** A hora de encerramento de um Incident publicado. De volta a uma fase aberta, ela sai. */
+function resolvedAtOf(incident: ReadIncident, row: Incident | undefined, at: Date): Date | null {
+    if (!isClosed(incident)) return null;
+    if (incident.resolvedAt) return incident.resolvedAt;
+    // Sem hora publicada, a hora do Poll vale só para quem encerra agora. Quem já chegou encerrado, sem hora nenhuma,
+    // fica assim: a janela de Recent Incident conta da criação, e o Incident não parece recém-resolvido.
+    if (!row) return null;
+    return isClosed(toIncidentData(row)) ? row.resolvedAt : at;
+}
+
+/** O que a gravação guarda do que o Feed publica. O id é a identidade; título e link são só a publicação de agora. */
+function publishedFields(incident: ReadIncident, row: Incident | undefined, at: Date) {
+    return {
+        sourceId: incident.sourceId,
+        externalId: incident.externalId,
+        title: incident.title,
+        description: incident.description || row?.description,
+        status: incident.status,
+        kind: incident.kind,
+        scheduledFor: scheduledForOf(incident),
+        url: incident.url || row?.url,
+        createdAt: incident.createdAt,
+        resolvedAt: resolvedAtOf(incident, row, at),
+    };
+}
+
+/** Valor como a coluna guarda: as colunas de data têm precisão de segundos, e uma data do Feed pode ter milissegundos. */
+const stored = (value: string | Date | null | undefined) =>
+    value instanceof Date ? Math.floor(value.getTime() / 1000) : value ?? null;
+
+type PublishedFields = ReturnType<typeof publishedFields>;
+
+function differs(row: Incident, fields: PublishedFields): boolean {
+    return (Object.keys(fields) as (keyof PublishedFields)[]).some(column => stored(row[column]) !== stored(fields[column]));
 }
 
 /**
- * Reconcilia os Incidents de um Provider com os Feeds lidos, pelo título, até a identidade pela fonte do Ticket 14.
+ * Reconcilia os Incidents de um Provider com os Feeds lidos neste Poll. O par Provider Source e id publicado identifica
+ * o Incident: novo é inserido, conhecido é atualizado, inclusive quando volta a abrir depois de encerrado, e o ativo
+ * que saiu de um Feed lido é encerrado. Os de um Feed não lido ficam como estão.
+ *
+ * Passagem única: o Incident sem linha com o seu par assume uma linha antiga aberta com o mesmo título. As que ninguém
+ * assumir são encerradas no primeiro Poll com todos os Feeds lidos, porque sob Partial Reading podem ser do Feed não
+ * lido. Encerradas, ficam como histórico e nada mais as procura: o título só vale enquanto restar linha antiga aberta.
+ *
  * O histórico do Provider é consultado uma vez, qualquer que seja o volume do Feed.
  */
-async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderReading, at: Date) {
+async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderReading<ReadIncident>, at: Date) {
     // Uma falha de leitura não diz nada sobre os Incidents: os gravados ficam como estão e o card continua a mostrá-los.
     // Probes também não declaram Incidents.
-    const readFeeds = feeds.filter(f => f.read).length;
-    if (readFeeds === 0) return;
+    const readSources = new Set(feeds.filter(f => f.read).map(f => f.sourceId));
+    if (readSources.size === 0) return;
 
-    const published = readIncidentsOf(feeds);
+    // Um par repetido no Feed vira uma linha só, e a unicidade do par não recusa o Poll.
+    const published = new Map(readIncidentsOf(feeds).map(incident => [identityOf(incident), incident]));
     const recorded = await tx.select().from(incidents)
         .where(eq(incidents.providerId, providerId))
         .orderBy(desc(incidents.createdAt));
 
-    // O mais novo vence quando o título se repete no histórico.
-    const newestByTitle = new Map<string, Incident>();
+    const known = new Map<string, Incident>();
+    const openOldRowsByTitle = new Map<string, Incident[]>();
     for (const row of recorded) {
-        if (!newestByTitle.has(row.title)) newestByTitle.set(row.title, row);
-    }
-
-    for (const incident of published) {
-        const known = newestByTitle.get(incident.title);
-        const scheduledFor = scheduledForOf(incident);
-        if (!known) {
-            await tx.insert(incidents).values({
-                id: crypto.randomUUID(),
-                providerId,
-                title: incident.title,
-                description: incident.description,
-                status: incident.status,
-                kind: incident.kind,
-                scheduledFor,
-                url: incident.url,
-                createdAt: incident.createdAt,
-                updatedAt: at,
-                // Já encerrado no Feed: a hora de resolução publicada, para a janela de Recent Incident.
-                resolvedAt: isClosed(incident) ? incident.resolvedAt ?? null : null,
-            });
-        } else if (
-            known.status !== incident.status ||
-            known.kind !== incident.kind ||
-            !sameInstant(known.scheduledFor, scheduledFor)
-        ) {
-            await tx.update(incidents).set({
-                status: incident.status,
-                description: incident.description || known.description || undefined,
-                kind: incident.kind,
-                scheduledFor,
-                updatedAt: at,
-                // De volta a uma fase aberta, a hora do encerramento sai.
-                resolvedAt: isClosed(incident) ? at : null,
-            }).where(eq(incidents.id, known.id));
+        if (!isOldRow(row)) {
+            known.set(identityOf(row), row);
+        } else if (!isClosed(toIncidentData(row))) {
+            const title = row.title.trim();
+            if (!openOldRowsByTitle.has(title)) openOldRowsByTitle.set(title, []);
+            openOldRowsByTitle.get(title)?.push(row);
         }
     }
 
-    // Partial Reading: um Incident gravado pode ser do Feed não lido, e a linha só diz de qual Feed veio a partir do
-    // Ticket 14. Um Feed não lido nunca encerra os seus Incidents, então nada é encerrado neste Poll.
-    if (readFeeds < feeds.length) return;
+    for (const [identity, incident] of published) {
+        const row = known.get(identity) ?? openOldRowsByTitle.get(incident.title.trim())?.shift();
+        const fields = publishedFields(incident, row, at);
+        if (!row) {
+            await tx.insert(incidents).values({ id: crypto.randomUUID(), providerId, ...fields, updatedAt: at });
+        } else if (differs(row, fields)) {
+            await tx.update(incidents).set({ ...fields, updatedAt: at }).where(eq(incidents.id, row.id));
+        }
+    }
 
-    const stillPublished = new Set(published.map(i => i.title));
-    for (const row of recorded) {
-        if (stillPublished.has(row.title) || isClosed(toIncidentData(row))) continue;
+    const leftTheFeed = recorded.filter(row =>
+        row.sourceId !== null &&
+        readSources.has(row.sourceId) &&
+        !published.has(identityOf(row)) &&
+        !isClosed(toIncidentData(row)),
+    );
+    const unclaimed = readSources.size === feeds.length ? [...openOldRowsByTitle.values()].flat() : [];
+
+    for (const row of [...leftTheFeed, ...unclaimed]) {
         console.log(`Closing incident that left the Feed: ${row.title} for ${providerId}`);
         await tx.update(incidents).set({
             status: closedStatusFor(row.kind === "maintenance" ? "maintenance" : "problem"),
@@ -210,7 +241,7 @@ async function reconcileIncidents(tx: Writer, { providerId, feeds }: ProviderRea
  * Grava um Poll numa transação: as leituras de todos os Providers, com a mesma hora, que é o que as liga a este Poll,
  * e a reconciliação dos Incidents. Qualquer erro rejeita a promessa e não deixa nada gravado.
  */
-export async function recordPoll(db: Database, readings: readonly ProviderReading[], at: Date = new Date()): Promise<void> {
+export async function recordPoll(db: Database, readings: readonly ProviderReading<ReadIncident>[], at: Date = new Date()): Promise<void> {
     readings.forEach(assertRecordable);
 
     const checks = readings.flatMap(reading =>
@@ -289,28 +320,42 @@ function toIncidentData(row: Incident): IncidentData {
 
 /**
  * Remonta a entrada do módulo de Provider Status a partir das linhas do último Poll.
- * Provider com Feed: cada Feed vai lido, com o estado declarado, ou não lido. Os Incidents gravados ainda não dizem
- * de qual Feed vieram (Ticket 14), então vão juntos no primeiro Feed lido, ou no primeiro Feed se nenhum foi lido.
+ * Provider com Feed: cada Feed vai lido, com o estado declarado, ou não lido, levando os seus Incidents: os de um Feed
+ * não lido entram na lista, mas não decidem o estado nem a Upcoming Maintenance.
+ * A n-ésima linha do Poll é o n-ésimo Feed ativo, porque o Poll grava os Feeds na ordem do catálogo. Sem Feed certo
+ * (linha antiga, Feed desativado, ou catálogo mudado depois do Poll), o Incident vai no primeiro Feed não lido, onde
+ * não decide nada, ou no primeiro Feed se todos foram lidos.
  * Provider só com Probes: nenhum Feed, e a leitura gravada diz só se algum Probe respondeu. Um estado declarado
  * gravado antes (de quando havia Feed) não conta: só um Feed declara Degraded, Outage ou Maintenance.
  * O Poll anterior sem resposta, que habilita Down, chega com o Ticket 15.
  */
-function toStatusInput(accessOnly: boolean, recorded: ReadingStatus[], incidentsOfProvider: IncidentData[]): SnapshotEntry["reading"] {
+function toStatusInput(
+    accessOnly: boolean,
+    recorded: ReadingStatus[],
+    feedIds: string[],
+    incidentRows: Incident[],
+): SnapshotEntry["reading"] {
     const base = { previousPollUnanswered: false };
     if (accessOnly) {
         return { ...base, accessOnly, feeds: [], probes: recorded.map(r => r !== "unreachable") };
     }
 
-    const incidentsAt = Math.max(0, recorded.findIndex(r => r !== "unreachable"));
+    const linesMatchFeeds = recorded.length === feedIds.length;
+    const withoutFeed = Math.max(0, recorded.indexOf("unreachable"));
+    const incidentsByLine = recorded.map((): IncidentData[] => []);
+    for (const row of incidentRows) {
+        const line = linesMatchFeeds && row.sourceId ? feedIds.indexOf(row.sourceId) : -1;
+        incidentsByLine[line >= 0 ? line : withoutFeed].push(toIncidentData(row));
+    }
+
     return {
         ...base,
         accessOnly,
-        feeds: recorded.map((status, index) => {
-            const feedIncidents = index === incidentsAt ? incidentsOfProvider : [];
-            return status === "unreachable"
-                ? { read: false, incidents: feedIncidents }
-                : { read: true, declared: status, incidents: feedIncidents };
-        }),
+        feeds: recorded.map((status, line) =>
+            status === "unreachable"
+                ? { read: false, incidents: incidentsByLine[line] }
+                : { read: true, declared: status, incidents: incidentsByLine[line] },
+        ),
         probes: [],
     };
 }
@@ -337,16 +382,19 @@ export async function readSnapshot(db: Database, now: Date): Promise<Snapshot> {
 
     const entries = providerRows.map((provider): SnapshotEntry => {
         const latest = checks.get(provider.id) ?? [];
-        const incidentsOfProvider = (recorded.get(provider.id) ?? [])
-            .map(toIncidentData)
-            .filter(i => !isClosed(i) || isRecentlyResolved(i, now));
+        const sourcesOfProvider = sources.get(provider.id) ?? [];
+        const incidentRows = (recorded.get(provider.id) ?? []).filter(row => {
+            const incident = toIncidentData(row);
+            return !isClosed(incident) || isRecentlyResolved(incident, now);
+        });
 
         return {
             provider: toSnapshotProvider(provider),
             reading: toStatusInput(
-                isAccessOnly(sources.get(provider.id) ?? []),
+                isAccessOnly(sourcesOfProvider),
                 latest.length > 0 ? latest.map(c => c.status as ReadingStatus) : ["operational"],
-                incidentsOfProvider,
+                sourcesOfProvider.filter(s => s.kind === "feed").map(s => s.id),
+                incidentRows,
             ),
             lastUpdated: latest[0]?.checkedAt ?? undefined,
         };

@@ -199,6 +199,17 @@ describe("política de leitura no Poll: cada fonte é independente", () => {
         expect(await statusChecks("github")).toEqual(["operational"]);
     });
 
+    it("as 25 manutenções reais da Cloudflare, com 22 títulos, gravam 25 linhas, e o Poll seguinte não cria nem junta nenhuma", async () => {
+        route(CLOUDFLARE_FEED, async () => new Response(statuspageFixture("cloudflare-major.json")));
+        const maintenances = () =>
+            current.client.execute("SELECT count(*) AS n, count(DISTINCT external_id) AS ids FROM incidents WHERE provider_id = 'cloudflare' AND kind = 'maintenance'");
+
+        await poll();
+        await poll();
+
+        expect((await maintenances()).rows[0]).toMatchObject({ n: 25, ids: 25 });
+    });
+
     it("um Feed com conteúdo fora do formato vira Unreachable, com registro no log", async () => {
         route(CLOUDFLARE_FEED, async () => Response.json({ page: {}, status: {} }));
 
@@ -353,6 +364,22 @@ describe("Provider com vários Feeds (catálogo montado no teste)", () => {
         ]);
     });
 
+    it("sob Partial Reading, o Feed lido que ficou sem Incidents encerra o que era dele, e o Incident do não lido fica", async () => {
+        route(GITHUB_FEED, async () => statuspage("minor", [{ id: "a", name: "Do Feed lido" }]));
+        route(SECOND_FEED, async () => statuspage("minor", [{ id: "b", name: "Do Feed não lido" }]));
+        await poll();
+
+        route(GITHUB_FEED, async () => statuspage("none"));
+        route(SECOND_FEED, async () => new Response("oops", { status: 503 }));
+        await poll();
+
+        const rows = await current.client.execute("SELECT title, status, source_id FROM incidents WHERE provider_id = 'github' ORDER BY title");
+        expect(rows.rows.map(r => [r.title, r.status, r.source_id])).toEqual([
+            ["Do Feed lido", "resolved", "github-feed"],
+            ["Do Feed não lido", "investigating", "github-feed-2"],
+        ]);
+    });
+
     it("com os dois Feeds lidos, o Incident que saiu de ambos é encerrado", async () => {
         await current.client.execute(
             "INSERT INTO incidents (id, provider_id, title, status, kind) VALUES ('inc-1', 'github', 'Saiu do Feed', 'investigating', 'problem')",
@@ -384,7 +411,7 @@ describe("Probes ao lado dos Feeds", () => {
         await vi.advanceTimersByTimeAsync(1);
         const cloudflare = (await reading).find(r => r.providerId === "cloudflare");
 
-        expect(cloudflare?.feeds).toEqual([{ read: true, declared: "operational", incidents: [] }]);
+        expect(cloudflare?.feeds).toEqual([{ sourceId: "cloudflare-feed", read: true, declared: "operational", incidents: [] }]);
         expect(cloudflare?.probes).toEqual([false, true]);
     });
 
